@@ -305,7 +305,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
   const badge = senderInfo ? SENDER_BADGE[senderInfo.senderType] ?? SENDER_BADGE.unknown : null;
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#f9fafb", minWidth: 0 }}>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#f9fafb", minWidth: 0, minHeight: 0 }}>
       {/* Header */}
       <div style={{ padding: "14px 20px", borderBottom: "1px solid #e5e7eb", background: "#fff" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
