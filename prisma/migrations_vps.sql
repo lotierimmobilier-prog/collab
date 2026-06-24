@@ -204,18 +204,56 @@ CREATE TABLE IF NOT EXISTS tenants (
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ── Fournisseurs ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS suppliers (
+  id        TEXT PRIMARY KEY,
+  name      TEXT NOT NULL,
+  type      TEXT NOT NULL DEFAULT 'autre',
+  contact   TEXT,
+  phone     TEXT,
+  email     TEXT,
+  address   TEXT,
+  siret     TEXT,
+  notes     TEXT,
+  active    BOOLEAN NOT NULL DEFAULT true,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ── Ordres de service ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS service_orders (
+  id           TEXT PRIMARY KEY,
+  ref          TEXT NOT NULL UNIQUE,
+  "taskId"     TEXT,
+  "supplierId" TEXT NOT NULL REFERENCES suppliers(id),
+  title        TEXT NOT NULL,
+  description  TEXT,
+  address      TEXT,
+  deadline     TIMESTAMPTZ,
+  amount       FLOAT,
+  status       TEXT NOT NULL DEFAULT 'brouillon',
+  notes        TEXT,
+  "createdBy"  TEXT NOT NULL,
+  "createdAt"  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt"  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- ── Trigger updatedAt ────────────────────────────────────────
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN NEW."updatedAt" = now(); RETURN NEW; END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS suppliers_updated_at       ON suppliers;
+DROP TRIGGER IF EXISTS service_orders_updated_at  ON service_orders;
 DROP TRIGGER IF EXISTS tasks_updated_at          ON tasks;
 DROP TRIGGER IF EXISTS calendar_events_updated_at ON calendar_events;
 DROP TRIGGER IF EXISTS settings_updated_at        ON settings;
 DROP TRIGGER IF EXISTS owners_updated_at          ON owners;
 DROP TRIGGER IF EXISTS tenants_updated_at         ON tenants;
 
+CREATE TRIGGER suppliers_updated_at        BEFORE UPDATE ON suppliers        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER service_orders_updated_at  BEFORE UPDATE ON service_orders   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER tasks_updated_at           BEFORE UPDATE ON tasks           FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER calendar_events_updated_at BEFORE UPDATE ON calendar_events FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER settings_updated_at        BEFORE UPDATE ON settings        FOR EACH ROW EXECUTE FUNCTION update_updated_at();

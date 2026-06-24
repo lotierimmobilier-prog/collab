@@ -235,6 +235,50 @@ model EmailMessage {
   @@map("email_messages")
 }
 
+// ── Fournisseurs ─────────────────────────────────────────────
+
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   @default("autre")   // plomberie, electricite, menuiserie, maconnerie, peinture, autre
+  contact   String?
+  phone     String?
+  email     String?
+  address   String?
+  siret     String?
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders    ServiceOrder[]
+
+  @@map("suppliers")
+}
+
+// ── Ordres de service ────────────────────────────────────────
+
+model ServiceOrder {
+  id          String    @id @default(cuid())
+  ref         String    @unique   // ODS-2026-001
+  taskId      String?
+  supplierId  String
+  title       String
+  description String?
+  address     String?
+  deadline    DateTime?
+  amount      Float?
+  status      String    @default("brouillon")  // brouillon, envoyé, accepté, en_cours, terminé, annulé
+  notes       String?
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  supplier    Supplier  @relation(fields: [supplierId], references: [id])
+
+  @@map("service_orders")
+}
+
 // ── Gestion locative ─────────────────────────────────────────
 
 model Owner {

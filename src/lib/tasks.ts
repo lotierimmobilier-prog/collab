@@ -8,6 +8,7 @@ export interface Task {
   status: Status;
   priority: Priority;
   assignee?: string;
+  assigneeId?: string;
   assigneeInitials?: string;
   assigneeColor?: string;
   dueDate?: string;
@@ -16,6 +17,8 @@ export interface Task {
   subtasks?: { label: string; done: boolean }[];
   comments?: number;
   attachments?: number;
+  family?: { id: string; name: string; color: string } | null;
+  group?: { id: string; name: string } | null;
 }
 
 export const COLUMNS: { id: Status; label: string; color: string }[] = [
