@@ -1,16 +1,72 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { User, Role, ModuleAccess, Right, DEFAULT_ROLES, getInitials, avatarColor, MODULES, RIGHTS, getRightStyle } from "@/lib/admin";
 import UserModal from "./UserModal";
 
 export default function UsersAdmin() {
   const [users, setUsers] = useState<User[]>([]);
-  const [roles, setRoles] = useState<Role[]>(DEFAULT_ROLES);
+  const [roles] = useState<Role[]>(DEFAULT_ROLES);
   const [editing, setEditing] = useState<User | null | "new">(null);
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("all");
   const [showPassword, setShowPassword] = useState<string | null>(null);
   const [editingAccess, setEditingAccess] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState("");
+
+  // Charger les utilisateurs depuis l'API
+  useEffect(() => { fetchUsers(); }, []);
+
+  async function fetchUsers() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/users");
+      if (!res.ok) throw new Error("Erreur serveur");
+      const data = await res.json();
+      setUsers(data);
+    } catch (e) {
+      setApiError("Impossible de charger les utilisateurs : " + String(e));
+    } finally { setLoading(false); }
+  }
+
+  async function saveUser(user: User) {
+    const isNew = !users.find(u => u.id === user.id);
+    try {
+      const res = await fetch(isNew ? "/api/users" : `/api/users/${user.id}`, {
+        method: isNew ? "POST" : "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prenom: user.prenom, nom: user.nom, email: user.email,
+          password: user.password, roleId: user.roleId, active: user.active,
+          accessOverrides: user.accessOverrides ?? null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setApiError(data.error ?? "Erreur"); return; }
+      setApiError("");
+      await fetchUsers();
+    } catch (e) { setApiError(String(e)); }
+    setEditing(null);
+  }
+
+  async function toggleActive(id: string) {
+    const user = users.find(u => u.id === id);
+    if (!user) return;
+    await fetch(`/api/users/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active: !user.active }),
+    });
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, active: !u.active } : u));
+  }
+
+  async function deleteUser(id: string) {
+    if (!confirm("Supprimer cet utilisateur définitivement ?")) return;
+    await fetch(`/api/users/${id}`, { method: "DELETE" });
+    setUsers(prev => prev.filter(u => u.id !== id));
+  }
+
+  const roleOf = (roleId: string) => roles.find(r => r.id === roleId);
 
   const filtered = users.filter(u => {
     if (filterRole !== "all" && u.roleId !== filterRole) return false;
@@ -18,26 +74,13 @@ export default function UsersAdmin() {
     return !q || `${u.prenom} ${u.nom} ${u.email}`.toLowerCase().includes(q);
   });
 
-  function saveUser(user: User) {
-    setUsers(prev => {
-      const exists = prev.find(u => u.id === user.id);
-      return exists ? prev.map(u => u.id === user.id ? user : u) : [user, ...prev];
-    });
-    setEditing(null);
-  }
-
-  function toggleActive(id: string) {
-    setUsers(prev => prev.map(u => u.id === id ? { ...u, active: !u.active } : u));
-  }
-
-  function deleteUser(id: string) {
-    if (confirm("Supprimer cet utilisateur ?")) setUsers(prev => prev.filter(u => u.id !== id));
-  }
-
-  const roleOf = (roleId: string) => roles.find(r => r.id === roleId);
-
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      {apiError && (
+        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", padding: "10px 24px", fontSize: 13 }}>
+          {apiError}
+        </div>
+      )}
       {/* Toolbar */}
       <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "12px 24px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ position: "relative", flex: "0 0 220px" }}>
@@ -71,7 +114,11 @@ export default function UsersAdmin() {
 
       {/* List */}
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", padding: "60px 24px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>
+            Chargement des utilisateurs...
+          </div>
+        ) : filtered.length === 0 ? (
           <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", padding: "60px 24px", textAlign: "center" }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>👤</div>
             <div style={{ fontSize: 15, fontWeight: 500, color: "#374151", marginBottom: 8 }}>Aucun utilisateur</div>

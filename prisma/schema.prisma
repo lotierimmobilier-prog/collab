@@ -1,0 +1,23 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id              String    @id @default(cuid())
+  prenom          String
+  nom             String
+  email           String    @unique
+  passwordHash    String
+  roleId          String
+  active          Boolean   @default(true)
+  accessOverrides Json?
+  createdAt       DateTime  @default(now())
+  lastLogin       DateTime?
+  avatar          String?
+
+  @@map("users")
+}

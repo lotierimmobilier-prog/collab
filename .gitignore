@@ -20,3 +20,5 @@ Thumbs.db
 # Build
 *.log
 npm-debug.log*
+
+/src/generated/prisma
