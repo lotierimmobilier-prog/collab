@@ -1,24 +1,32 @@
 "use client";
 import Link from "next/link";
 
+// Palette Lotier Immobilier
+const GOLD = "#B8966A";
+const GOLD_BG = "#F7F0E6";
+const DARK = "#1C1A17";
+const LABEL_COLOR = "#A09880";
+const ITEM_COLOR = "#5C5449";
+const BORDER = "#E6E1D9";
+
 const nav = [
-  { id: "dashboard",  label: "Tableau de bord",    icon: "⊞", href: "/",              group: "Principal" },
-  { id: "tasks",      label: "Tâches",              icon: "☑", href: "/taches",        group: "Principal" },
-  { id: "planning",   label: "Planning",            icon: "📅", href: "/planning",      group: "Principal" },
-  { id: "mail",       label: "Messagerie",          icon: "✉", href: "/messagerie",    group: "Principal", badge: 3 },
-  { id: "edl",        label: "États des lieux",     icon: "🏠", href: "/etats-des-lieux", group: "Gestion locative" },
-  { id: "locataires", label: "Dossiers locataires", icon: "👥", href: "/locataires",   group: "Gestion locative" },
-  { id: "compta",     label: "Tableau de bord",     icon: "📊", href: "/comptabilite", group: "Comptabilité" },
-  { id: "compta-enc", label: "Encaissements",       icon: "💰", href: "/comptabilite/encaissements", group: "Comptabilité" },
-  { id: "compta-dep", label: "Dépenses",            icon: "📤", href: "/comptabilite/depenses",      group: "Comptabilité" },
-  { id: "compta-tva", label: "TVA",                 icon: "🧾", href: "/comptabilite/tva",           group: "Comptabilité" },
-  { id: "formation",  label: "Formation",           icon: "🎓", href: "/formation",    group: "Agence" },
-  { id: "reseaux",    label: "Réseaux sociaux",     icon: "📱", href: "/reseaux-sociaux", group: "Agence" },
+  { id: "dashboard",  label: "Tableau de bord",    icon: "⊟",  href: "/",                group: "Principal" },
+  { id: "tasks",      label: "Tâches",              icon: "✓",  href: "/taches",          group: "Principal" },
+  { id: "planning",   label: "Planning",            icon: "▦",  href: "/planning",        group: "Principal" },
+  { id: "mail",       label: "Messagerie",          icon: "@",  href: "/messagerie",      group: "Principal", badge: 3 },
+  { id: "edl",        label: "États des lieux",     icon: "⌂",  href: "/etats-des-lieux", group: "Gestion locative" },
+  { id: "locataires", label: "Dossiers locataires", icon: "◎",  href: "/locataires",      group: "Gestion locative" },
+  { id: "compta",     label: "Tableau de bord",     icon: "∑",  href: "/comptabilite",    group: "Comptabilité" },
+  { id: "compta-enc", label: "Encaissements",       icon: "↗",  href: "/comptabilite/encaissements", group: "Comptabilité" },
+  { id: "compta-dep", label: "Dépenses",            icon: "↙",  href: "/comptabilite/depenses",      group: "Comptabilité" },
+  { id: "compta-tva", label: "TVA",                 icon: "%",  href: "/comptabilite/tva",           group: "Comptabilité" },
+  { id: "formation",  label: "Formation",           icon: "◈",  href: "/formation",       group: "Agence" },
+  { id: "reseaux",    label: "Réseaux sociaux",     icon: "⌘",  href: "/reseaux-sociaux", group: "Agence" },
 ];
 
 const adminNav = [
-  { id: "admin-users", label: "Utilisateurs", icon: "👤", href: "/admin/utilisateurs" },
-  { id: "admin-roles", label: "Rôles & droits", icon: "🔐", href: "/admin/roles" },
+  { id: "admin-users", label: "Utilisateurs", icon: "○", href: "/admin/utilisateurs", badge: undefined },
+  { id: "admin-roles", label: "Rôles & droits", icon: "◫", href: "/admin/roles", badge: undefined },
 ];
 
 const groups = ["Principal", "Gestion locative", "Comptabilité", "Agence"];
@@ -26,38 +34,39 @@ const groups = ["Principal", "Gestion locative", "Comptabilité", "Agence"];
 export default function Sidebar({ active }: { active: string }) {
   return (
     <aside style={{
-      width: 216, flexShrink: 0, background: "#fff", borderRight: "1px solid #e5e7eb",
-      display: "flex", flexDirection: "column", padding: "0 0 12px",
+      width: 220, flexShrink: 0,
+      background: "#FAFAF8",
+      borderRight: `1px solid ${BORDER}`,
+      display: "flex", flexDirection: "column",
     }}>
-      {/* Logo */}
-      <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #e5e7eb" }}>
-        <Link href="/" style={{ textDecoration: "none" }}>
-          <span style={{ fontSize: 20, fontWeight: 600, color: "#111827" }}>
-            Collab<span style={{ color: "#7c3aed" }}>.</span>
-          </span>
+      {/* Logo Lotier */}
+      <div style={{ padding: "16px 20px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Link href="/" style={{ textDecoration: "none", display: "block" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Lotier Immobilier" style={{ width: 140, height: "auto", display: "block" }} />
         </Link>
       </div>
 
-      <nav style={{ flex: 1, overflowY: "auto", paddingTop: 6 }}>
+      {/* Navigation */}
+      <nav style={{ flex: 1, overflowY: "auto", paddingTop: 8, paddingBottom: 8 }}>
         {groups.map(group => {
           const items = nav.filter(n => n.group === group);
           return (
-            <div key={group}>
+            <div key={group} style={{ marginBottom: 4 }}>
               <NavLabel>{group}</NavLabel>
               {items.map(item => (
                 <div key={item.id}>
                   <NavItem item={item} active={active} />
-                  {/* Lien candidature sous "Dossiers locataires" */}
                   {item.id === "locataires" && (
                     <Link href="/candidature" style={{ textDecoration: "none" }}>
                       <div style={{
                         display: "flex", alignItems: "center", gap: 8,
-                        padding: "7px 20px 7px 46px", fontSize: 12,
-                        color: active === "candidature" ? "#7c3aed" : "#9ca3af",
-                        background: active === "candidature" ? "#f5f3ff" : "transparent",
-                        borderLeft: active === "candidature" ? "2px solid #7c3aed" : "2px solid transparent",
+                        padding: "6px 20px 6px 48px", fontSize: 12,
+                        color: active === "candidature" ? GOLD : "#9E9690",
+                        background: active === "candidature" ? GOLD_BG : "transparent",
+                        borderLeft: active === "candidature" ? `2px solid ${GOLD}` : "2px solid transparent",
                       }}>
-                        <span>🔗</span>
+                        <span style={{ fontSize: 11 }}>↳</span>
                         <span>Lien candidature</span>
                       </div>
                     </Link>
@@ -71,6 +80,20 @@ export default function Sidebar({ active }: { active: string }) {
         <NavLabel>Administration</NavLabel>
         {adminNav.map(item => <NavItem key={item.id} item={item} active={active} />)}
       </nav>
+
+      {/* Utilisateur en bas */}
+      <div style={{ padding: "12px 16px", borderTop: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: "50%", background: GOLD_BG,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 11, fontWeight: 700, color: GOLD, flexShrink: 0,
+        }}>JL</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: DARK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Jérôme Lotier</div>
+          <div style={{ fontSize: 10, color: LABEL_COLOR }}>Administrateur</div>
+        </div>
+        <span style={{ fontSize: 14, color: LABEL_COLOR, cursor: "pointer" }}>→</span>
+      </div>
     </aside>
   );
 }
@@ -78,8 +101,8 @@ export default function Sidebar({ active }: { active: string }) {
 function NavLabel({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
-      fontSize: 10, textTransform: "uppercase", letterSpacing: "0.07em",
-      color: "#9ca3af", padding: "10px 20px 4px", fontWeight: 600,
+      fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em",
+      color: LABEL_COLOR, padding: "8px 20px 3px", fontWeight: 600,
     }}>{children}</div>
   );
 }
@@ -93,16 +116,17 @@ function NavItem({ item, active }: {
     <Link href={item.href} style={{ textDecoration: "none" }}>
       <div style={{
         display: "flex", alignItems: "center", gap: 10,
-        padding: "8px 20px", cursor: "pointer", fontSize: 13,
-        color: isActive ? "#7c3aed" : "#6b7280",
-        background: isActive ? "#f5f3ff" : "transparent",
-        borderLeft: isActive ? "2px solid #7c3aed" : "2px solid transparent",
-        fontWeight: isActive ? 500 : 400,
+        padding: "7px 20px", cursor: "pointer", fontSize: 13,
+        color: isActive ? GOLD : ITEM_COLOR,
+        background: isActive ? GOLD_BG : "transparent",
+        borderLeft: isActive ? `2px solid ${GOLD}` : "2px solid transparent",
+        fontWeight: isActive ? 600 : 400,
+        transition: "background 0.15s, color 0.15s",
       }}>
-        <span style={{ fontSize: 15, width: 18, textAlign: "center" }}>{item.icon}</span>
+        <span style={{ fontSize: 13, width: 16, textAlign: "center", color: isActive ? GOLD : "#A09880", fontWeight: 500 }}>{item.icon}</span>
         <span style={{ flex: 1 }}>{item.label}</span>
         {item.badge && (
-          <span style={{ background: "#7c3aed", color: "#fff", borderRadius: 10, padding: "1px 6px", fontSize: 10 }}>
+          <span style={{ background: GOLD, color: "#fff", borderRadius: 10, padding: "1px 6px", fontSize: 10, fontWeight: 600 }}>
             {item.badge}
           </span>
         )}

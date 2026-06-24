@@ -154,7 +154,7 @@ export default function GoogleMailConnect({ onSynced, onClose }: Props) {
             <div style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 12, fontWeight: 500, color: "#374151", marginBottom: 5 }}>
                 Client ID Google OAuth 2.0
-                <button onClick={() => setShowHelp(s => !s)} style={{ background: "none", border: "none", color: "#7c3aed", cursor: "pointer", fontSize: 12, marginLeft: 8 }}>
+                <button onClick={() => setShowHelp(s => !s)} style={{ background: "none", border: "none", color: "#B8966A", cursor: "pointer", fontSize: 12, marginLeft: 8 }}>
                   {showHelp ? "Masquer" : "Comment obtenir ?"}
                 </button>
               </div>
@@ -167,18 +167,18 @@ export default function GoogleMailConnect({ onSynced, onClose }: Props) {
             </div>
 
             {showHelp && (
-              <div style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 10, padding: "14px", fontSize: 12, color: "#374151", lineHeight: 1.7, marginBottom: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 8, color: "#7c3aed" }}>Obtenir un Client ID Google :</div>
+              <div style={{ background: "#F7F0E6", border: "1px solid #E8D9C0", borderRadius: 10, padding: "14px", fontSize: 12, color: "#374151", lineHeight: 1.7, marginBottom: 12 }}>
+                <div style={{ fontWeight: 600, marginBottom: 8, color: "#B8966A" }}>Obtenir un Client ID Google :</div>
                 <ol style={{ paddingLeft: 18, margin: 0 }}>
                   <li>Aller sur <strong>console.cloud.google.com</strong></li>
                   <li>Créer ou sélectionner un projet</li>
                   <li>Activer l&apos;API <strong>Gmail API</strong></li>
                   <li>Aller dans <strong>Identifiants → Créer → ID client OAuth 2.0</strong></li>
                   <li>Type : <strong>Application Web</strong></li>
-                  <li>Ajouter <code style={{ background: "#ede9fe", borderRadius: 3, padding: "1px 5px" }}>{typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}</code> aux <strong>Origines JS autorisées</strong></li>
+                  <li>Ajouter <code style={{ background: "#F7F0E6", borderRadius: 3, padding: "1px 5px" }}>{typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}</code> aux <strong>Origines JS autorisées</strong></li>
                   <li>Copier le <strong>Client ID</strong></li>
                 </ol>
-                <div style={{ marginTop: 10, background: "#ede9fe", borderRadius: 6, padding: "8px 10px", fontSize: 11, color: "#7c3aed" }}>
+                <div style={{ marginTop: 10, background: "#F7F0E6", borderRadius: 6, padding: "8px 10px", fontSize: 11, color: "#B8966A" }}>
                   Le token OAuth est stocké uniquement dans votre navigateur. Aucun mot de passe n&apos;est envoyé.
                 </div>
               </div>
@@ -216,7 +216,7 @@ export default function GoogleMailConnect({ onSynced, onClose }: Props) {
         </div>
 
         <div style={{ padding: "14px 20px", borderTop: "1px solid #e5e7eb" }}>
-          <button onClick={onClose} style={{ width: "100%", background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
+          <button onClick={onClose} style={{ width: "100%", background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
             Fermer
           </button>
         </div>

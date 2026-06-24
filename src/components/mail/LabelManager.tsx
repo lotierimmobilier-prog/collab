@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { MailLabel } from "@/lib/mail";
 
-const COLORS = ["#7c3aed","#0891b2","#059669","#dc2626","#d97706","#db2777","#374151","#ea580c","#65a30d"];
+const COLORS = ["#B8966A","#0891b2","#059669","#dc2626","#d97706","#db2777","#374151","#ea580c","#65a30d"];
 
 export default function LabelManager({ labels, onSave, onClose }: {
   labels: MailLabel[];
@@ -45,7 +45,7 @@ export default function LabelManager({ labels, onSave, onClose }: {
             <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 8 }}>Nouveau libellé</div>
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <input value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} placeholder="Nom du libellé" style={{ flex: 1, height: 34, border: "1px solid #e5e7eb", borderRadius: 7, padding: "0 10px", fontSize: 12, outline: "none" }} />
-              <button onClick={add} style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 7, padding: "0 14px", fontSize: 12, cursor: "pointer" }}>+</button>
+              <button onClick={add} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 7, padding: "0 14px", fontSize: 12, cursor: "pointer" }}>+</button>
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {COLORS.map(c => (
@@ -57,7 +57,7 @@ export default function LabelManager({ labels, onSave, onClose }: {
 
         <div style={{ padding: "12px 20px", borderTop: "1px solid #e5e7eb", display: "flex", justifyContent: "flex-end", gap: 10 }}>
           <button onClick={onClose} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 8, padding: "7px 14px", fontSize: 13, cursor: "pointer" }}>Annuler</button>
-          <button onClick={() => { onSave(list); onClose(); }} style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>Enregistrer</button>
+          <button onClick={() => { onSave(list); onClose(); }} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>Enregistrer</button>
         </div>
       </div>
     </>

@@ -98,7 +98,7 @@ export default function NewDossierModal({ onClose, onAdd }: {
         <div style={{ padding: "14px 20px", borderTop: "1px solid #e5e7eb", display: "flex", justifyContent: "flex-end", gap: 10 }}>
           <button onClick={onClose} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>Annuler</button>
           <button onClick={submit} disabled={!f.nom || !f.prenom || !f.email} style={{
-            background: (f.nom && f.prenom && f.email) ? "#7c3aed" : "#e5e7eb",
+            background: (f.nom && f.prenom && f.email) ? "#B8966A" : "#e5e7eb",
             color: (f.nom && f.prenom && f.email) ? "#fff" : "#9ca3af",
             border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 500, cursor: "pointer",
           }}>Créer le dossier</button>

@@ -84,7 +84,7 @@ export default function TransactionsPanel({ transactions, mandataires, onAdd, on
                   {t.factureId ? (
                     <span style={{ background: "#f0fdf4", color: "#166534", borderRadius: 6, padding: "3px 8px", fontSize: 11, fontWeight: 600 }}>✓ Émise</span>
                   ) : t.mandataireId ? (
-                    <button onClick={() => onEmettreFacture(t.id)} style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer" }}>
+                    <button onClick={() => onEmettreFacture(t.id)} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer" }}>
                       Émettre facture
                     </button>
                   ) : (
@@ -181,5 +181,5 @@ function F({ label, children }: { label: string; children: React.ReactNode }) {
 }
 
 const inp: React.CSSProperties = { width: "100%", height: 36, border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 10px", fontSize: 13, outline: "none", background: "#f9fafb", fontFamily: "inherit", boxSizing: "border-box" };
-const btnPrimary: React.CSSProperties = { background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" };
+const btnPrimary: React.CSSProperties = { background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" };
 const btnSecondary: React.CSSProperties = { background: "none", border: "1px solid #e5e7eb", borderRadius: 8, padding: "7px 14px", fontSize: 13, cursor: "pointer", color: "#374151" };

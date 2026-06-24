@@ -1,24 +1,30 @@
+const GOLD = "#B8966A";
+const GOLD_BG = "#F7F0E6";
+const DARK = "#1C1A17";
+const BORDER = "#E6E1D9";
+
 export default function Topbar({ title }: { title: string }) {
   return (
     <div style={{
-      height: 56, display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "0 24px", background: "#fff", borderBottom: "1px solid #e5e7eb", flexShrink: 0,
+      height: 52, display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "0 24px", background: "#fff", borderBottom: `1px solid ${BORDER}`, flexShrink: 0,
     }}>
-      <span style={{ fontWeight: 500, fontSize: 15 }}>{title}</span>
+      <span style={{ fontWeight: 600, fontSize: 14, color: DARK, letterSpacing: "0.01em" }}>{title}</span>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <button style={{
-          background: "none", border: "1px solid #e5e7eb", borderRadius: 8,
-          padding: "5px 10px", cursor: "pointer", fontSize: 14, position: "relative",
+          background: "none", border: `1px solid ${BORDER}`, borderRadius: 8,
+          padding: "5px 11px", cursor: "pointer", fontSize: 13, color: "#78726B",
+          display: "flex", alignItems: "center", gap: 6,
         }}>
-          🔔 <span style={{
-            background: "#7c3aed", color: "#fff", borderRadius: 10,
-            padding: "1px 6px", fontSize: 11, marginLeft: 4,
+          ◎ <span style={{
+            background: GOLD, color: "#fff", borderRadius: 10,
+            padding: "1px 6px", fontSize: 10, fontWeight: 600,
           }}>5</span>
         </button>
         <div style={{
-          width: 32, height: 32, borderRadius: "50%", background: "#ede9fe",
+          width: 32, height: 32, borderRadius: "50%", background: GOLD_BG,
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 12, fontWeight: 600, color: "#7c3aed",
+          fontSize: 11, fontWeight: 700, color: GOLD, cursor: "pointer",
         }}>JL</div>
       </div>
     </div>

@@ -54,7 +54,7 @@ export default function DossierDetail({ dossier, onClose, onUpdate }: {
               <div style={{ fontSize: 12, color: "#6b7280" }}>{dossier.email}{dossier.telephone ? ` · ${dossier.telephone}` : ""}</div>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={downloadPDF} disabled={generatingPdf} style={{ background: "#f5f3ff", color: "#7c3aed", border: "1px solid #ddd6fe", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>
+              <button onClick={downloadPDF} disabled={generatingPdf} style={{ background: "#F7F0E6", color: "#B8966A", border: "1px solid #E8D9C0", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>
                 {generatingPdf ? "..." : "PDF"}
               </button>
               <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>x</button>
@@ -62,7 +62,7 @@ export default function DossierDetail({ dossier, onClose, onUpdate }: {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ flex: 1, background: "#f3f4f6", borderRadius: 8, height: 6 }}>
-              <div style={{ width: `${Math.min(100, uploadedCount * 10)}%`, height: "100%", background: "#7c3aed", borderRadius: 8 }} />
+              <div style={{ width: `${Math.min(100, uploadedCount * 10)}%`, height: "100%", background: "#B8966A", borderRadius: 8 }} />
             </div>
             <span style={{ fontSize: 11, color: "#6b7280" }}>{uploadedCount} doc(s)</span>
             <select value={dossier.status} onChange={e => onUpdate({ ...dossier, status: e.target.value as DossierStatus })}
@@ -76,8 +76,8 @@ export default function DossierDetail({ dossier, onClose, onUpdate }: {
           {(["apercu", "pieces", "gli", "notes"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: "none", border: "none", cursor: "pointer", padding: "10px 14px", fontSize: 13,
-              fontWeight: tab === t ? 500 : 400, color: tab === t ? "#7c3aed" : "#6b7280",
-              borderBottom: tab === t ? "2px solid #7c3aed" : "2px solid transparent",
+              fontWeight: tab === t ? 500 : 400, color: tab === t ? "#B8966A" : "#6b7280",
+              borderBottom: tab === t ? "2px solid #B8966A" : "2px solid transparent",
             }}>{{ apercu: "Apercu", pieces: "Pieces", gli: "GLI", notes: "Notes" }[t]}</button>
           ))}
         </div>

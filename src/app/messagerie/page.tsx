@@ -4,7 +4,7 @@ import MailBoard from "@/components/mail/MailBoard";
 
 export default function MessageriePage() {
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f3f4f6" }}>
+    <div style={{ display: "flex", minHeight: "100vh", background: "#F3F1EC" }}>
       <Sidebar active="mail" />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <Topbar title="Messagerie" />

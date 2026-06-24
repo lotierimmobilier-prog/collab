@@ -75,7 +75,7 @@ export default function GoogleSyncPanel(props: Props) {
               <div style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 12, fontWeight: 500, color: "#374151", marginBottom: 5 }}>
                   Client ID Google *
-                  <button onClick={() => setShowHelp(s => !s)} style={{ background: "none", border: "none", color: "#7c3aed", cursor: "pointer", fontSize: 12, marginLeft: 8 }}>
+                  <button onClick={() => setShowHelp(s => !s)} style={{ background: "none", border: "none", color: "#B8966A", cursor: "pointer", fontSize: 12, marginLeft: 8 }}>
                     {showHelp ? "Masquer l'aide" : "Comment obtenir mon Client ID ?"}
                   </button>
                 </div>
@@ -88,7 +88,7 @@ export default function GoogleSyncPanel(props: Props) {
               </div>
 
               {showHelp && (
-                <div style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 10, padding: "14px", fontSize: 12, color: "#374151", lineHeight: 1.7, marginBottom: 12 }}>
+                <div style={{ background: "#F7F0E6", border: "1px solid #E8D9C0", borderRadius: 10, padding: "14px", fontSize: 12, color: "#374151", lineHeight: 1.7, marginBottom: 12 }}>
                   <div style={{ fontWeight: 600, marginBottom: 8 }}>📋 Étapes pour obtenir un Client ID Google :</div>
                   <ol style={{ paddingLeft: 18, margin: 0 }}>
                     <li>Aller sur <strong>console.cloud.google.com</strong></li>
@@ -96,10 +96,10 @@ export default function GoogleSyncPanel(props: Props) {
                     <li>Activer l'API <strong>Google Calendar API</strong></li>
                     <li>Aller dans <strong>Identifiants → Créer des identifiants → ID client OAuth 2.0</strong></li>
                     <li>Type : <strong>Application Web</strong></li>
-                    <li>Ajouter <code style={{ background: "#ede9fe", borderRadius: 3, padding: "1px 5px" }}>{typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}</code> aux <strong>Origines JavaScript autorisées</strong></li>
+                    <li>Ajouter <code style={{ background: "#F7F0E6", borderRadius: 3, padding: "1px 5px" }}>{typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}</code> aux <strong>Origines JavaScript autorisées</strong></li>
                     <li>Copier le <strong>Client ID</strong> généré</li>
                   </ol>
-                  <div style={{ marginTop: 10, padding: "8px 10px", background: "#ede9fe", borderRadius: 6, fontSize: 11, color: "#7c3aed" }}>
+                  <div style={{ marginTop: 10, padding: "8px 10px", background: "#F7F0E6", borderRadius: 6, fontSize: 11, color: "#B8966A" }}>
                     ℹ Aucune clé secrète n'est stockée côté serveur. Le token OAuth est conservé uniquement dans votre navigateur.
                   </div>
                 </div>
@@ -109,7 +109,7 @@ export default function GoogleSyncPanel(props: Props) {
                 onClick={() => clientId.trim() && onConnect({ clientId: clientId.trim() })}
                 disabled={!clientId.trim()}
                 style={{
-                  width: "100%", background: clientId.trim() ? "#7c3aed" : "#e5e7eb",
+                  width: "100%", background: clientId.trim() ? "#B8966A" : "#e5e7eb",
                   color: clientId.trim() ? "#fff" : "#9ca3af",
                   border: "none", borderRadius: 8, padding: "10px", fontSize: 13,
                   fontWeight: 500, cursor: clientId.trim() ? "pointer" : "default",
@@ -140,7 +140,7 @@ export default function GoogleSyncPanel(props: Props) {
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, fontWeight: 500, color: "#111827" }}>
                         {cal.summary}
-                        {cal.primary && <span style={{ fontSize: 10, background: "#f5f3ff", color: "#7c3aed", borderRadius: 4, padding: "1px 5px", marginLeft: 6 }}>Principal</span>}
+                        {cal.primary && <span style={{ fontSize: 10, background: "#F7F0E6", color: "#B8966A", borderRadius: 4, padding: "1px 5px", marginLeft: 6 }}>Principal</span>}
                       </div>
                       {cal.description && <div style={{ fontSize: 11, color: "#9ca3af" }}>{cal.description}</div>}
                     </div>
@@ -171,7 +171,7 @@ export default function GoogleSyncPanel(props: Props) {
             <button onClick={onDisconnect} style={{ background: "none", border: "1px solid #fecaca", borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer", color: "#dc2626" }}>
               Déconnecter Google
             </button>
-            <button onClick={onClose} style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
+            <button onClick={onClose} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
               Fermer
             </button>
           </div>

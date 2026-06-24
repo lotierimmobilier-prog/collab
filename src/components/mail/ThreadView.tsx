@@ -134,22 +134,22 @@ export default function ThreadView({ thread, labels, accounts, aiKey, onClose, o
       {/* Reply area */}
       <div style={{ borderTop: "1px solid #e5e7eb", padding: "12px 20px" }}>
         {!showReply ? (
-          <button onClick={() => setShowReply(true)} style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer", color: "#7c3aed", fontWeight: 500 }}>
+          <button onClick={() => setShowReply(true)} style={{ background: "#F7F0E6", border: "1px solid #E8D9C0", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer", color: "#B8966A", fontWeight: 500 }}>
             ↩ Répondre
           </button>
         ) : (
           <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, overflow: "hidden" }}>
             {/* AI assistant */}
-            <div style={{ background: "#f5f3ff", padding: "10px 14px", borderBottom: "1px solid #e5e7eb", display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#7c3aed", flexShrink: 0, marginTop: 4 }}>✨ Assistant IA</span>
-              <select value={aiTone} onChange={e => setAiTone(e.target.value)} style={{ height: 28, border: "1px solid #ddd6fe", borderRadius: 6, fontSize: 11, padding: "0 6px", background: "#fff", color: "#374151" }}>
+            <div style={{ background: "#F7F0E6", padding: "10px 14px", borderBottom: "1px solid #e5e7eb", display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#B8966A", flexShrink: 0, marginTop: 4 }}>✨ Assistant IA</span>
+              <select value={aiTone} onChange={e => setAiTone(e.target.value)} style={{ height: 28, border: "1px solid #E8D9C0", borderRadius: 6, fontSize: 11, padding: "0 6px", background: "#fff", color: "#374151" }}>
                 <option value="professionnel">Professionnel</option>
                 <option value="cordial">Cordial</option>
                 <option value="formel">Formel</option>
                 <option value="concis">Concis</option>
               </select>
-              <input value={aiInstruction} onChange={e => setAiInstruction(e.target.value)} placeholder="Instruction optionnelle (ex: rappeler le loyer, refuser...)" style={{ flex: 1, minWidth: 180, height: 28, border: "1px solid #ddd6fe", borderRadius: 6, fontSize: 11, padding: "0 8px", outline: "none" }} />
-              <button onClick={generateAIReply} disabled={generating} style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: generating ? 0.7 : 1, display: "flex", alignItems: "center", gap: 5 }}>
+              <input value={aiInstruction} onChange={e => setAiInstruction(e.target.value)} placeholder="Instruction optionnelle (ex: rappeler le loyer, refuser...)" style={{ flex: 1, minWidth: 180, height: 28, border: "1px solid #E8D9C0", borderRadius: 6, fontSize: 11, padding: "0 8px", outline: "none" }} />
+              <button onClick={generateAIReply} disabled={generating} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: generating ? 0.7 : 1, display: "flex", alignItems: "center", gap: 5 }}>
                 {generating ? "Génération..." : "Générer"}
               </button>
               {aiError && <div style={{ width: "100%", fontSize: 11, color: "#dc2626" }}>{aiError}</div>}
@@ -167,7 +167,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, onClose, o
               style={{ width: "100%", border: "none", borderTop: "1px solid #f3f4f6", padding: "10px 14px", fontSize: 13, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box" }}
             />
             <div style={{ padding: "8px 14px", borderTop: "1px solid #f3f4f6", display: "flex", gap: 8, alignItems: "center" }}>
-              <button onClick={sendReply} disabled={!replyBody.trim()} style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: !replyBody.trim() ? 0.5 : 1 }}>
+              <button onClick={sendReply} disabled={!replyBody.trim()} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: !replyBody.trim() ? 0.5 : 1 }}>
                 Envoyer
               </button>
               <button onClick={() => { setShowReply(false); setReplyBody(""); }} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 8, padding: "7px 14px", fontSize: 13, cursor: "pointer", color: "#374151" }}>
@@ -188,7 +188,7 @@ function MessageBubble({ msg, isLast }: { msg: MailMessage; isLast: boolean }) {
   return (
     <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, overflow: "hidden" }}>
       <div onClick={() => setExpanded(s => !s)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", cursor: "pointer", background: expanded ? "#fff" : "#f9fafb" }}>
-        <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#ede9fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#7c3aed", flexShrink: 0 }}>
+        <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#F7F0E6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#B8966A", flexShrink: 0 }}>
           {msg.from.name.charAt(0).toUpperCase()}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>

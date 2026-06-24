@@ -57,7 +57,7 @@ export default function TaskCard({ task, onDragStart, onClick }: {
           <div style={{ height: 4, background: "#f3f4f6", borderRadius: 2 }}>
             <div style={{
               width: `${Math.round((doneSubs / totalSubs) * 100)}%`,
-              height: "100%", background: "#7c3aed", borderRadius: 2,
+              height: "100%", background: "#B8966A", borderRadius: 2,
             }} />
           </div>
         </div>

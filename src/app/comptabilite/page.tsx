@@ -4,7 +4,7 @@ import ComptaBoard from "@/components/compta/ComptaBoard";
 
 export default function ComptaPage() {
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f3f4f6" }}>
+    <div style={{ display: "flex", minHeight: "100vh", background: "#F3F1EC" }}>
       <Sidebar active="compta" />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <Topbar title="Comptabilité" />

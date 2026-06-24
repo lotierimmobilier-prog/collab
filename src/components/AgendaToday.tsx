@@ -1,7 +1,7 @@
 import Card from "./Card";
 
 const events = [
-  { time: "09:30", label: "État des lieux — Rue Morel 4", sub: "Entrée — Famille Dupont", color: "#f5f3ff" },
+  { time: "09:30", label: "État des lieux — Rue Morel 4", sub: "Entrée — Famille Dupont", color: "#F7F0E6" },
   { time: "11:00", label: "Appel franchisé Bordeaux", sub: "Point mensuel", color: "#ecfdf5" },
   { time: "14:00", label: "Signature bail — Studio Centre", sub: "Mme Leclerc", color: "#fffbeb" },
   { time: "16:30", label: "Visite — T3 Quartier Nord", sub: "M. et Mme Fontaine", color: "#f3f4f6" },

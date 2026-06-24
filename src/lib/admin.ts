@@ -25,6 +25,13 @@ export interface User {
   createdAt: string;
   lastLogin?: string;
   avatar?: string;
+  accessOverrides?: ModuleAccess[]; // droits individuels qui surchargent le rôle
+}
+
+export function getUserRight(user: User, role: Role | undefined, moduleId: string): Right {
+  const override = user.accessOverrides?.find(o => o.moduleId === moduleId);
+  if (override) return override.right;
+  return role?.modules.find(m => m.moduleId === moduleId)?.right ?? "aucun";
 }
 
 export const MODULES = [
@@ -54,7 +61,7 @@ export const DEFAULT_ROLES: Role[] = [
   {
     id: "admin",
     label: "Administrateur",
-    color: "#7c3aed",
+    color: "#B8966A",
     description: "Accès complet à tous les modules et à l'administration",
     isSystem: true,
     modules: allModules("admin"),
@@ -97,7 +104,7 @@ export function getInitials(prenom: string, nom: string): string {
 }
 
 export const AVATAR_COLORS = [
-  { bg: "#ede9fe", text: "#7c3aed" },
+  { bg: "#F7F0E6", text: "#B8966A" },
   { bg: "#dcfce7", text: "#16a34a" },
   { bg: "#dbeafe", text: "#2563eb" },
   { bg: "#fef9c3", text: "#ca8a04" },

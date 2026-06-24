@@ -45,12 +45,12 @@ export default function MandatairesPanel({ mandataires, factures, onAdd, onUpdat
               return (
                 <div key={m.id} onClick={() => setSelected(isSelected ? null : m)} style={{
                   background: "#fff", borderRadius: 12,
-                  border: `1.5px solid ${isSelected ? "#7c3aed" : "#e5e7eb"}`,
+                  border: `1.5px solid ${isSelected ? "#B8966A" : "#e5e7eb"}`,
                   padding: "14px 16px", cursor: "pointer",
-                  boxShadow: isSelected ? "0 0 0 3px #ede9fe" : "none",
+                  boxShadow: isSelected ? "0 0 0 3px #F7F0E6" : "none",
                 }}>
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                    <div style={{ width: 42, height: 42, borderRadius: "50%", background: "#ede9fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "#7c3aed", flexShrink: 0 }}>
+                    <div style={{ width: 42, height: 42, borderRadius: "50%", background: "#F7F0E6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "#B8966A", flexShrink: 0 }}>
                       {m.prenom.charAt(0)}{m.nom.charAt(0)}
                     </div>
                     <div style={{ flex: 1 }}>
@@ -59,7 +59,7 @@ export default function MandatairesPanel({ mandataires, factures, onAdd, onUpdat
                         <span style={{ background: m.actif ? "#f0fdf4" : "#f3f4f6", color: m.actif ? "#166534" : "#6b7280", borderRadius: 5, padding: "1px 7px", fontSize: 10, fontWeight: 600 }}>
                           {m.actif ? "Actif" : "Inactif"}
                         </span>
-                        <span style={{ background: "#f5f3ff", color: "#7c3aed", borderRadius: 5, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>
+                        <span style={{ background: "#F7F0E6", color: "#B8966A", borderRadius: 5, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>
                           {m.tauxCommission}%
                         </span>
                       </div>
@@ -72,7 +72,7 @@ export default function MandatairesPanel({ mandataires, factures, onAdd, onUpdat
                   {/* Stats commissions */}
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 12, paddingTop: 12, borderTop: "1px solid #f3f4f6" }}>
                     <Stat label="Factures" value={String(nb)} />
-                    <Stat label="Total commissions TTC" value={formatEur(total)} color="#7c3aed" />
+                    <Stat label="Total commissions TTC" value={formatEur(total)} color="#B8966A" />
                     <Stat label="Payé TTC" value={formatEur(paid)} color="#059669" />
                   </div>
                 </div>
@@ -91,7 +91,7 @@ export default function MandatairesPanel({ mandataires, factures, onAdd, onUpdat
               <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 16 }}>×</button>
             </div>
             <div style={{ textAlign: "center", marginBottom: 14 }}>
-              <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#ede9fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: "#7c3aed", margin: "0 auto 8px" }}>
+              <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#F7F0E6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: "#B8966A", margin: "0 auto 8px" }}>
                 {selected.prenom.charAt(0)}{selected.nom.charAt(0)}
               </div>
               <div style={{ fontSize: 15, fontWeight: 600, color: "#111827" }}>{selected.prenom} {selected.nom}</div>
@@ -108,7 +108,7 @@ export default function MandatairesPanel({ mandataires, factures, onAdd, onUpdat
                 return (
                   <div key={f.id} style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 12px", marginBottom: 8 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "#7c3aed", fontFamily: "monospace" }}>{f.numero}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#B8966A", fontFamily: "monospace" }}>{f.numero}</span>
                       <span style={{ background: s.bg, color: s.text, borderRadius: 5, padding: "1px 7px", fontSize: 10, fontWeight: 600 }}>{s.label}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#6b7280", marginBottom: 2 }}>
@@ -117,7 +117,7 @@ export default function MandatairesPanel({ mandataires, factures, onAdd, onUpdat
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#6b7280", marginBottom: 2 }}>
                       <span>Commission {f.tauxCommission}% HT</span>
-                      <span style={{ color: "#7c3aed", fontWeight: 600 }}>{formatEur(f.commissionHT)}</span>
+                      <span style={{ color: "#B8966A", fontWeight: 600 }}>{formatEur(f.commissionHT)}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#6b7280", marginBottom: 2 }}>
                       <span>TVA 20%</span>
@@ -136,7 +136,7 @@ export default function MandatairesPanel({ mandataires, factures, onAdd, onUpdat
             <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: 12, marginTop: 4 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700 }}>
                 <span style={{ color: "#6b7280" }}>Total à reverser TTC</span>
-                <span style={{ color: "#7c3aed" }}>{formatEur(totalComm(selected.id))}</span>
+                <span style={{ color: "#B8966A" }}>{formatEur(totalComm(selected.id))}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginTop: 4 }}>
                 <span style={{ color: "#9ca3af" }}>Déjà payé TTC</span>
@@ -180,12 +180,12 @@ function MandataireModal({ mandataire, onClose, onSave }: { mandataire: Mandatai
             <F label="Taux de commission (%)">
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <input type="number" min="0" max="100" value={f.tauxCommission} onChange={e => set("tauxCommission", e.target.value)} style={{ ...inp, flex: 1 }} />
-                <span style={{ fontSize: 13, color: "#7c3aed", fontWeight: 700 }}>{f.tauxCommission}%</span>
+                <span style={{ fontSize: 13, color: "#B8966A", fontWeight: 700 }}>{f.tauxCommission}%</span>
               </div>
             </F>
           </div>
           <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-            <div onClick={() => set("actif", !f.actif)} style={{ width: 38, height: 20, borderRadius: 10, background: f.actif ? "#7c3aed" : "#e5e7eb", position: "relative", cursor: "pointer", transition: "background .2s" }}>
+            <div onClick={() => set("actif", !f.actif)} style={{ width: 38, height: 20, borderRadius: 10, background: f.actif ? "#B8966A" : "#e5e7eb", position: "relative", cursor: "pointer", transition: "background .2s" }}>
               <div style={{ position: "absolute", top: 2, left: f.actif ? 20 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
             </div>
             <span style={{ fontSize: 13 }}>Mandataire {f.actif ? "actif" : "inactif"}</span>
@@ -209,5 +209,5 @@ function F({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><div style={{ fontSize: 12, fontWeight: 500, color: "#374151", marginBottom: 5 }}>{label}</div>{children}</div>;
 }
 const inp: React.CSSProperties = { width: "100%", height: 36, border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 10px", fontSize: 13, outline: "none", background: "#f9fafb", fontFamily: "inherit", boxSizing: "border-box" };
-const btnPrimary: React.CSSProperties = { background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" };
+const btnPrimary: React.CSSProperties = { background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" };
 const btnSecondary: React.CSSProperties = { background: "none", border: "1px solid #e5e7eb", borderRadius: 8, padding: "7px 14px", fontSize: 13, cursor: "pointer", color: "#374151" };

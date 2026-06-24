@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { User, Role, DEFAULT_ROLES, getInitials, avatarColor, MODULES } from "@/lib/admin";
+import { User, Role, ModuleAccess, Right, DEFAULT_ROLES, getInitials, avatarColor, MODULES, RIGHTS, getRightStyle } from "@/lib/admin";
 import UserModal from "./UserModal";
 
 export default function UsersAdmin() {
@@ -10,6 +10,7 @@ export default function UsersAdmin() {
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("all");
   const [showPassword, setShowPassword] = useState<string | null>(null);
+  const [editingAccess, setEditingAccess] = useState<User | null>(null);
 
   const filtered = users.filter(u => {
     if (filterRole !== "all" && u.roleId !== filterRole) return false;
@@ -119,21 +120,18 @@ export default function UsersAdmin() {
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <div
                       onClick={() => toggleActive(user.id)}
-                      style={{ width: 36, height: 20, borderRadius: 10, background: user.active ? "#7c3aed" : "#e5e7eb", cursor: "pointer", position: "relative", transition: "background .2s" }}
+                      style={{ width: 36, height: 20, borderRadius: 10, background: user.active ? "#B8966A" : "#e5e7eb", cursor: "pointer", position: "relative", transition: "background .2s" }}
                     >
                       <div style={{ position: "absolute", top: 2, left: user.active ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
                     </div>
                     <span style={{ fontSize: 11, color: user.active ? "#059669" : "#9ca3af" }}>{user.active ? "Actif" : "Inactif"}</span>
                   </div>
 
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => setEditing(user)} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#374151" }}>✏</button>
-                    <button
-                      onClick={() => setShowPassword(showPassword === user.id ? null : user.id)}
-                      title="Voir le mot de passe"
-                      style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#374151" }}
-                    >🔑</button>
-                    <button onClick={() => deleteUser(user.id)} style={{ background: "none", border: "1px solid #fecaca", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#dc2626" }}>🗑</button>
+                  <div style={{ display: "flex", gap: 5 }}>
+                    <button onClick={() => setEditing(user)} title="Modifier" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#374151" }}>✏</button>
+                    <button onClick={() => setEditingAccess(user)} title="Gérer les accès" style={{ background: user.accessOverrides?.length ? "#F7F0E6" : "none", border: `1px solid ${user.accessOverrides?.length ? "#B8966A" : "#e5e7eb"}`, borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: user.accessOverrides?.length ? "#B8966A" : "#374151" }}>🔐</button>
+                    <button onClick={() => setShowPassword(showPassword === user.id ? null : user.id)} title="Voir le mot de passe" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#374151" }}>🔑</button>
+                    <button onClick={() => deleteUser(user.id)} title="Supprimer" style={{ background: "none", border: "1px solid #fecaca", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#dc2626" }}>🗑</button>
                   </div>
                 </div>
               );
@@ -163,7 +161,142 @@ export default function UsersAdmin() {
           onSave={saveUser}
         />
       )}
+
+      {editingAccess && (
+        <AccessPanel
+          user={editingAccess}
+          role={roles.find(r => r.id === editingAccess.roleId)}
+          onClose={() => setEditingAccess(null)}
+          onSave={user => { saveUser(user); setEditingAccess(null); }}
+        />
+      )}
     </div>
+  );
+}
+
+/* ── Panneau accès rapide ─────────────────────────────────── */
+function AccessPanel({ user, role, onClose, onSave }: {
+  user: User; role: Role | undefined;
+  onClose: () => void; onSave: (u: User) => void;
+}) {
+  const [overrides, setOverrides] = useState<ModuleAccess[]>(user.accessOverrides ?? []);
+
+  function getRoleRight(moduleId: string): Right {
+    return role?.modules.find(m => m.moduleId === moduleId)?.right ?? "aucun";
+  }
+  function getEffective(moduleId: string): Right {
+    return overrides.find(o => o.moduleId === moduleId)?.right ?? getRoleRight(moduleId);
+  }
+  function setRight(moduleId: string, right: Right) {
+    if (right === getRoleRight(moduleId)) {
+      setOverrides(p => p.filter(o => o.moduleId !== moduleId));
+    } else {
+      setOverrides(p => {
+        const ex = p.find(o => o.moduleId === moduleId);
+        return ex ? p.map(o => o.moduleId === moduleId ? { ...o, right } : o) : [...p, { moduleId, right }];
+      });
+    }
+  }
+
+  const ac = avatarColor(user.id);
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 40 }} />
+      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 500, background: "#fff", zIndex: 50, display: "flex", flexDirection: "column", boxShadow: "-4px 0 24px rgba(0,0,0,0.12)" }}>
+        {/* Header */}
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 38, height: 38, borderRadius: "50%", background: ac.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: ac.text }}>
+                {getInitials(user.prenom, user.nom)}
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>{user.prenom} {user.nom}</div>
+                <div style={{ fontSize: 11, color: role?.color ?? "#9ca3af" }}>{role?.label ?? "Aucun rôle"} {overrides.length > 0 && `· ${overrides.length} accès perso`}</div>
+              </div>
+            </div>
+            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#9ca3af" }}>×</button>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>Accès & permissions</div>
+            {overrides.length > 0 && (
+              <button onClick={() => setOverrides([])} style={{ fontSize: 11, color: "#dc2626", background: "none", border: "1px solid #fecaca", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>
+                Réinitialiser tout
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Modules */}
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {MODULES.map((mod, i) => {
+            const effective = getEffective(mod.id);
+            const roleRight = getRoleRight(mod.id);
+            const hasOv = overrides.some(o => o.moduleId === mod.id);
+            return (
+              <div key={mod.id} style={{ padding: "12px 20px", borderBottom: i < MODULES.length - 1 ? "1px solid #f3f4f6" : "none", background: hasOv ? "#faf5ff" : "transparent" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <span style={{ fontSize: 18, flexShrink: 0 }}>{mod.icon}</span>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: "#111827" }}>{mod.label}</div>
+                      {hasOv && (
+                        <div style={{ fontSize: 10, color: "#B8966A", marginTop: 1 }}>
+                          Perso · rôle : <strong>{getRightStyle(roleRight).label}</strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
+                    {RIGHTS.map(r => {
+                      const active = effective === r.value;
+                      return (
+                        <button key={r.value} onClick={() => setRight(mod.id, r.value)} style={{
+                          padding: "4px 9px", fontSize: 11, fontWeight: active ? 700 : 400,
+                          border: `1.5px solid ${active ? r.color : "#e5e7eb"}`,
+                          borderRadius: 6, cursor: "pointer",
+                          background: active ? r.bg : "#fff",
+                          color: active ? r.color : "#9ca3af",
+                        }}>{r.label}</button>
+                      );
+                    })}
+                    {hasOv && (
+                      <button onClick={() => setOverrides(p => p.filter(o => o.moduleId !== mod.id))} title="Revenir au rôle" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 6px", fontSize: 11, cursor: "pointer", color: "#9ca3af" }}>↺</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Résumé actif */}
+        <div style={{ padding: "12px 20px", borderTop: "1px solid #e5e7eb", background: "#f9fafb" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Accès actifs</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 12 }}>
+            {MODULES.map(mod => {
+              const right = getEffective(mod.id);
+              if (right === "aucun") return null;
+              const s = getRightStyle(right);
+              const hasOv = overrides.some(o => o.moduleId === mod.id);
+              return (
+                <span key={mod.id} style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}30`, borderRadius: 5, padding: "2px 7px", fontSize: 10, fontWeight: 600 }}>
+                  {mod.icon} {mod.label}{hasOv ? " ★" : ""}
+                </span>
+              );
+            })}
+            {MODULES.every(m => getEffective(m.id) === "aucun") && <span style={{ fontSize: 12, color: "#9ca3af" }}>Aucun accès accordé</span>}
+          </div>
+          <button
+            onClick={() => onSave({ ...user, accessOverrides: overrides.length > 0 ? overrides : undefined })}
+            style={{ width: "100%", background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          >
+            Enregistrer les accès
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -177,5 +310,5 @@ function Stat({ label, value, color }: { label: string; value: number; color?: s
 }
 
 const sel: React.CSSProperties = { height: 34, border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, padding: "0 10px", background: "#f9fafb", color: "#374151", outline: "none" };
-const btnPrimary: React.CSSProperties = { background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" };
+const btnPrimary: React.CSSProperties = { background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" };
 const btnSecondary: React.CSSProperties = { background: "#fff", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 8, padding: "7px 14px", fontSize: 13, cursor: "pointer" };

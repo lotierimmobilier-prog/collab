@@ -93,7 +93,7 @@ export default function PlanningBoard() {
       const allEvents: LocalEvent[] = [];
       for (const cal of selected) {
         const evts = await fetchEvents(cal.id, token, timeMin, timeMax);
-        for (const e of evts) allEvents.push(gEventToLocal(e, cal.backgroundColor ?? "#7c3aed"));
+        for (const e of evts) allEvents.push(gEventToLocal(e, cal.backgroundColor ?? "#B8966A"));
       }
       setGEvents(allEvents);
       setLastSync(new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }));
@@ -184,7 +184,7 @@ export default function PlanningBoard() {
         {connected && (
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#6b7280" }}>
             {syncing ? (
-              <span style={{ color: "#7c3aed" }}>🔄 Synchronisation…</span>
+              <span style={{ color: "#B8966A" }}>🔄 Synchronisation…</span>
             ) : syncError ? (
               <span style={{ color: "#dc2626" }}>⚠ {syncError}</span>
             ) : lastSync ? (
@@ -210,7 +210,7 @@ export default function PlanningBoard() {
 
         <button onClick={() => setShowSync(true)} style={{ ...btnSecondary, display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 14 }}>📅</span> Agendas Google
-          {connected && <span style={{ background: "#7c3aed", color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 10 }}>{calendars.filter(c => c.selected).length}</span>}
+          {connected && <span style={{ background: "#B8966A", color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 10 }}>{calendars.filter(c => c.selected).length}</span>}
         </button>
 
         {/* View toggle */}
@@ -218,7 +218,7 @@ export default function PlanningBoard() {
           {(["month", "week", "day"] as const).map(v => (
             <button key={v} onClick={() => setView(v)} style={{
               padding: "6px 12px", fontSize: 12, border: "none", cursor: "pointer",
-              background: view === v ? "#7c3aed" : "#fff",
+              background: view === v ? "#B8966A" : "#fff",
               color: view === v ? "#fff" : "#6b7280",
             }}>{{ month: "Mois", week: "Semaine", day: "Jour" }[v]}</button>
           ))}
@@ -350,4 +350,4 @@ function formatHeader(date: Date, view: string): string {
 
 const iconBtn: React.CSSProperties = { background: "none", border: "1px solid #e5e7eb", borderRadius: 8, padding: "5px 10px", cursor: "pointer", fontSize: 16, color: "#374151" };
 const btnSecondary: React.CSSProperties = { background: "#fff", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" };
-const btnPrimary: React.CSSProperties = { background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" };
+const btnPrimary: React.CSSProperties = { background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" };

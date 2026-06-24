@@ -36,7 +36,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function KpiCard({ label, value, sub, color = "#7c3aed", icon, href }: {
+function KpiCard({ label, value, sub, color = "#B8966A", icon, href }: {
   label: string; value: string | number; sub?: string; color?: string; icon?: string; href?: string;
 }) {
   const inner = (
@@ -63,7 +63,7 @@ function KpiCard({ label, value, sub, color = "#7c3aed", icon, href }: {
   return href ? <a href={href} style={{ textDecoration: "none" }}>{inner}</a> : inner;
 }
 
-function RingCard({ label, value, max, color = "#7c3aed", sub }: {
+function RingCard({ label, value, max, color = "#B8966A", sub }: {
   label: string; value: number; max: number; color?: string; sub?: string;
 }) {
   const pct = Math.min(100, max > 0 ? (value / max) * 100 : 0);
@@ -123,19 +123,19 @@ function AdminView() {
         <Alert type="warning" text="Webhook GitHub — vérifier le statut de déploiement" />
       </div>
       <Section title="Activité plateforme">
-        <KpiCard label="Utilisateurs actifs" value={8} sub="sur 12 inscrits" icon="👥" color="#7c3aed" href="/admin/utilisateurs" />
+        <KpiCard label="Utilisateurs actifs" value={8} sub="sur 12 inscrits" icon="👥" color="#B8966A" href="/admin/utilisateurs" />
         <KpiCard label="Connexions aujourd'hui" value={23} sub="+4 vs hier" icon="📡" color="#2563eb" />
         <KpiCard label="Modules actifs" value={7} sub="sur 10 disponibles" icon="🧩" color="#059669" />
         <KpiCard label="Espace serveur" value="2.4 Go" sub="sur 96 Go disponibles" icon="💾" color="#d97706" />
       </Section>
       <Section title="Vue d'ensemble modules">
-        <RingCard label="Dossiers locataires" value={12} max={50} color="#7c3aed" sub="en cours" />
+        <RingCard label="Dossiers locataires" value={12} max={50} color="#B8966A" sub="en cours" />
         <RingCard label="Tâches ouvertes" value={34} max={100} color="#2563eb" sub="toutes équipes" />
         <RingCard label="Messages non lus" value={7} max={50} color="#dc2626" sub="toutes boîtes" />
         <RingCard label="Encaissements" value={3} max={20} color="#059669" sub="à valider" />
       </Section>
       <Section title="Actions rapides">
-        <ActionCard icon="👤" label="Gérer les utilisateurs" desc="Créer, modifier, désactiver" color="#7c3aed" href="/admin/utilisateurs" />
+        <ActionCard icon="👤" label="Gérer les utilisateurs" desc="Créer, modifier, désactiver" color="#B8966A" href="/admin/utilisateurs" />
         <ActionCard icon="🔐" label="Rôles & permissions" desc="Droits par module" color="#2563eb" href="/admin/roles" />
         <ActionCard icon="📊" label="Comptabilité" desc="Encaissements & factures" color="#059669" href="/comptabilite" />
         <ActionCard icon="✉️" label="Messagerie" desc="Comptes mail configurés" color="#d97706" href="/messagerie" />
@@ -151,18 +151,18 @@ function DirigeantView() {
     <>
       <Section title="Performance agence">
         <KpiCard label="CA du mois" value="42 800 €" sub="+12% vs mois dernier" icon="💰" color="#059669" href="/comptabilite" />
-        <KpiCard label="Commissions agents" value="6 420 €" sub="4 agents actifs" icon="🤝" color="#7c3aed" href="/comptabilite" />
+        <KpiCard label="Commissions agents" value="6 420 €" sub="4 agents actifs" icon="🤝" color="#B8966A" href="/comptabilite" />
         <KpiCard label="Dossiers en cours" value={12} sub="3 en attente GLI" icon="📁" color="#2563eb" href="/locataires" />
         <KpiCard label="Locations signées" value={5} sub="ce mois" icon="🔑" color="#d97706" />
       </Section>
       <Section title="Suivi équipe">
-        <RingCard label="Tâches équipe" value={34} max={60} color="#7c3aed" sub="34 ouvertes" />
+        <RingCard label="Tâches équipe" value={34} max={60} color="#B8966A" sub="34 ouvertes" />
         <RingCard label="Dossiers complets" value={8} max={12} color="#059669" sub="prêts à signer" />
         <RingCard label="Rdv cette semaine" value={11} max={20} color="#2563eb" sub="planifiés" />
         <RingCard label="Msgs non lus" value={4} max={30} color="#dc2626" sub="toutes boîtes" />
       </Section>
       <Section title="Accès rapides">
-        <ActionCard icon="📁" label="Dossiers locataires" desc="Suivi candidatures & GLI" color="#7c3aed" href="/locataires" />
+        <ActionCard icon="📁" label="Dossiers locataires" desc="Suivi candidatures & GLI" color="#B8966A" href="/locataires" />
         <ActionCard icon="📊" label="Comptabilité" desc="CA, commissions, TVA" color="#059669" href="/comptabilite" />
         <ActionCard icon="📅" label="Planning" desc="Agenda équipe" color="#2563eb" href="/planning" />
         <ActionCard icon="✔️" label="Tâches équipe" desc="Kanban global" color="#d97706" href="/taches" />
@@ -176,19 +176,19 @@ function AgentView() {
   return (
     <>
       <Section title="Mes indicateurs">
-        <KpiCard label="Mes dossiers" value={4} sub="2 en attente validation" icon="📁" color="#7c3aed" href="/locataires" />
+        <KpiCard label="Mes dossiers" value={4} sub="2 en attente validation" icon="📁" color="#B8966A" href="/locataires" />
         <KpiCard label="Mes commissions" value="1 840 €" sub="ce mois" icon="💰" color="#059669" href="/comptabilite" />
         <KpiCard label="Mes tâches" value={7} sub="3 urgentes" icon="✔️" color="#dc2626" href="/taches" />
         <KpiCard label="Messages non lus" value={2} sub="boîte principale" icon="✉️" color="#d97706" href="/messagerie" />
       </Section>
       <Section title="Mes dossiers">
-        <RingCard label="Dossiers actifs" value={4} max={10} color="#7c3aed" sub="sur objectif 10" />
+        <RingCard label="Dossiers actifs" value={4} max={10} color="#B8966A" sub="sur objectif 10" />
         <RingCard label="Docs reçus" value={28} max={40} color="#059669" sub="pièces complètes" />
         <RingCard label="GLI validés" value={2} max={4} color="#2563eb" sub="éligibles" />
         <RingCard label="Tâches faites" value={14} max={21} color="#d97706" sub="cette semaine" />
       </Section>
       <Section title="Accès rapides">
-        <ActionCard icon="📁" label="Mes dossiers" desc="Candidatures locataires" color="#7c3aed" href="/locataires" />
+        <ActionCard icon="📁" label="Mes dossiers" desc="Candidatures locataires" color="#B8966A" href="/locataires" />
         <ActionCard icon="📊" label="Mes commissions" desc="Auto-facturation" color="#059669" href="/comptabilite" />
         <ActionCard icon="📅" label="Mon planning" desc="Mes rendez-vous" color="#2563eb" href="/planning" />
         <ActionCard icon="✔️" label="Mes tâches" desc="Kanban personnel" color="#d97706" href="/taches" />
@@ -208,19 +208,19 @@ function ComptableView() {
       </div>
       <Section title="Tableau financier">
         <KpiCard label="Encaissements du mois" value="42 800 €" sub="dont 3 à valider" icon="💳" color="#059669" href="/comptabilite" />
-        <KpiCard label="Commissions dues" value="6 420 €" sub="4 mandataires" icon="🤝" color="#7c3aed" href="/comptabilite" />
+        <KpiCard label="Commissions dues" value="6 420 €" sub="4 mandataires" icon="🤝" color="#B8966A" href="/comptabilite" />
         <KpiCard label="TVA collectée" value="4 280 €" sub="T2 2026" icon="📋" color="#2563eb" href="/comptabilite" />
         <KpiCard label="Dépenses du mois" value="8 340 €" sub="-3% vs mois dernier" icon="📤" color="#dc2626" href="/comptabilite" />
       </Section>
       <Section title="À traiter">
-        <RingCard label="Factures à émettre" value={4} max={10} color="#7c3aed" sub="mandataires" />
+        <RingCard label="Factures à émettre" value={4} max={10} color="#B8966A" sub="mandataires" />
         <RingCard label="Encaissements" value={3} max={10} color="#059669" sub="à confirmer" />
         <RingCard label="Dépenses" value={6} max={20} color="#dc2626" sub="à catégoriser" />
         <RingCard label="TVA T2 saisie" value={78} max={100} color="#2563eb" sub="avancement %" />
       </Section>
       <Section title="Accès rapides">
         <ActionCard icon="💳" label="Encaissements" desc="Saisir & valider" color="#059669" href="/comptabilite" />
-        <ActionCard icon="🧾" label="Factures mandataires" desc="Générer & envoyer" color="#7c3aed" href="/comptabilite" />
+        <ActionCard icon="🧾" label="Factures mandataires" desc="Générer & envoyer" color="#B8966A" href="/comptabilite" />
         <ActionCard icon="📋" label="Déclaration TVA" desc="T2 2026 en cours" color="#2563eb" href="/comptabilite" />
         <ActionCard icon="📤" label="Dépenses" desc="Saisir les dépenses" color="#dc2626" href="/comptabilite" />
       </Section>
@@ -234,17 +234,17 @@ function CollaborateurView() {
       <Section title="Mes indicateurs">
         <KpiCard label="Tâches assignées" value={9} sub="3 urgentes" icon="✔️" color="#dc2626" href="/taches" />
         <KpiCard label="Rdv aujourd'hui" value={3} sub="prochain à 14h" icon="📅" color="#2563eb" href="/planning" />
-        <KpiCard label="Messages non lus" value={5} sub="boîte principale" icon="✉️" color="#7c3aed" href="/messagerie" />
+        <KpiCard label="Messages non lus" value={5} sub="boîte principale" icon="✉️" color="#B8966A" href="/messagerie" />
         <KpiCard label="Tâches terminées" value={12} sub="cette semaine" icon="✓" color="#059669" />
       </Section>
       <Section title="Ma semaine">
         <RingCard label="Tâches faites" value={12} max={21} color="#059669" sub="objectif semaine" />
         <RingCard label="Rdv planifiés" value={8} max={15} color="#2563eb" sub="cette semaine" />
-        <RingCard label="Msgs traités" value={18} max={23} color="#7c3aed" sub="boîte principale" />
+        <RingCard label="Msgs traités" value={18} max={23} color="#B8966A" sub="boîte principale" />
         <RingCard label="Urgences traitées" value={2} max={3} color="#dc2626" sub="sur 3 signalées" />
       </Section>
       <Section title="Accès rapides">
-        <ActionCard icon="✔️" label="Mes tâches" desc="Kanban personnel" color="#7c3aed" href="/taches" />
+        <ActionCard icon="✔️" label="Mes tâches" desc="Kanban personnel" color="#B8966A" href="/taches" />
         <ActionCard icon="📅" label="Mon planning" desc="Agenda & rendez-vous" color="#2563eb" href="/planning" />
         <ActionCard icon="✉️" label="Messagerie" desc="Boîtes mail" color="#d97706" href="/messagerie" />
         <ActionCard icon="📁" label="Dossiers locataires" desc="Consultation" color="#059669" href="/locataires" />
@@ -278,9 +278,9 @@ export default function Dashboard() {
           {ROLES.map(r => (
             <button key={r.id} onClick={() => setRole(r.id)} style={{
               display: "flex", alignItems: "center", gap: 5,
-              background: role === r.id ? "#7c3aed" : "#f9fafb",
+              background: role === r.id ? "#B8966A" : "#f9fafb",
               color: role === r.id ? "#fff" : "#6b7280",
-              border: `1px solid ${role === r.id ? "#7c3aed" : "#e5e7eb"}`,
+              border: `1px solid ${role === r.id ? "#B8966A" : "#e5e7eb"}`,
               borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer",
               fontWeight: role === r.id ? 600 : 400,
             }}>
@@ -291,7 +291,7 @@ export default function Dashboard() {
       </div>
 
       {/* Bannière */}
-      <div style={{ margin: "20px 28px 4px", background: "linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%)", borderRadius: 14, padding: "18px 24px", color: "#fff", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ margin: "20px 28px 4px", background: "linear-gradient(135deg, #B8966A 0%, #8A6A42 100%)", borderRadius: 14, padding: "18px 24px", color: "#fff", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <div style={{ fontSize: 17, fontWeight: 700 }}>{greet("Jérôme")} {currentRole.icon}</div>
           <div style={{ fontSize: 13, opacity: 0.8, marginTop: 4 }}>

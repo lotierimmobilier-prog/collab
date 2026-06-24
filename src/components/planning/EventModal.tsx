@@ -3,7 +3,7 @@ import { useState } from "react";
 import { LocalEvent } from "./PlanningBoard";
 
 const COLORS = [
-  { value: "#7c3aed", label: "Violet" },
+  { value: "#B8966A", label: "Violet" },
   { value: "#0891b2", label: "Cyan" },
   { value: "#059669", label: "Vert" },
   { value: "#dc2626", label: "Rouge" },
@@ -37,7 +37,7 @@ export default function EventModal({ defaultDate, onClose, onSave }: {
     allDay: false,
     location: "",
     description: "",
-    color: "#7c3aed",
+    color: "#B8966A",
     type: "rdv",
   });
 
@@ -90,9 +90,9 @@ export default function EventModal({ defaultDate, onClose, onSave }: {
             {EVENT_TYPES.map(t => (
               <button key={t.value} onClick={() => set("type", t.value)} style={{
                 padding: "4px 10px", fontSize: 11, borderRadius: 6, cursor: "pointer",
-                border: `1px solid ${f.type === t.value ? "#7c3aed" : "#e5e7eb"}`,
-                background: f.type === t.value ? "#f5f3ff" : "#fff",
-                color: f.type === t.value ? "#7c3aed" : "#6b7280",
+                border: `1px solid ${f.type === t.value ? "#B8966A" : "#e5e7eb"}`,
+                background: f.type === t.value ? "#F7F0E6" : "#fff",
+                color: f.type === t.value ? "#B8966A" : "#6b7280",
                 fontWeight: f.type === t.value ? 600 : 400,
               }}>{t.label}</button>
             ))}

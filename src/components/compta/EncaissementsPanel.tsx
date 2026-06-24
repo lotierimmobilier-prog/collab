@@ -54,7 +54,7 @@ export default function EncaissementsPanel({ encaissements, transactions, onAdd 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
         <KPI label="Total HT" value={formatEur(totalHT)} color="#059669" />
         <KPI label="TVA collectée" value={formatEur(totalTVA)} color="#f59e0b" />
-        <KPI label="Total TTC" value={formatEur(totalTTC)} color="#7c3aed" />
+        <KPI label="Total TTC" value={formatEur(totalTTC)} color="#B8966A" />
       </div>
 
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
@@ -82,7 +82,7 @@ export default function EncaissementsPanel({ encaissements, transactions, onAdd 
               <span style={{ background: "#f3f4f6", color: "#374151", borderRadius: 5, padding: "2px 7px", fontSize: 11 }}>{ENCAISSEMENT_LABELS[e.type]}</span>
               <span style={{ fontSize: 13, fontWeight: 600, color: "#059669" }}>{formatEur(e.montantHT)}</span>
               <span style={{ fontSize: 13, color: "#f59e0b" }}>{formatEur(e.montantTTC - e.montantHT)}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: "#7c3aed" }}>{formatEur(e.montantTTC)}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#B8966A" }}>{formatEur(e.montantTTC)}</span>
               <span style={{ fontSize: 12, color: "#374151" }}>{MODE_LABELS[e.mode]}</span>
               <span style={{ fontSize: 12, color: "#6b7280" }}>{e.date}</span>
             </div>
@@ -118,7 +118,7 @@ export default function EncaissementsPanel({ encaissements, transactions, onAdd 
 
               {/* Calcul auto */}
               {montantHT > 0 && (
-                <div style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 20 }}>
+                <div style={{ background: "#F7F0E6", border: "1px solid #E8D9C0", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 20 }}>
                   <div style={{ textAlign: "center" }}>
                     <div style={{ fontSize: 10, color: "#9ca3af", marginBottom: 2 }}>HT</div>
                     <div style={{ fontSize: 15, fontWeight: 700, color: "#059669" }}>{formatEur(montantHT)}</div>
@@ -129,7 +129,7 @@ export default function EncaissementsPanel({ encaissements, transactions, onAdd 
                   </div>
                   <div style={{ textAlign: "center" }}>
                     <div style={{ fontSize: 10, color: "#9ca3af", marginBottom: 2 }}>TTC</div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: "#7c3aed" }}>{formatEur(montantTTC)}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#B8966A" }}>{formatEur(montantTTC)}</div>
                   </div>
                 </div>
               )}
@@ -173,5 +173,5 @@ function F({ label, children }: { label: string; children: React.ReactNode }) {
 }
 
 const inp: React.CSSProperties = { width: "100%", height: 36, border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 10px", fontSize: 13, outline: "none", background: "#f9fafb", fontFamily: "inherit", boxSizing: "border-box" };
-const btnPrimary: React.CSSProperties = { background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" };
+const btnPrimary: React.CSSProperties = { background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" };
 const btnSecondary: React.CSSProperties = { background: "none", border: "1px solid #e5e7eb", borderRadius: 8, padding: "7px 14px", fontSize: 13, cursor: "pointer", color: "#374151" };

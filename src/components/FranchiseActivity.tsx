@@ -1,7 +1,7 @@
 import Card from "./Card";
 
 const franchises = [
-  { code: "LY", name: "Lyon", biens: 68, loues: 63, pct: 93, color: "#f5f3ff", textColor: "#7c3aed" },
+  { code: "LY", name: "Lyon", biens: 68, loues: 63, pct: 93, color: "#F7F0E6", textColor: "#B8966A" },
   { code: "BX", name: "Bordeaux", biens: 45, loues: 39, pct: 87, color: "#ecfdf5", textColor: "#059669" },
   { code: "MA", name: "Marseille", biens: 52, loues: 41, pct: 79, color: "#fffbeb", textColor: "#d97706" },
   { code: "TO", name: "Toulouse", biens: 38, loues: 27, pct: 71, color: "#fef2f2", textColor: "#dc2626" },

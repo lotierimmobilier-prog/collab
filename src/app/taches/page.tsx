@@ -4,7 +4,7 @@ import TaskBoard from "@/components/tasks/TaskBoard";
 
 export default function TachesPage() {
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f3f4f6" }}>
+    <div style={{ display: "flex", minHeight: "100vh", background: "#F3F1EC" }}>
       <Sidebar active="tasks" />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <Topbar title="Tâches" />

@@ -81,13 +81,13 @@ export default function ComptaBoard() {
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             background: "none", border: "none", cursor: "pointer",
             padding: "12px 14px", fontSize: 13, display: "flex", alignItems: "center", gap: 6,
-            color: tab === t.id ? "#7c3aed" : "#6b7280",
+            color: tab === t.id ? "#B8966A" : "#6b7280",
             fontWeight: tab === t.id ? 600 : 400,
-            borderBottom: tab === t.id ? "2px solid #7c3aed" : "2px solid transparent",
+            borderBottom: tab === t.id ? "2px solid #B8966A" : "2px solid transparent",
           }}>
             <span>{t.icon}</span> {t.label}
             {t.id === "factures" && facturesEnAttente > 0 && (
-              <span style={{ background: "#7c3aed", color: "#fff", borderRadius: 10, padding: "1px 6px", fontSize: 10 }}>{facturesEnAttente}</span>
+              <span style={{ background: "#B8966A", color: "#fff", borderRadius: 10, padding: "1px 6px", fontSize: 10 }}>{facturesEnAttente}</span>
             )}
           </button>
         ))}
@@ -101,7 +101,7 @@ export default function ComptaBoard() {
             {/* KPIs */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
               <KPI label="Honoraires HT encaissés" value={formatEur(totalEnc)} icon="💰" color="#059669" />
-              <KPI label="Commissions mandataires HT" value={formatEur(totalComm)} icon="👤" color="#7c3aed" />
+              <KPI label="Commissions mandataires HT" value={formatEur(totalComm)} icon="👤" color="#B8966A" />
               <KPI label="Net agence HT" value={formatEur(netAgence)} icon="🏦" color="#0891b2" />
               <KPI label="Factures en attente" value={String(facturesEnAttente)} icon="📄" color="#f59e0b" />
             </div>
@@ -114,7 +114,7 @@ export default function ComptaBoard() {
                   <Empty msg="Aucune transaction enregistrée" />
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    <TypeRow icon="🏡" label="Ventes" count={transVente} color="#7c3aed"
+                    <TypeRow icon="🏡" label="Ventes" count={transVente} color="#B8966A"
                       montant={transactions.filter(t => t.type === "vente").reduce((s, t) => s + (t.honorairesAgenceHT ?? 0), 0)} />
                     <TypeRow icon="🔑" label="Mises en location" count={transLoc} color="#0891b2"
                       montant={transactions.filter(t => t.type === "location").reduce((s, t) => s + (t.honorairesLocationHT ?? 0), 0)} />
@@ -137,7 +137,7 @@ export default function ComptaBoard() {
                         <div style={{ fontSize: 13, fontWeight: 500 }}>{m.prenom} {m.nom}</div>
                         <div style={{ fontSize: 11, color: "#9ca3af" }}>{nb} facture(s) · {m.tauxCommission}%</div>
                       </div>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "#7c3aed" }}>{formatEur(comm)}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "#B8966A" }}>{formatEur(comm)}</span>
                     </div>
                   );
                 })}
@@ -233,7 +233,7 @@ function Empty({ msg }: { msg: string }) {
 function Avatar({ prenom, nom }: { prenom: string; nom: string }) {
   const initials = `${prenom.charAt(0)}${nom.charAt(0)}`.toUpperCase();
   return (
-    <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#ede9fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#7c3aed", flexShrink: 0 }}>
+    <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#F7F0E6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#B8966A", flexShrink: 0 }}>
       {initials}
     </div>
   );

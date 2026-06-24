@@ -14,7 +14,7 @@ export default function Card({ title, action, children }: {
         <h2 style={{ fontSize: 14, fontWeight: 500, color: "#111827" }}>{title}</h2>
         {action && (
           <Link href={action.href} style={{
-            fontSize: 12, color: "#7c3aed", textDecoration: "none",
+            fontSize: 12, color: "#B8966A", textDecoration: "none",
             border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 10px",
           }}>{action.label}</Link>
         )}

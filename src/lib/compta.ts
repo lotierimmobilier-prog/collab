@@ -85,7 +85,7 @@ export const FACTURE_STATUS: Record<FactureStatus, { label: string; bg: string; 
 };
 
 export const TRANSACTION_TYPE: Record<TransactionType, { label: string; icon: string; color: string }> = {
-  vente:    { label: "Vente",          icon: "🏡", color: "#7c3aed" },
+  vente:    { label: "Vente",          icon: "🏡", color: "#B8966A" },
   location: { label: "Mise en location", icon: "🔑", color: "#0891b2" },
 };
 

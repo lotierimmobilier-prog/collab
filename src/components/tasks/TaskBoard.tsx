@@ -98,7 +98,7 @@ export default function TaskBoard() {
           {(["board", "list"] as const).map(v => (
             <button key={v} onClick={() => setView(v)} style={{
               padding: "6px 12px", fontSize: 12, border: "none", cursor: "pointer",
-              background: view === v ? "#7c3aed" : "#fff",
+              background: view === v ? "#B8966A" : "#fff",
               color: view === v ? "#fff" : "#6b7280",
             }}>
               {v === "board" ? "⊞ Kanban" : "≡ Liste"}
@@ -107,7 +107,7 @@ export default function TaskBoard() {
         </div>
 
         <button onClick={() => setShowNew(true)} style={{
-          background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8,
+          background: "#B8966A", color: "#fff", border: "none", borderRadius: 8,
           padding: "7px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer",
           display: "flex", alignItems: "center", gap: 6,
         }}>
@@ -131,8 +131,8 @@ export default function TaskBoard() {
                 onDrop={() => handleDrop(col.id)}
                 style={{
                   width: 280, flexShrink: 0, display: "flex", flexDirection: "column",
-                  background: isOver ? "#f5f3ff" : "#f9fafb",
-                  borderRadius: 12, border: isOver ? "2px dashed #7c3aed" : "1px solid #e5e7eb",
+                  background: isOver ? "#F7F0E6" : "#f9fafb",
+                  borderRadius: 12, border: isOver ? "2px dashed #B8966A" : "1px solid #e5e7eb",
                   transition: "all .15s",
                 }}
               >

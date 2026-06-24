@@ -78,7 +78,7 @@ function MonthView({ currentDate, events, onSelectDate, onSelectEvent }: SubProp
                   <div style={{
                     width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 12, fontWeight: isToday ? 700 : 400,
-                    background: isToday ? "#7c3aed" : "transparent",
+                    background: isToday ? "#B8966A" : "transparent",
                     color: isToday ? "#fff" : d.getDay() === 0 || d.getDay() === 6 ? "#9ca3af" : "#111827",
                     marginBottom: 4,
                   }}>{d.getDate()}</div>
@@ -128,7 +128,7 @@ function WeekView({ currentDate, events, onSelectDate, onSelectEvent }: SubProps
                 width: 28, height: 28, borderRadius: "50%", margin: "2px auto 0",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 13, fontWeight: isToday ? 700 : 400,
-                background: isToday ? "#7c3aed" : "transparent",
+                background: isToday ? "#B8966A" : "transparent",
                 color: isToday ? "#fff" : "#111827",
               }}>{d.getDate()}</div>
             </div>

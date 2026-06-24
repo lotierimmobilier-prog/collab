@@ -62,8 +62,8 @@ export default function ThreadList({ threads, messages, labels, accounts, select
             onClick={() => onSelect(t)}
             style={{
               padding: "12px 14px", borderBottom: "1px solid #f3f4f6", cursor: "pointer",
-              background: selectedId === t.id ? "#f5f3ff" : unread ? "#fafafa" : "#fff",
-              borderLeft: selectedId === t.id ? "3px solid #7c3aed" : "3px solid transparent",
+              background: selectedId === t.id ? "#F7F0E6" : unread ? "#fafafa" : "#fff",
+              borderLeft: selectedId === t.id ? "3px solid #B8966A" : "3px solid transparent",
               position: "relative",
             }}
             onMouseEnter={e => selectedId !== t.id && (e.currentTarget.style.background = "#f9fafb")}
@@ -71,7 +71,7 @@ export default function ThreadList({ threads, messages, labels, accounts, select
           >
             <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
               {/* Unread dot */}
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: unread ? "#7c3aed" : "transparent", flexShrink: 0, marginTop: 5 }} />
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: unread ? "#B8966A" : "transparent", flexShrink: 0, marginTop: 5 }} />
 
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>

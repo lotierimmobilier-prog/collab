@@ -111,7 +111,7 @@ export default function AccountConfigPanel({ accounts, onSave, onClose, onSyncAc
                 </div>
               ))}
 
-              <button onClick={() => setShowForm(true)} style={{ width: "100%", border: "1px dashed #e5e7eb", borderRadius: 10, padding: "12px 0", fontSize: 13, cursor: "pointer", color: "#7c3aed", background: "none" }}>
+              <button onClick={() => setShowForm(true)} style={{ width: "100%", border: "1px dashed #e5e7eb", borderRadius: 10, padding: "12px 0", fontSize: 13, cursor: "pointer", color: "#B8966A", background: "none" }}>
                 + Ajouter un compte
               </button>
             </>
@@ -129,7 +129,7 @@ export default function AccountConfigPanel({ accounts, onSave, onClose, onSyncAc
 
         <div style={{ padding: "14px 20px", borderTop: "1px solid #e5e7eb", display: "flex", justifyContent: "flex-end", gap: 10 }}>
           <button onClick={onClose} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>Fermer</button>
-          <button onClick={() => { onSave(list); onClose(); }} style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>Enregistrer</button>
+          <button onClick={() => { onSave(list); onClose(); }} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>Enregistrer</button>
         </div>
       </div>
     </>
@@ -279,9 +279,9 @@ function AccountForm({ account, colorIndex, onSave, onCancel }: {
       {/* Protocol */}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         {(["imap", "pop3"] as Protocol[]).map(p => (
-          <label key={p} style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", border: `1.5px solid ${f.protocol === p ? "#7c3aed" : "#e5e7eb"}`, borderRadius: 8, cursor: "pointer", background: f.protocol === p ? "#f5f3ff" : "#fff" }}>
+          <label key={p} style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", border: `1.5px solid ${f.protocol === p ? "#B8966A" : "#e5e7eb"}`, borderRadius: 8, cursor: "pointer", background: f.protocol === p ? "#F7F0E6" : "#fff" }}>
             <input type="radio" name="proto" checked={f.protocol === p} onChange={() => set("protocol", p)} style={{ display: "none" }} />
-            <span style={{ fontWeight: 600, fontSize: 13, color: f.protocol === p ? "#7c3aed" : "#374151" }}>{p.toUpperCase()}</span>
+            <span style={{ fontWeight: 600, fontSize: 13, color: f.protocol === p ? "#B8966A" : "#374151" }}>{p.toUpperCase()}</span>
             <span style={{ fontSize: 11, color: "#9ca3af" }}>{p === "imap" ? "Synchronisé" : "Téléchargement"}</span>
           </label>
         ))}
@@ -345,7 +345,7 @@ function AccountForm({ account, colorIndex, onSave, onCancel }: {
 
       <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
         <button onClick={onCancel} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>Annuler</button>
-        <button onClick={submit} disabled={!f.email || !f.host} style={{ background: (!f.email || !f.host) ? "#e5e7eb" : "#7c3aed", color: (!f.email || !f.host) ? "#9ca3af" : "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 500, cursor: "pointer", flex: 1 }}>
+        <button onClick={submit} disabled={!f.email || !f.host} style={{ background: (!f.email || !f.host) ? "#e5e7eb" : "#B8966A", color: (!f.email || !f.host) ? "#9ca3af" : "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 500, cursor: "pointer", flex: 1 }}>
           {account ? "Enregistrer les modifications" : "Ajouter le compte"}
         </button>
       </div>

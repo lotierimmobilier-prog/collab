@@ -17,7 +17,7 @@ export default function FacturesPanel({ factures, transactions, mandataires, onP
   return (
     <div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
-        <KPI label="Total commissions émises TTC" value={formatEur(totalEmis)} color="#7c3aed" />
+        <KPI label="Total commissions émises TTC" value={formatEur(totalEmis)} color="#B8966A" />
         <KPI label="Commissions payées TTC" value={formatEur(totalPaye)} color="#059669" />
         <KPI label="En attente de paiement TTC" value={formatEur(totalAttente)} color="#f59e0b" />
       </div>
@@ -40,7 +40,7 @@ export default function FacturesPanel({ factures, transactions, mandataires, onP
             const s = FACTURE_STATUS[f.status];
             return (
               <div key={f.id} style={{ display: "grid", gridTemplateColumns: "110px 1.5fr 1.2fr 80px 100px 100px 90px 90px 100px", padding: "11px 16px", gap: 10, alignItems: "center", borderBottom: i < factures.length - 1 ? "1px solid #f9fafb" : "none" }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "#7c3aed", fontFamily: "monospace" }}>{f.numero}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#B8966A", fontFamily: "monospace" }}>{f.numero}</span>
                 <div>
                   {m ? (
                     <>
@@ -57,9 +57,9 @@ export default function FacturesPanel({ factures, transactions, mandataires, onP
                     </>
                   ) : <span style={{ color: "#9ca3af" }}>—</span>}
                 </div>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "#7c3aed" }}>{f.tauxCommission}%</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#B8966A" }}>{f.tauxCommission}%</span>
                 <span style={{ fontSize: 12, color: "#374151" }}>{formatEur(f.honorairesAgenceHT)}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "#7c3aed" }}>{formatEur(f.commissionHT)}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#B8966A" }}>{formatEur(f.commissionHT)}</span>
                 <span style={{ fontSize: 12, color: "#f59e0b" }}>{formatEur(f.tva)}</span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{formatEur(f.commissionTTC)}</span>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

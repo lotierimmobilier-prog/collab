@@ -178,7 +178,7 @@ export default function MailBoard() {
       {/* SIDEBAR */}
       <div style={{ width: 224, flexShrink: 0, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", overflowY: "auto" }}>
         <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
-          <button onClick={() => setShowCompose(true)} style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          <button onClick={() => setShowCompose(true)} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             ✏ Nouveau message
           </button>
         </div>
@@ -260,7 +260,7 @@ export default function MailBoard() {
             + IMAP / POP3
           </button>
           {hasAnyAccount && (
-            <button onClick={syncAll} disabled={!!syncing} style={{ width: "100%", background: "none", border: "1px solid #ddd6fe", borderRadius: 8, padding: "7px 0", fontSize: 12, cursor: "pointer", color: "#7c3aed" }}>
+            <button onClick={syncAll} disabled={!!syncing} style={{ width: "100%", background: "none", border: "1px solid #E8D9C0", borderRadius: 8, padding: "7px 0", fontSize: 12, cursor: "pointer", color: "#B8966A" }}>
               🔄 Tout synchroniser
             </button>
           )}
@@ -321,7 +321,7 @@ export default function MailBoard() {
                   <button onClick={() => setShowGmailConnect(true)} style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                     <GIcon /> Connecter Gmail
                   </button>
-                  <button onClick={() => setShowImapConfig(true)} style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>
+                  <button onClick={() => setShowImapConfig(true)} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>
                     Configurer IMAP
                   </button>
                 </div>
@@ -355,14 +355,14 @@ function NavLabel({ children, inline }: { children: React.ReactNode; inline?: bo
 }
 function NavItem({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 16px", cursor: "pointer", fontSize: 13, color: active ? "#7c3aed" : "#374151", background: active ? "#f5f3ff" : "transparent", borderLeft: active ? "2px solid #7c3aed" : "2px solid transparent", fontWeight: active ? 500 : 400 }}
+    <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 16px", cursor: "pointer", fontSize: 13, color: active ? "#B8966A" : "#374151", background: active ? "#F7F0E6" : "transparent", borderLeft: active ? "2px solid #B8966A" : "2px solid transparent", fontWeight: active ? 500 : 400 }}
       onMouseEnter={e => !active && (e.currentTarget.style.background = "#f9fafb")}
       onMouseLeave={e => !active && (e.currentTarget.style.background = "transparent")}
     >{children}</div>
   );
 }
 function Badge({ children }: { children: React.ReactNode }) {
-  return <span style={{ background: "#7c3aed", color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 10 }}>{children}</span>;
+  return <span style={{ background: "#B8966A", color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 10 }}>{children}</span>;
 }
 function labelIcon(id: string) { return { inbox: "📥", sent: "📤", drafts: "📝", starred: "⭐", trash: "🗑" }[id] ?? "📧"; }
 function GIcon() {
@@ -420,7 +420,7 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend }: {
           <div style={{ display: "flex", gap: 6 }}>
             {labels.map(l => <button key={l.id} onClick={() => setSelLabels(p => p.includes(l.id) ? p.filter(x => x !== l.id) : [...p, l.id])} style={{ border: `1px solid ${selLabels.includes(l.id) ? l.color : "#e5e7eb"}`, background: selLabels.includes(l.id) ? l.color + "18" : "transparent", color: selLabels.includes(l.id) ? l.color : "#9ca3af", borderRadius: 5, padding: "2px 8px", fontSize: 11, cursor: "pointer" }}>{l.name}</button>)}
           </div>
-          <button onClick={send} disabled={!to || !subject} style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: (!to || !subject) ? 0.5 : 1 }}>Envoyer</button>
+          <button onClick={send} disabled={!to || !subject} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: (!to || !subject) ? 0.5 : 1 }}>Envoyer</button>
         </div>
       </div>
     </>

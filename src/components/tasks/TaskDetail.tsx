@@ -128,9 +128,9 @@ export default function TaskDetail({ task, onClose, onStatusChange }: {
             <Label>Commentaires</Label>
             <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "flex-start" }}>
               <div style={{
-                width: 30, height: 30, borderRadius: "50%", background: "#ede9fe",
+                width: 30, height: 30, borderRadius: "50%", background: "#F7F0E6",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 11, fontWeight: 700, color: "#7c3aed", flexShrink: 0,
+                fontSize: 11, fontWeight: 700, color: "#B8966A", flexShrink: 0,
               }}>JL</div>
               <div style={{ flex: 1 }}>
                 <textarea
@@ -148,7 +148,7 @@ export default function TaskDetail({ task, onClose, onStatusChange }: {
                   <button
                     onClick={() => setComment("")}
                     style={{
-                      marginTop: 6, background: "#7c3aed", color: "#fff",
+                      marginTop: 6, background: "#B8966A", color: "#fff",
                       border: "none", borderRadius: 6, padding: "6px 14px",
                       fontSize: 12, cursor: "pointer",
                     }}

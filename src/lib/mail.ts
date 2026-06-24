@@ -72,7 +72,7 @@ export const SYSTEM_LABELS: MailLabel[] = [
 
 export const DEFAULT_LABELS: MailLabel[] = [
   ...SYSTEM_LABELS,
-  { id: "locataires", name: "Locataires",  color: "#7c3aed" },
+  { id: "locataires", name: "Locataires",  color: "#B8966A" },
   { id: "proprietaires", name: "Propriétaires", color: "#0891b2" },
   { id: "mandataires", name: "Mandataires", color: "#059669" },
   { id: "urgents",  name: "Urgents",       color: "#dc2626" },
@@ -90,7 +90,7 @@ export const IMAP_PRESETS: Record<string, { host: string; port: number; smtpHost
   "sfr.fr":          { host: "imap.sfr.fr",          port: 993, smtpHost: "smtp.sfr.fr",          smtpPort: 465 },
 };
 
-export const ACCOUNT_COLORS = ["#7c3aed","#0891b2","#059669","#dc2626","#d97706","#db2777","#374151"];
+export const ACCOUNT_COLORS = ["#B8966A","#0891b2","#059669","#dc2626","#d97706","#db2777","#374151"];
 
 export function getPreset(email: string) {
   const domain = email.split("@")[1]?.toLowerCase();

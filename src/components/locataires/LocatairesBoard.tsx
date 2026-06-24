@@ -50,14 +50,14 @@ export default function LocatairesBoard() {
         <div style={{ flex: 1 }} />
 
         {/* Lien candidature — pas de window.location pour éviter l'hydration mismatch */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 8, padding: "6px 12px" }}>
-          <span style={{ fontSize: 12, color: "#7c3aed", fontWeight: 500 }}>🔗 Lien candidature</span>
-          <code style={{ fontSize: 11, color: "#6b7280", background: "#ede9fe", borderRadius: 4, padding: "2px 6px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#F7F0E6", border: "1px solid #E8D9C0", borderRadius: 8, padding: "6px 12px" }}>
+          <span style={{ fontSize: 12, color: "#B8966A", fontWeight: 500 }}>🔗 Lien candidature</span>
+          <code style={{ fontSize: 11, color: "#6b7280", background: "#F7F0E6", borderRadius: 4, padding: "2px 6px" }}>
             /candidature
           </code>
           <button
             onClick={() => { if (typeof window !== "undefined") navigator.clipboard?.writeText(window.location.origin + "/candidature"); }}
-            style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 6, padding: "3px 10px", fontSize: 11, cursor: "pointer" }}
+            style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 6, padding: "3px 10px", fontSize: 11, cursor: "pointer" }}
           >Copier</button>
         </div>
 
@@ -147,4 +147,4 @@ export default function LocatairesBoard() {
 }
 
 const selectStyle: React.CSSProperties = { height: 34, border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, padding: "0 10px", background: "#f9fafb", color: "#374151", outline: "none" };
-const btnPrimary: React.CSSProperties = { background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" };
+const btnPrimary: React.CSSProperties = { background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" };

@@ -8,7 +8,7 @@ export default function RolesAdmin() {
   const [showNew, setShowNew] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newDesc, setNewDesc] = useState("");
-  const [newColor, setNewColor] = useState("#7c3aed");
+  const [newColor, setNewColor] = useState("#B8966A");
   const [dirty, setDirty] = useState(false);
 
   function selectRole(role: Role) {
@@ -82,7 +82,7 @@ export default function RolesAdmin() {
               onClick={() => selectRole(role)}
               style={{
                 padding: "10px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10,
-                background: selectedRole.id === role.id ? "#f5f3ff" : "transparent",
+                background: selectedRole.id === role.id ? "#F7F0E6" : "transparent",
                 borderLeft: selectedRole.id === role.id ? `3px solid ${role.color}` : "3px solid transparent",
               }}
             >
@@ -216,7 +216,7 @@ export default function RolesAdmin() {
               </F>
               <F label="Couleur">
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {["#7c3aed", "#0891b2", "#059669", "#dc2626", "#d97706", "#db2777"].map(c => (
+                  {["#B8966A", "#0891b2", "#059669", "#dc2626", "#d97706", "#db2777"].map(c => (
                     <div key={c} onClick={() => setNewColor(c)} style={{
                       width: 28, height: 28, borderRadius: "50%", background: c, cursor: "pointer",
                       border: newColor === c ? `3px solid ${c}` : "3px solid transparent",
@@ -242,5 +242,5 @@ function F({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><div style={{ fontSize: 12, fontWeight: 500, color: "#374151", marginBottom: 5 }}>{label}</div>{children}</div>;
 }
 
-const btnPrimary: React.CSSProperties = { background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" };
+const btnPrimary: React.CSSProperties = { background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" };
 const inp: React.CSSProperties = { height: 36, border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 10px", fontSize: 13, outline: "none", background: "#f9fafb", fontFamily: "inherit", boxSizing: "border-box" };

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Task, Priority, Status, PRIORITY_STYLES, COLUMNS } from "@/lib/tasks";
 
 const MEMBERS = [
-  { initials: "JL", name: "Jérôme L.", color: "#ede9fe" },
+  { initials: "JL", name: "Jérôme L.", color: "#F7F0E6" },
   { initials: "MD", name: "Marie D.", color: "#dcfce7" },
   { initials: "PR", name: "Paul R.", color: "#dbeafe" },
 ];
@@ -162,7 +162,7 @@ export default function NewTaskModal({ onClose, onAdd }: {
             padding: "8px 16px", fontSize: 13, cursor: "pointer", color: "#374151",
           }}>Annuler</button>
           <button onClick={submit} disabled={!title.trim()} style={{
-            background: title.trim() ? "#7c3aed" : "#e5e7eb",
+            background: title.trim() ? "#B8966A" : "#e5e7eb",
             color: title.trim() ? "#fff" : "#9ca3af",
             border: "none", borderRadius: 8, padding: "8px 18px",
             fontSize: 13, fontWeight: 500, cursor: title.trim() ? "pointer" : "default",

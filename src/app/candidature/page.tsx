@@ -143,12 +143,12 @@ export default function CandidaturePage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f5f3ff", padding: "32px 16px" }}>
+    <div style={{ minHeight: "100vh", background: "#F7F0E6", padding: "32px 16px" }}>
       <div style={{ maxWidth: 640, margin: "0 auto" }}>
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 4 }}>
-            Collab<span style={{ color: "#7c3aed" }}>.</span> — Dépôt de dossier
+            Collab<span style={{ color: "#B8966A" }}>.</span> — Dépôt de dossier
           </div>
           <div style={{ fontSize: 13, color: "#6b7280" }}>Constituez votre dossier de candidature locative en ligne</div>
         </div>
@@ -161,12 +161,12 @@ export default function CandidaturePage() {
                 <div style={{
                   width: 28, height: 28, borderRadius: "50%", display: "flex",
                   alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700,
-                  background: step > s.n ? "#7c3aed" : step === s.n ? "#7c3aed" : "#e5e7eb",
+                  background: step > s.n ? "#B8966A" : step === s.n ? "#B8966A" : "#e5e7eb",
                   color: step >= s.n ? "#fff" : "#9ca3af",
                 }}>{step > s.n ? "✓" : s.n}</div>
-                <span style={{ fontSize: 12, color: step >= s.n ? "#7c3aed" : "#9ca3af", fontWeight: step === s.n ? 600 : 400 }}>{s.label}</span>
+                <span style={{ fontSize: 12, color: step >= s.n ? "#B8966A" : "#9ca3af", fontWeight: step === s.n ? 600 : 400 }}>{s.label}</span>
               </div>
-              {i < STEPS.length - 1 && <div style={{ flex: 1, height: 1, background: step > s.n ? "#7c3aed" : "#e5e7eb", margin: "0 8px" }} />}
+              {i < STEPS.length - 1 && <div style={{ flex: 1, height: 1, background: step > s.n ? "#B8966A" : "#e5e7eb", margin: "0 8px" }} />}
             </div>
           ))}
         </div>
@@ -238,12 +238,12 @@ export default function CandidaturePage() {
                 </p>
 
                 {/* Progress */}
-                <div style={{ background: "#f9fafb", borderRadius: 8, padding: "10px 14px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ background: "#FAFAF8", borderRadius: 8, padding: "10px 14px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ height: 6, background: "#e5e7eb", borderRadius: 3 }}>
                       <div style={{
                         width: `${Math.round((uploadedRequired.length / requiredDocs.length) * 100)}%`,
-                        height: "100%", background: step3Valid ? "#10b981" : "#7c3aed", borderRadius: 3, transition: "width .3s",
+                        height: "100%", background: step3Valid ? "#10b981" : "#B8966A", borderRadius: 3, transition: "width .3s",
                       }} />
                     </div>
                   </div>
@@ -404,7 +404,7 @@ export default function CandidaturePage() {
 
 function PageShell({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ minHeight: "100vh", background: "#f5f3ff", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <div style={{ minHeight: "100vh", background: "#F7F0E6", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ background: "#fff", borderRadius: 16, padding: "48px 40px", maxWidth: 500, width: "100%", boxShadow: "0 4px 24px rgba(0,0,0,0.08)" }}>
         {children}
       </div>
@@ -445,12 +445,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const inputStyle: React.CSSProperties = {
   width: "100%", height: 38, border: "1px solid #e5e7eb", borderRadius: 8,
-  padding: "0 10px", fontSize: 13, outline: "none", background: "#f9fafb",
+  padding: "0 10px", fontSize: 13, outline: "none", background: "#FAFAF8",
   fontFamily: "inherit", boxSizing: "border-box",
 };
 
 const btnPrimary: React.CSSProperties = {
-  background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8,
+  background: "#B8966A", color: "#fff", border: "none", borderRadius: 8,
   padding: "9px 20px", fontSize: 13, fontWeight: 500, cursor: "pointer",
 };
 
