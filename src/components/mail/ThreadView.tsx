@@ -488,53 +488,65 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
         </div>
       )}
 
-      {/* ── Zone réponse — épinglée EN HAUT, avant les messages ── */}
+      {/* ── Zone réponse — modal flottante sur la popup ── */}
       {showReply && (
-        <div style={{ borderBottom: "2px solid #e5e7eb", background: "#fff", flexShrink: 0 }}>
-          {/* En-tête : destinataire + outils IA */}
-          <div style={{ background: GOLD_BG, padding: "10px 20px", borderBottom: `1px solid ${BORDER}`, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: GOLD, flexShrink: 0 }}>✦ Réponse à</span>
-            <span style={{ fontSize: 12, color: "#374151", fontWeight: 500 }}>{lastMsg.from.name || lastMsg.from.email}</span>
-            <div style={{ flex: 1 }} />
-            <select value={aiTone} onChange={e => setAiTone(e.target.value)} style={{ height: 26, border: `1px solid ${BORDER}`, borderRadius: 6, fontSize: 11, padding: "0 6px", background: "#fff", color: "#374151" }}>
-              <option value="professionnel">Professionnel</option>
-              <option value="cordial">Cordial</option>
-              <option value="formel">Formel</option>
-              <option value="concis">Concis</option>
-            </select>
-            <input value={aiInstruction} onChange={e => setAiInstruction(e.target.value)} placeholder="Instruction IA…" style={{ width: 160, height: 26, border: `1px solid ${BORDER}`, borderRadius: 6, fontSize: 11, padding: "0 8px", outline: "none", background: "#fff" }} />
-            <button onClick={generateAIReply} disabled={generating} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: generating ? 0.7 : 1 }}>
-              {generating ? "…" : "✦ Générer"}
-            </button>
-            {aiError && <span style={{ fontSize: 11, color: "#dc2626" }}>{aiError}</span>}
-            <button onClick={() => { setShowReply(false); setReplyBody(""); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 18, lineHeight: 1, marginLeft: 4 }}>×</button>
-          </div>
+        <div style={{ position: "absolute", inset: 0, zIndex: 20, display: "flex", alignItems: "flex-end", background: "rgba(0,0,0,0.18)", pointerEvents: "all" }}
+          onClick={e => { if (e.target === e.currentTarget) { setShowReply(false); setReplyBody(""); } }}>
+          <div style={{ width: "100%", background: "#fff", borderRadius: "16px 16px 0 0", boxShadow: "0 -8px 32px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", maxHeight: "75%", overflow: "hidden" }}>
 
-          {/* Corps de la réponse */}
-          <textarea
-            autoFocus
-            value={replyBody}
-            onChange={e => setReplyBody(e.target.value)}
-            placeholder={generating ? "Auguste rédige la réponse…" : "Votre réponse…"}
-            rows={6}
-            style={{ width: "100%", border: "none", padding: "12px 20px", fontSize: 13, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box", background: generating ? "#fafaf8" : "#fff", color: generating ? "#9ca3af" : "#111827" }}
-          />
+            {/* En-tête */}
+            <div style={{ background: GOLD_BG, padding: "10px 16px", borderBottom: `1px solid ${BORDER}`, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flexShrink: 0 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: GOLD, flexShrink: 0 }}>✦ Réponse à</span>
+              <span style={{ fontSize: 12, color: "#374151", fontWeight: 500, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lastMsg.from.name || lastMsg.from.email}</span>
+              {/* Bouton fermer bien visible */}
+              <button onClick={() => { setShowReply(false); setReplyBody(""); }}
+                style={{ width: 28, height: 28, borderRadius: "50%", background: "#f3f4f6", border: "1px solid #e5e7eb", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "#374151", fontWeight: 700, flexShrink: 0, lineHeight: 1 }}>
+                ×
+              </button>
+            </div>
 
-          {/* Actions */}
-          <div style={{ padding: "8px 20px 12px", borderTop: "1px solid #f3f4f6", display: "flex", gap: 8, alignItems: "center" }}>
-            <button onClick={sendReply} disabled={!replyBody.trim() || generating}
-              style={{ background: replyBody.trim() && !generating ? GOLD : "#e5e7eb", color: replyBody.trim() && !generating ? "#fff" : "#9ca3af", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-              ↑ Envoyer
-            </button>
-            <button onClick={() => { setShowReply(false); setReplyBody(""); }}
-              style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer", color: "#374151" }}>
-              Annuler
-            </button>
-            {replyBody && (
-              <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: 4 }}>
-                {replyBody.length} caractères
-              </span>
-            )}
+            {/* Outils IA */}
+            <div style={{ padding: "8px 16px", borderBottom: `1px solid ${BORDER}`, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", flexShrink: 0, background: "#fafafa" }}>
+              <select value={aiTone} onChange={e => setAiTone(e.target.value)} style={{ height: 26, border: `1px solid ${BORDER}`, borderRadius: 6, fontSize: 11, padding: "0 6px", background: "#fff", color: "#374151" }}>
+                <option value="professionnel">Professionnel</option>
+                <option value="cordial">Cordial</option>
+                <option value="formel">Formel</option>
+                <option value="concis">Concis</option>
+              </select>
+              <input value={aiInstruction} onChange={e => setAiInstruction(e.target.value)} placeholder="Instruction IA…" style={{ flex: 1, minWidth: 100, height: 26, border: `1px solid ${BORDER}`, borderRadius: 6, fontSize: 11, padding: "0 8px", outline: "none", background: "#fff" }} />
+              <button onClick={generateAIReply} disabled={generating} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: generating ? 0.7 : 1, whiteSpace: "nowrap" }}>
+                {generating ? "…" : "✦ Générer"}
+              </button>
+              {aiError && <span style={{ fontSize: 11, color: "#dc2626", width: "100%" }}>{aiError}</span>}
+            </div>
+
+            {/* Textarea scrollable */}
+            <div style={{ flex: 1, overflowY: "auto", minHeight: 120 }}>
+              <textarea
+                autoFocus
+                value={replyBody}
+                onChange={e => setReplyBody(e.target.value)}
+                placeholder={generating ? "Auguste rédige la réponse…" : "Votre réponse…"}
+                style={{ width: "100%", minHeight: 160, height: "100%", border: "none", padding: "14px 20px", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box", background: generating ? "#fafaf8" : "#fff", color: generating ? "#9ca3af" : "#111827", display: "block" }}
+              />
+            </div>
+
+            {/* Actions */}
+            <div style={{ padding: "10px 16px 14px", borderTop: "1px solid #f3f4f6", display: "flex", gap: 8, alignItems: "center", flexShrink: 0, background: "#fff" }}>
+              <button onClick={sendReply} disabled={!replyBody.trim() || generating}
+                style={{ background: replyBody.trim() && !generating ? GOLD : "#e5e7eb", color: replyBody.trim() && !generating ? "#fff" : "#9ca3af", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                ↑ Envoyer
+              </button>
+              <button onClick={() => { setShowReply(false); setReplyBody(""); }}
+                style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 8, padding: "9px 16px", fontSize: 13, cursor: "pointer", color: "#374151" }}>
+                Annuler
+              </button>
+              {replyBody && (
+                <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: "auto" }}>
+                  {replyBody.length} caractères
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}

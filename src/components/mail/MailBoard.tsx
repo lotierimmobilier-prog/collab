@@ -28,6 +28,8 @@ export default function MailBoard() {
   const [threads, setThreads]             = useState<MailThread[]>([]);
   const [activeLabel, setActiveLabel]     = useState("inbox");
   const [activeAccount, setActiveAccount] = useState<string>("all");
+  // Comptes masqués dans la boîte de réception — vide = tous visibles
+  const [hiddenAccounts, setHiddenAccounts] = useState<Set<string>>(new Set());
   const [selectedThread, setSelectedThread] = useState<MailThread | null>(null);
 
   // Recherche
@@ -454,6 +456,7 @@ export default function MailBoard() {
 
     return threads.filter(t => {
       const allMsgs = messages.filter(m => m.threadId === t.id);
+      if (hiddenAccounts.size > 0 && hiddenAccounts.has(t.accountId)) return false;
       if (activeAccount !== "all" && t.accountId !== activeAccount) return false;
       if (activeLabel === "inbox") return allMsgs.some(m => m.labels.includes("inbox") && !m.labels.includes("trash"));
       if (activeLabel === "trash") return allMsgs.some(m => m.labels.includes("trash"));
@@ -517,47 +520,50 @@ export default function MailBoard() {
           </NavItem>
         ))}
 
-        {/* Gmail accounts */}
+        {/* Gmail accounts — checkboxes pour afficher/masquer */}
         {gmailConfigs.length > 0 && (
           <>
             <NavLabel>Gmail</NavLabel>
-            <NavItem active={activeAccount === "all"} onClick={() => setActiveAccount("all")}>
-              <span style={{ fontSize: 14 }}>📧</span>
-              <span style={{ flex: 1, fontSize: 12 }}>Tous les comptes</span>
-              {totalUnread > 0 && <Badge>{totalUnread}</Badge>}
-            </NavItem>
             {gmailConfigs.map(cfg => {
-              const tok   = loadGmailToken(cfg.accountId);
-              const valid = isGmailTokenValid(tok);
+              const tok     = loadGmailToken(cfg.accountId);
+              const valid   = isGmailTokenValid(tok);
+              const visible = !hiddenAccounts.has(cfg.accountId);
               return (
-                <NavItem key={cfg.accountId} active={activeAccount === cfg.accountId} onClick={() => setActiveAccount(cfg.accountId)}>
+                <div key={cfg.accountId} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 14px", cursor: "pointer" }}
+                  onClick={() => setHiddenAccounts(prev => { const n = new Set(prev); visible ? n.add(cfg.accountId) : n.delete(cfg.accountId); return n; })}>
+                  <input type="checkbox" checked={visible} onChange={() => {}} style={{ width: 14, height: 14, flexShrink: 0, accentColor: "#EA4335", cursor: "pointer" }} />
                   <GIcon />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cfg.email.split("@")[0]}</div>
+                    <div style={{ fontSize: 12, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: visible ? "#111827" : "#9ca3af" }}>{cfg.email.split("@")[0]}</div>
                     <div style={{ fontSize: 10, color: valid ? "#059669" : "#f59e0b" }}>{valid ? "Connecté" : "Token expiré"}</div>
                   </div>
                   <button onClick={e => { e.stopPropagation(); syncGmail(cfg.accountId); }} disabled={syncing === cfg.accountId} title="Synchroniser" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#9ca3af" }}>🔄</button>
-                </NavItem>
+                </div>
               );
             })}
           </>
         )}
 
-        {/* IMAP accounts */}
+        {/* IMAP accounts — checkboxes pour afficher/masquer */}
         {accounts.length > 0 && (
           <>
             <NavLabel>IMAP / POP3</NavLabel>
-            {accounts.filter(a => a.active).map(a => (
-              <NavItem key={a.id} active={activeAccount === a.id} onClick={() => setActiveAccount(a.id)}>
-                <div style={{ width: 10, height: 10, borderRadius: "50%", background: a.color, flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.label}</div>
-                  <div style={{ fontSize: 10, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.email}</div>
+            {accounts.filter(a => a.active).map(a => {
+              const visible = !hiddenAccounts.has(a.id);
+              return (
+                <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 14px", cursor: "pointer" }}
+                  onClick={() => setHiddenAccounts(prev => { const n = new Set(prev); visible ? n.add(a.id) : n.delete(a.id); return n; })}>
+                  <input type="checkbox" checked={visible} onChange={() => {}} style={{ width: 14, height: 14, flexShrink: 0, accentColor: a.color, cursor: "pointer" }} />
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: a.color, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: visible ? "#111827" : "#9ca3af" }}>{a.label}</div>
+                    <div style={{ fontSize: 10, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.email}</div>
+                  </div>
+                  <button onClick={e => { e.stopPropagation(); syncImap(a, 1); }} disabled={syncing === a.id} title="Sync récents" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#9ca3af" }}>🔄</button>
+                  <button onClick={e => { e.stopPropagation(); downloadAllImap(a); }} disabled={syncing === a.id} title="Tout télécharger" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "#9ca3af" }}>⬇</button>
                 </div>
-                <button onClick={e => { e.stopPropagation(); syncImap(a, 1); }} disabled={syncing === a.id} title="Sync récents" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#9ca3af" }}>🔄</button>
-                <button onClick={e => { e.stopPropagation(); downloadAllImap(a); }} disabled={syncing === a.id} title="Tout télécharger" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "#9ca3af" }}>⬇</button>
-              </NavItem>
-            ))}
+              );
+            })}
           </>
         )}
 
@@ -633,7 +639,7 @@ export default function MailBoard() {
               onStar={toggleStar}
               onTrash={trash}
               onApplyLabel={applyLabel}
-              onAccountFilter={id => { setActiveAccount(id); setSelectedThread(null); setListPage(1); }}
+              onAccountFilter={() => { /* filtrage géré par checkboxes sidebar */ }}
               onClassifyAll={classifyAllWithAuguste}
               classifying={classifying}
             />
@@ -700,7 +706,7 @@ export default function MailBoard() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 60, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px" }}
           onClick={e => { if (e.target === e.currentTarget) setSelectedThread(null); }}
         >
-          <div style={{ width: "min(920px, 96vw)", height: "calc(100vh - 32px)", background: "#fff", borderRadius: 16, boxShadow: "0 24px 80px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ width: "min(920px, 96vw)", height: "calc(100vh - 32px)", background: "#fff", borderRadius: 16, boxShadow: "0 24px 80px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
             <ThreadView
               thread={selectedThread}
               labels={labels}
