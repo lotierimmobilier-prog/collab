@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useSession, signOut } from "next-auth/react";
 
 // Palette Lotier Immobilier
 const GOLD = "#B8966A";
@@ -32,6 +33,7 @@ const adminNav = [
 const groups = ["Principal", "Gestion locative", "Comptabilité", "Agence"];
 
 export default function Sidebar({ active }: { active: string }) {
+  const { data: session } = useSession();
   return (
     <aside style={{
       width: 220, flexShrink: 0,
@@ -82,18 +84,38 @@ export default function Sidebar({ active }: { active: string }) {
       </nav>
 
       {/* Utilisateur en bas */}
-      <div style={{ padding: "12px 16px", borderTop: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{
-          width: 32, height: 32, borderRadius: "50%", background: GOLD_BG,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 11, fontWeight: 700, color: GOLD, flexShrink: 0,
-        }}>JL</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: DARK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Jérôme Lotier</div>
-          <div style={{ fontSize: 10, color: LABEL_COLOR }}>Administrateur</div>
+      {session?.user && (
+        <div style={{ padding: "12px 16px", borderTop: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 10 }}>
+          {session.user.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={session.user.image} alt="" style={{ width: 32, height: 32, borderRadius: "50%", flexShrink: 0 }} />
+          ) : (
+            <div style={{
+              width: 32, height: 32, borderRadius: "50%", background: GOLD_BG,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 11, fontWeight: 700, color: GOLD, flexShrink: 0,
+            }}>
+              {(session.user.prenom?.[0] ?? session.user.name?.[0] ?? "?").toUpperCase()}
+              {(session.user.nom?.[0] ?? "").toUpperCase()}
+            </div>
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: DARK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {session.user.prenom && session.user.nom
+                ? `${session.user.prenom} ${session.user.nom}`
+                : session.user.name}
+            </div>
+            <div style={{ fontSize: 10, color: LABEL_COLOR, textTransform: "capitalize" }}>
+              {session.user.roleId ?? "Utilisateur"}
+            </div>
+          </div>
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            title="Se déconnecter"
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: LABEL_COLOR, padding: 2, lineHeight: 1 }}
+          >→</button>
         </div>
-        <span style={{ fontSize: 14, color: LABEL_COLOR, cursor: "pointer" }}>→</span>
-      </div>
+      )}
     </aside>
   );
 }
