@@ -498,9 +498,9 @@ export default function MailBoard() {
   const fmtCountdown = (s: number) => s < 60 ? `${s}s` : `${Math.ceil(s / 60)}min`;
 
   return (
-    <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
+    <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden", height: "100%" }}>
       {/* SIDEBAR */}
-      <div style={{ width: 224, flexShrink: 0, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+      <div style={{ width: 224, flexShrink: 0, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", overflowY: "scroll" }}>
         <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
           <button onClick={() => setShowCompose(true)} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             ✏ Nouveau message
