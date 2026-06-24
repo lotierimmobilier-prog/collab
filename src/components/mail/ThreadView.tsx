@@ -190,20 +190,18 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
     finally { setAiLoading(null); }
   }
 
-  // ── Ancienne génération réponse (fallback avec clé perso) ───
+  // ── Génération réponse IA via Auguste ───────────────────────
   async function generateAIReply() {
-    if (!aiKey) { setAiError("Clé API manquante"); return; }
     setGenerating(true); setAiError("");
     try {
-      const ctx  = buildContext(thread);
-      const resp = await fetch("/api/ai-reply", {
+      const resp = await fetch("/api/mail/ai", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadContext: ctx, subject: thread.subject, tone: aiTone, instruction: aiInstruction, apiKey: aiKey }),
+        body: JSON.stringify({ action: "draft_reply", messages: thread.messages, threadSubject: thread.subject, tone: aiTone, instruction: aiInstruction }),
       });
       const data = await resp.json();
       if (data.error) { setAiError(data.error); return; }
       setReplyBody(data.reply ?? "");
-    } catch { setAiError("Erreur de connexion à l'API"); }
+    } catch { setAiError("Erreur de connexion à Auguste"); }
     finally { setGenerating(false); }
   }
 

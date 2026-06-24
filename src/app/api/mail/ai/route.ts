@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const { action, messages, threadSubject, senderEmail } = await req.json();
+  const { action, messages, threadSubject, senderEmail, tone = "professionnel", instruction = "" } = await req.json();
   const ctx = buildThreadContext(messages || []);
 
   if (action === "summarize") {
@@ -40,9 +40,11 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "draft_reply") {
+    const toneLabel: Record<string, string> = { professionnel: "professionnel et bienveillant", cordial: "cordial et chaleureux", formel: "formel et sobre", concis: "concis, aller à l'essentiel" };
+    const instrPart = instruction ? `\nInstruction supplémentaire : ${instruction}` : "";
     const resp = await client.messages.create({
       model: "claude-sonnet-4-6", max_tokens: 800, system: SYSTEM,
-      messages: [{ role: "user", content: `Rédige une réponse professionnelle à cet email. Ton: professionnel et bienveillant. Agence immobilière Lotier Immobilier.\n\n${ctx}\n\nRéponds en JSON: {"reply": "...", "subject": "Re: ${threadSubject}"}` }],
+      messages: [{ role: "user", content: `Rédige une réponse à cet email. Ton : ${toneLabel[tone] ?? "professionnel et bienveillant"}. Agence immobilière Lotier Immobilier.${instrPart}\n\n${ctx}\n\nRéponds en JSON: {"reply": "...", "subject": "Re: ${threadSubject}"}` }],
     });
     const text = resp.content.find(b => b.type === "text")?.text ?? "{}";
     return NextResponse.json(JSON.parse(text));
