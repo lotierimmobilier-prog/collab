@@ -2,23 +2,27 @@ import { NextRequest, NextResponse } from "next/server";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { ImapFlow } = require("imapflow");
 
-export async function POST(req: NextRequest) {
-  const { host, port, ssl, username, password, accountId, limit = 50 } = await req.json();
-
-  if (!host || !username || !password) {
-    return NextResponse.json({ ok: false, error: "Paramètres incomplets" }, { status: 400 });
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const client = new ImapFlow({
+function makeClient(host: string, port: string, ssl: boolean, username: string, password: string) {
+  return new ImapFlow({
     host,
     port: parseInt(port),
     secure: ssl,
     auth: { user: username, pass: password },
     logger: false,
-    connectionTimeout: 15000,
-    greetingTimeout: 5000,
+    connectionTimeout: 20000,
+    greetingTimeout: 8000,
+    socketTimeout: 30000,
   });
+}
+
+export async function POST(req: NextRequest) {
+  const { host, port, ssl, username, password, accountId, limit = 20 } = await req.json();
+
+  if (!host || !username || !password) {
+    return NextResponse.json({ ok: false, error: "Paramètres incomplets" }, { status: 400 });
+  }
+
+  const client = makeClient(host, port, ssl, username, password);
 
   try {
     await client.connect();
@@ -28,17 +32,17 @@ export async function POST(req: NextRequest) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mailbox = client.mailbox as any;
-      const total = mailbox?.exists ?? 50;
-      const from = Math.max(1, total - limit + 1);
-      const range = `${from}:*`;
+      const total = mailbox?.exists ?? 0;
+      const fetchLimit = Math.min(limit, 20); // max 20 par sync
+      const from = Math.max(1, total - fetchLimit + 1);
+      const range = total > 0 ? `${from}:*` : "1:1";
 
+      // Fetch enveloppe + flags seulement (pas de corps = rapide)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for await (const msg of client.fetch(range, {
         uid: true,
         flags: true,
         envelope: true,
-        bodyStructure: true,
-        source: false,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       }) as AsyncIterable<any>) {
         const env = msg.envelope ?? {};
@@ -49,28 +53,13 @@ export async function POST(req: NextRequest) {
         const labels = ["inbox"];
         if (isStarred) labels.push("starred");
 
-        let bodyText = msg.snippet ?? "";
-        let bodyHtml = `<p>${bodyText}</p>`;
-
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const fullMsg = await client.fetchOne(String(msg.seq), { bodyParts: ["TEXT", "1"] }) as any;
-          const parts = fullMsg?.bodyParts;
-          if (parts) {
-            const raw = parts.get("TEXT") ?? parts.get("1");
-            if (raw) {
-              bodyText = Buffer.from(raw).toString("utf-8").slice(0, 2000);
-              bodyHtml = `<p>${bodyText.replace(/\n/g, "<br/>")}</p>`;
-            }
-          }
-        } catch { /* corps non disponible */ }
-
         const threadId = env.messageId
           ? env.messageId.replace(/[<>]/g, "").replace(/[^a-zA-Z0-9@._-]/g, "_")
           : `${accountId}-${msg.uid}`;
 
         messages.push({
           id: `${accountId}-${msg.uid}`,
+          uid: msg.uid,
           threadId,
           accountId,
           from: {
@@ -82,11 +71,12 @@ export async function POST(req: NextRequest) {
             email: a.address ?? "",
           })),
           subject: env.subject ?? "(Sans objet)",
-          body: bodyHtml,
-          bodyText,
+          body: "", // chargé à la demande via /api/mail/body
+          bodyText: "",
           date: env.date?.toISOString() ?? new Date().toISOString(),
           status: isUnread ? "unread" : "read",
           labels,
+          total, // nb total messages dans INBOX
         });
       }
     } finally {
@@ -99,7 +89,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       messages: messages.reverse(),
       count: messages.length,
-      message: `${messages.length} message(s) synchronisé(s) depuis INBOX`,
+      message: `${messages.length} message(s) chargé(s) (${messages[0]?.total ?? 0} au total)`,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Erreur de synchronisation";

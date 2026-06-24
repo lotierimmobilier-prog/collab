@@ -7,6 +7,7 @@ interface Props {
   labels: MailLabel[];
   accounts: MailAccount[];
   aiKey: string;
+  loadingBody?: boolean;
   onClose: () => void;
   onReply: (m: MailMessage) => void;
   onApplyLabel: (id: string) => void;
@@ -16,7 +17,7 @@ interface Props {
   customLabels: MailLabel[];
 }
 
-export default function ThreadView({ thread, labels, accounts, aiKey, onClose, onReply, onApplyLabel, onRemoveLabel, onStar, onTrash, customLabels }: Props) {
+export default function ThreadView({ thread, labels, accounts, aiKey, loadingBody, onClose, onReply, onApplyLabel, onRemoveLabel, onStar, onTrash, customLabels }: Props) {
   const [showReply, setShowReply] = useState(false);
   const [replyBody, setReplyBody] = useState("");
   const [aiTone, setAiTone] = useState("professionnel");
@@ -205,10 +206,17 @@ function MessageBubble({ msg, isLast }: { msg: MailMessage; isLast: boolean }) {
 
       {expanded && (
         <div style={{ padding: "16px 16px 16px 62px", borderTop: "1px solid #f3f4f6" }}>
-          <div
-            style={{ fontSize: 14, color: "#374151", lineHeight: 1.7 }}
-            dangerouslySetInnerHTML={{ __html: msg.body }}
-          />
+          {loadingBody && !msg.body ? (
+            <div style={{ fontSize: 13, color: "#9ca3af", padding: "12px 0", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #e5e7eb", borderTopColor: "#B8966A", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+              Chargement du message...
+            </div>
+          ) : (
+            <div
+              style={{ fontSize: 14, color: "#374151", lineHeight: 1.7 }}
+              dangerouslySetInnerHTML={{ __html: msg.body || "<em style='color:#9ca3af'>Corps du message non disponible</em>" }}
+            />
+          )}
           {msg.attachments && msg.attachments.length > 0 && (
             <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
               {msg.attachments.map(att => (

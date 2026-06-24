@@ -36,6 +36,7 @@ export default function MailBoard() {
   const [aiKey, setAiKey] = useState("");
   const [syncing, setSyncing] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState("");
+  const [loadingBody, setLoadingBody] = useState(false);
 
   useEffect(() => {
     const a = localStorage.getItem(ACCOUNTS_KEY);
@@ -114,7 +115,7 @@ export default function MailBoard() {
       const resp = await fetch("/api/mail/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ host: a.host, port: a.port, ssl: a.ssl, username: a.username, password: a.password, accountId: a.id, limit: 50 }),
+        body: JSON.stringify({ host: a.host, port: a.port, ssl: a.ssl, username: a.username, password: a.password, accountId: a.id, limit: 20 }),
       });
       const data = await resp.json();
       if (data.ok) {
@@ -128,6 +129,39 @@ export default function MailBoard() {
       }
     } catch { setSyncStatus("Erreur réseau"); setTimeout(() => setSyncStatus(""), 4000); }
     finally { setSyncing(null); }
+  }
+
+  /* ── Chargement du corps à la demande ──────────────────── */
+  async function loadMessageBody(thread: MailThread) {
+    // Trouver si un message de ce thread vient d'un compte IMAP et n'a pas encore de corps
+    const msg = thread.messages.find(m => !m.body || m.body === "");
+    if (!msg) return;
+    const account = accounts.find(a => a.id === msg.accountId);
+    if (!account) return; // Gmail : corps déjà chargé côté client
+    const uid = (msg as MailMessage & { uid?: number }).uid;
+    if (!uid) return;
+
+    setLoadingBody(true);
+    try {
+      const resp = await fetch("/api/mail/body", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ host: account.host, port: account.port, ssl: account.ssl, username: account.username, password: account.password, uid }),
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        setMessages(prev => {
+          const updated = prev.map(m => m.id === msg.id ? { ...m, body: data.bodyHtml, bodyText: data.bodyText } : m);
+          rebuildThreads(updated);
+          return updated;
+        });
+        setSelectedThread(prev => prev ? {
+          ...prev,
+          messages: prev.messages.map(m => m.id === msg.id ? { ...m, body: data.bodyHtml, bodyText: data.bodyText } : m),
+        } : null);
+      }
+    } catch { /* silencieux */ }
+    finally { setLoadingBody(false); }
   }
 
   async function syncAll() {
@@ -288,7 +322,7 @@ export default function MailBoard() {
             labels={labels}
             accounts={accounts}
             selectedId={selectedThread?.id}
-            onSelect={t => { setSelectedThread(t); markRead(t.id); }}
+            onSelect={t => { setSelectedThread(t); markRead(t.id); loadMessageBody(t); }}
             onStar={toggleStar}
             onTrash={trash}
             onApplyLabel={applyLabel}
@@ -302,6 +336,7 @@ export default function MailBoard() {
               labels={labels}
               accounts={accounts}
               aiKey={aiKey}
+              loadingBody={loadingBody}
               onClose={() => setSelectedThread(null)}
               onReply={msg => { addMessage(msg); setSelectedThread(prev => prev ? { ...prev, messages: [...prev.messages, msg] } : null); }}
               onApplyLabel={id => applyLabel(selectedThread.id, id)}
