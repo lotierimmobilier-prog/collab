@@ -13,7 +13,7 @@ export async function GET() {
         createdAt: true, lastLogin: true, avatar: true,
       },
     });
-    return NextResponse.json(users.map(u => ({
+    return NextResponse.json(users.map((u: typeof users[number]) => ({
       ...u,
       createdAt: u.createdAt.toLocaleDateString("fr-FR"),
       lastLogin: u.lastLogin?.toLocaleDateString("fr-FR"),
