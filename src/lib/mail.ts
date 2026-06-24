@@ -18,6 +18,7 @@ export interface MailAccount {
   color: string;
   active: boolean;
   lastSync?: string;
+  signature?: string;         // Signature HTML/texte personnalisée par compte
   // Accès multi-utilisateurs
   sharedUserIds?: string[];   // IDs des utilisateurs autorisés (vide = créateur seulement)
   isShared?: boolean;         // true si compte d'agence partagé

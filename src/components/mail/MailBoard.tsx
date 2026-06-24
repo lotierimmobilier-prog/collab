@@ -489,59 +489,65 @@ export default function MailBoard() {
           </div>
         )}
 
-        <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-          <ThreadList
-            threads={visibleThreads}
-            messages={search && searchResults !== null ? [...messages, ...searchResults.filter(r => !messages.find(m => m.id === r.id))] : messages}
-            labels={labels}
-            accounts={accounts}
-            selectedId={selectedThread?.id}
-            activeLabel={activeLabel}
-            activeAccount={activeAccount}
-            customLabels={customLabels}
-            page={listPage}
-            onPageChange={p => { setListPage(p); setSelectedThread(null); }}
-            onSelect={t => { setSelectedThread(t); markRead(t.id); loadMessageBody(t); }}
-            onStar={toggleStar}
-            onTrash={trash}
-            onApplyLabel={applyLabel}
-            onAccountFilter={id => { setActiveAccount(id); setSelectedThread(null); setListPage(1); }}
-          />
-
-          {selectedThread ? (
-            <ThreadView
-              thread={selectedThread}
+        {/* Layout vertical : liste en haut, vue en bas */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+          {/* Zone liste — hauteur fixe, 10 items */}
+          <div style={{ flexShrink: 0, overflow: "hidden", display: "flex", flexDirection: "column", borderBottom: "2px solid #e5e7eb" }}>
+            <ThreadList
+              threads={visibleThreads}
+              messages={search && searchResults !== null ? [...messages, ...searchResults.filter(r => !messages.find(m => m.id === r.id))] : messages}
               labels={labels}
               accounts={accounts}
-              aiKey={aiKey}
-              loadingBody={loadingBody}
-              onClose={() => setSelectedThread(null)}
-              onReply={msg => { addMessage(msg); setSelectedThread(prev => prev ? { ...prev, messages: [...prev.messages, msg] } : null); }}
-              onApplyLabel={id => applyLabel(selectedThread.id, id)}
-              onRemoveLabel={id => removeLabel(selectedThread.id, id)}
-              onStar={() => toggleStar(selectedThread.id)}
-              onTrash={() => trash(selectedThread.id)}
+              selectedId={selectedThread?.id}
+              activeLabel={activeLabel}
+              activeAccount={activeAccount}
               customLabels={customLabels}
+              page={listPage}
+              onPageChange={p => { setListPage(p); setSelectedThread(null); }}
+              onSelect={t => { setSelectedThread(t); markRead(t.id); loadMessageBody(t); }}
+              onStar={toggleStar}
+              onTrash={trash}
+              onApplyLabel={applyLabel}
+              onAccountFilter={id => { setActiveAccount(id); setSelectedThread(null); setListPage(1); }}
             />
-          ) : (
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#f9fafb", gap: 12 }}>
-              <div style={{ fontSize: 48 }}>✉</div>
-              <div style={{ fontSize: 14, fontWeight: 500, color: "#374151" }}>
-                {!hasAnyAccount ? "Commencez par ajouter un compte" : "Sélectionnez un message"}
-              </div>
-              {!hasAnyAccount && (
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button onClick={() => setShowGmailConnect(true)} style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                    <GIcon /> Connecter Gmail
-                  </button>
-                  <button onClick={() => setShowImapConfig(true)} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>
-                    Configurer IMAP
-                  </button>
+          </div>
+
+          {/* Zone lecture — flex restant */}
+          <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex" }}>
+            {selectedThread ? (
+              <ThreadView
+                thread={selectedThread}
+                labels={labels}
+                accounts={accounts}
+                aiKey={aiKey}
+                loadingBody={loadingBody}
+                onClose={() => setSelectedThread(null)}
+                onReply={msg => { addMessage(msg); setSelectedThread(prev => prev ? { ...prev, messages: [...prev.messages, msg] } : null); }}
+                onApplyLabel={id => applyLabel(selectedThread.id, id)}
+                onRemoveLabel={id => removeLabel(selectedThread.id, id)}
+                onStar={() => toggleStar(selectedThread.id)}
+                onTrash={() => trash(selectedThread.id)}
+                customLabels={customLabels}
+              />
+            ) : (
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#f9fafb", gap: 12 }}>
+                <div style={{ fontSize: 48, opacity: 0.3 }}>✉</div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: "#6b7280" }}>
+                  {!hasAnyAccount ? "Commencez par ajouter un compte" : "Sélectionnez un message pour le lire"}
                 </div>
-              )}
-              {hasAnyAccount && <div style={{ fontSize: 12, color: "#9ca3af" }}>{visibleThreads.length} conversation(s)</div>}
-            </div>
-          )}
+                {!hasAnyAccount && (
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setShowGmailConnect(true)} style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                      <GIcon /> Connecter Gmail
+                    </button>
+                    <button onClick={() => setShowImapConfig(true)} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>
+                      Configurer IMAP
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -589,53 +595,200 @@ function GIcon() {
   );
 }
 
-function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend }: {
+function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo }: {
   accounts: MailAccount[]; gmailConfigs: GmailConfig[];
   labels: MailLabel[]; onClose: () => void; onSend: (m: MailMessage) => void;
+  replyTo?: { to: string; subject: string; inReplyTo?: string; accountId?: string };
 }) {
-  const [to, setTo]           = useState("");
-  const [subject, setSubject] = useState("");
-  const [body, setBody]       = useState("");
-  const [accountId, setAccountId] = useState(gmailConfigs[0]?.accountId ?? accounts[0]?.id ?? "");
-  const [selLabels, setSelLabels] = useState(["inbox", "sent"]);
+  const allAccounts = [
+    ...gmailConfigs.map(c => ({ id: c.accountId, label: `${c.email}`, email: c.email, name: c.name ?? c.email, smtpHost: "", smtpPort: 587, smtpSsl: true, username: c.email, password: "", signature: "", color: "#4285f4" })),
+    ...accounts.map(a => ({ id: a.id, label: `${a.label} — ${a.email}`, email: a.email, name: a.name, smtpHost: a.smtpHost, smtpPort: a.smtpPort, smtpSsl: a.smtpSsl, username: a.username, password: a.password, signature: a.signature ?? "", color: a.color })),
+  ];
 
-  function send() {
-    if (!to || !subject) return;
-    const gCfg = gmailConfigs.find(c => c.accountId === accountId);
-    const aCfg = accounts.find(a => a.id === accountId);
-    const fromEmail = gCfg?.email ?? aCfg?.email ?? "moi@agence.fr";
-    const fromName  = gCfg?.name  ?? aCfg?.name  ?? "Moi";
-    onSend({ id: Date.now().toString(), threadId: Date.now().toString(), accountId: accountId || "local", from: { name: fromName, email: fromEmail }, to: to.split(",").map(e => ({ name: e.trim(), email: e.trim() })), subject, body: `<p>${body.replace(/\n/g, "<br/>")}</p>`, bodyText: body, date: new Date().toISOString(), status: "read", labels: selLabels });
+  const firstId = replyTo?.accountId ?? allAccounts[0]?.id ?? "";
+  const [accountId, setAccountId] = useState(firstId);
+  const [to, setTo]               = useState(replyTo?.to ?? "");
+  const [cc, setCc]               = useState("");
+  const [subject, setSubject]     = useState(replyTo?.subject ?? "");
+  const [body, setBody]           = useState("");
+  const [showCc, setShowCc]       = useState(false);
+  const [showSig, setShowSig]     = useState(false);
+  const [sending, setSending]     = useState(false);
+  const [error, setError]         = useState("");
+  const [selLabels, setSelLabels] = useState(["sent"]);
+
+  const acct = allAccounts.find(a => a.id === accountId);
+  const sig   = acct?.signature ?? "";
+
+  // Charger/sauvegarder la signature depuis localStorage par compte
+  const SIG_KEY = `collab_mail_sig_${accountId}`;
+  const [editSig, setEditSig] = useState(() => {
+    if (typeof window === "undefined") return sig;
+    return localStorage.getItem(SIG_KEY) ?? sig;
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem(SIG_KEY);
+      setEditSig(stored ?? (acct?.signature ?? ""));
+    }
+  }, [accountId, SIG_KEY, acct?.signature]);
+
+  function saveSig() {
+    if (typeof window !== "undefined") localStorage.setItem(SIG_KEY, editSig);
+    setShowSig(false);
   }
 
-  const allAccounts = [
-    ...gmailConfigs.map(c => ({ id: c.accountId, label: c.email })),
-    ...accounts.map(a => ({ id: a.id, label: `${a.label} <${a.email}>` })),
-  ];
+  async function send() {
+    if (!to.trim() || !subject.trim()) return;
+    setSending(true);
+    setError("");
+
+    const storedSig = typeof window !== "undefined" ? (localStorage.getItem(SIG_KEY) ?? "") : "";
+    const fullBody  = body + (storedSig ? `\n\n--\n${storedSig}` : "");
+    const fullHtml  = `<div style="font-family:sans-serif;font-size:14px;line-height:1.6">${body.replace(/\n/g,"<br/>")}</div>` +
+                      (storedSig ? `<br/><hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0"/><div style="font-family:sans-serif;font-size:12px;color:#6b7280">${storedSig.replace(/\n/g,"<br/>")}</div>` : "");
+
+    try {
+      const r = await fetch("/api/mail/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: to.trim(),
+          cc: cc.trim() || undefined,
+          subject: subject.trim(),
+          body: fullBody,
+          html: fullHtml,
+          fromEmail: acct?.email,
+          fromName: acct?.name,
+          smtpHost: acct?.smtpHost,
+          smtpPort: acct?.smtpPort,
+          smtpSsl: acct?.smtpSsl,
+          username: acct?.username,
+          password: acct?.password,
+          inReplyTo: replyTo?.inReplyTo,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) { setError(data.error ?? "Erreur lors de l'envoi"); return; }
+
+      // Ajouter le mail envoyé en local
+      onSend({
+        id: data.messageId ?? Date.now().toString(),
+        threadId: Date.now().toString(),
+        accountId: accountId || "local",
+        from: { name: acct?.name ?? "", email: acct?.email ?? "" },
+        to: to.split(",").map(e => ({ name: e.trim(), email: e.trim() })),
+        subject: subject.trim(),
+        body: fullHtml,
+        bodyText: fullBody,
+        date: new Date().toISOString(),
+        status: "read",
+        labels: selLabels,
+      });
+    } catch {
+      setError("Erreur réseau — vérifiez votre connexion");
+    } finally {
+      setSending(false);
+    }
+  }
 
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 40 }} />
-      <div style={{ position: "fixed", bottom: 24, right: 24, width: 560, background: "#fff", borderRadius: 14, zIndex: 50, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ background: "#1f2937", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ color: "#fff", fontWeight: 600, fontSize: 13 }}>Nouveau message</span>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: 18, cursor: "pointer" }}>×</button>
-        </div>
-        <div style={{ padding: "0 16px" }}>
-          {allAccounts.length > 1 && (
-            <select value={accountId} onChange={e => setAccountId(e.target.value)} style={{ width: "100%", border: "none", borderBottom: "1px solid #f3f4f6", padding: "8px 0", fontSize: 12, outline: "none", color: "#6b7280" }}>
-              {allAccounts.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
-            </select>
-          )}
-          <input value={to} onChange={e => setTo(e.target.value)} placeholder="À" style={{ width: "100%", border: "none", borderBottom: "1px solid #f3f4f6", padding: "8px 0", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
-          <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Objet" style={{ width: "100%", border: "none", borderBottom: "1px solid #f3f4f6", padding: "8px 0", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
-          <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="Rédigez votre message..." rows={10} style={{ width: "100%", border: "none", padding: "10px 0", fontSize: 13, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box" }} />
-        </div>
-        <div style={{ padding: "10px 16px", borderTop: "1px solid #f3f4f6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", gap: 6 }}>
-            {labels.map(l => <button key={l.id} onClick={() => setSelLabels(p => p.includes(l.id) ? p.filter(x => x !== l.id) : [...p, l.id])} style={{ border: `1px solid ${selLabels.includes(l.id) ? l.color : "#e5e7eb"}`, background: selLabels.includes(l.id) ? l.color + "18" : "transparent", color: selLabels.includes(l.id) ? l.color : "#9ca3af", borderRadius: 5, padding: "2px 8px", fontSize: 11, cursor: "pointer" }}>{l.name}</button>)}
+      <div style={{ position: "fixed", bottom: 24, right: 24, width: 580, background: "#fff", borderRadius: 14, zIndex: 50, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", maxHeight: "85vh", overflow: "hidden" }}>
+        {/* Header */}
+        <div style={{ background: "#1f2937", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+          <span style={{ color: "#fff", fontWeight: 600, fontSize: 13 }}>✉ Nouveau message</span>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button onClick={() => setShowSig(s => !s)} title="Gérer la signature" style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: "#d1d5db", fontSize: 11 }}>✍ Signature</button>
+            <button onClick={onClose} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: 20, cursor: "pointer", lineHeight: 1 }}>×</button>
           </div>
-          <button onClick={send} disabled={!to || !subject} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: (!to || !subject) ? 0.5 : 1 }}>Envoyer</button>
+        </div>
+
+        {/* Gestion signature */}
+        {showSig && (
+          <div style={{ padding: "12px 16px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", flexShrink: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 6 }}>SIGNATURE — {acct?.email}</div>
+            <textarea
+              value={editSig}
+              onChange={e => setEditSig(e.target.value)}
+              rows={4}
+              placeholder={"Cordialement,\nVotre Nom\nLotier Immobilier · 01 23 45 67 89"}
+              style={{ width: "100%", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 10px", fontSize: 12, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box", background: "#fff" }}
+            />
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+              <button onClick={saveSig} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer" }}>Sauvegarder</button>
+              <button onClick={() => setShowSig(false)} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", color: "#6b7280" }}>Annuler</button>
+            </div>
+          </div>
+        )}
+
+        {/* Champs */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 16px" }}>
+          {/* Expéditeur */}
+          <div style={{ borderBottom: "1px solid #f3f4f6", padding: "8px 0", display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 11, color: "#9ca3af", width: 24, flexShrink: 0 }}>De</span>
+            {allAccounts.length > 1 ? (
+              <select value={accountId} onChange={e => setAccountId(e.target.value)} style={{ flex: 1, border: "none", fontSize: 12, outline: "none", color: "#374151", background: "transparent", cursor: "pointer" }}>
+                {allAccounts.map(a => (
+                  <option key={a.id} value={a.id}>{a.label}</option>
+                ))}
+              </select>
+            ) : (
+              <span style={{ fontSize: 12, color: "#374151" }}>{acct?.name} &lt;{acct?.email}&gt;</span>
+            )}
+            {acct && <span style={{ width: 8, height: 8, borderRadius: "50%", background: acct.color, flexShrink: 0, display: "inline-block" }} />}
+          </div>
+
+          <div style={{ borderBottom: "1px solid #f3f4f6", padding: "8px 0", display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 11, color: "#9ca3af", width: 24, flexShrink: 0 }}>À</span>
+            <input value={to} onChange={e => setTo(e.target.value)} placeholder="destinataire@email.com" style={{ flex: 1, border: "none", fontSize: 13, outline: "none", fontFamily: "inherit" }} />
+            <button onClick={() => setShowCc(s => !s)} style={{ background: "none", border: "none", fontSize: 10, color: "#9ca3af", cursor: "pointer" }}>Cc</button>
+          </div>
+
+          {showCc && (
+            <div style={{ borderBottom: "1px solid #f3f4f6", padding: "8px 0", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 11, color: "#9ca3af", width: 24, flexShrink: 0 }}>Cc</span>
+              <input value={cc} onChange={e => setCc(e.target.value)} placeholder="copie@email.com" style={{ flex: 1, border: "none", fontSize: 13, outline: "none", fontFamily: "inherit" }} />
+            </div>
+          )}
+
+          <div style={{ borderBottom: "1px solid #f3f4f6", padding: "8px 0", display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 11, color: "#9ca3af", width: 24, flexShrink: 0 }}>Obj</span>
+            <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Objet du message" style={{ flex: 1, border: "none", fontSize: 13, outline: "none", fontFamily: "inherit", fontWeight: 500 }} />
+          </div>
+
+          <textarea
+            value={body}
+            onChange={e => setBody(e.target.value)}
+            placeholder="Rédigez votre message…"
+            rows={8}
+            style={{ width: "100%", border: "none", padding: "12px 0", fontSize: 13, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box" }}
+          />
+
+          {/* Aperçu signature */}
+          {(() => { const s = typeof window !== "undefined" ? (localStorage.getItem(SIG_KEY) ?? "") : ""; return s ? (
+            <div style={{ borderTop: "1px solid #f3f4f6", padding: "8px 0", fontSize: 12, color: "#9ca3af", whiteSpace: "pre-line" }}>— {s}</div>
+          ) : null; })()}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "10px 16px", borderTop: "1px solid #f3f4f6", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+            {labels.map(l => (
+              <button key={l.id} onClick={() => setSelLabels(p => p.includes(l.id) ? p.filter(x => x !== l.id) : [...p, l.id])}
+                style={{ border: `1px solid ${selLabels.includes(l.id) ? l.color : "#e5e7eb"}`, background: selLabels.includes(l.id) ? l.color + "18" : "transparent", color: selLabels.includes(l.id) ? l.color : "#9ca3af", borderRadius: 5, padding: "2px 8px", fontSize: 11, cursor: "pointer" }}>
+                {l.name}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {error && <span style={{ fontSize: 11, color: "#dc2626", maxWidth: 200 }}>{error}</span>}
+            <button onClick={send} disabled={!to.trim() || !subject.trim() || sending}
+              style={{ background: !to.trim() || !subject.trim() ? "#e5e7eb" : "#B8966A", color: !to.trim() || !subject.trim() ? "#9ca3af" : "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              {sending ? "Envoi…" : "↑ Envoyer"}
+            </button>
+          </div>
         </div>
       </div>
     </>

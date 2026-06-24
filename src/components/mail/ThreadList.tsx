@@ -1,7 +1,7 @@
 "use client";
 import { MailThread, MailMessage, MailLabel, MailAccount } from "@/lib/mail";
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 
 interface Props {
   threads: MailThread[];
@@ -54,7 +54,7 @@ export default function ThreadList({ threads, messages, labels, accounts, select
   const showAccountFilter = accounts.length > 1;
 
   return (
-    <div style={{ width: 320, flexShrink: 0, borderRight: "1px solid #e5e7eb", background: "#fff", display: "flex", flexDirection: "column" }}>
+    <div style={{ width: "100%", flexShrink: 0, borderBottom: "1px solid #e5e7eb", background: "#fff", display: "flex", flexDirection: "column" }}>
       {/* Filtre par compte */}
       {showAccountFilter && (
         <div style={{ padding: "6px 10px", borderBottom: "1px solid #f3f4f6", display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>

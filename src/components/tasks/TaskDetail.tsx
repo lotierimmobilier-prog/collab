@@ -43,7 +43,7 @@ export default function TaskDetail({ task, onClose, onStatusChange, onUpdate }: 
   const [tags, setTags]           = useState<string[]>(task.tags ?? []);
   const [project, setProject]     = useState(task.project ?? "");
 
-  const p = PRIORITY_STYLES[task.priority];
+  const p = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES["moyenne"];
 
   useEffect(() => {
     fetch(`/api/ods?taskId=${task.id}`).then(r => r.json()).then(d => { if (Array.isArray(d)) setOdsList(d); }).catch(() => {});
@@ -72,7 +72,22 @@ export default function TaskDetail({ task, onClose, onStatusChange, onUpdate }: 
       });
       if (r.ok) {
         const updated = await r.json();
-        onUpdate?.({ ...task, ...updated, tags: updated.tags ?? tags });
+        // Recomputer les champs dérivés depuis le state local
+        const selectedUser = users.find(u => u.id === assigneeId);
+        const COLORS = ["#B8966A","#059669","#2563EB","#7C3AED","#DC2626","#D97706"];
+        const colorForId = (id: string) => COLORS[id.charCodeAt(0) % COLORS.length];
+        const merged: typeof task = {
+          ...task,
+          ...updated,
+          tags: updated.tags ?? tags,
+          assignee: selectedUser ? `${selectedUser.prenom} ${selectedUser.nom}` : (assigneeId ? task.assignee : undefined),
+          assigneeId: assigneeId || undefined,
+          assigneeInitials: selectedUser ? (selectedUser.prenom[0] + selectedUser.nom[0]).toUpperCase() : (assigneeId ? task.assigneeInitials : undefined),
+          assigneeColor: selectedUser ? colorForId(selectedUser.id) : (assigneeId ? task.assigneeColor : undefined),
+          dueDate: dueDate || undefined,
+          priority: priority as typeof task.priority,
+        };
+        onUpdate?.(merged);
         setEditMode(false);
       }
     } finally { setSaving(false); }

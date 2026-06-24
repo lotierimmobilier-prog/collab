@@ -1,23 +1,70 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Middleware Edge-compatible : vérifie juste la présence du cookie de session
-// Sans importer next-auth (évite node:util/types en Edge runtime)
+// ── Routes publiques (pas d'auth requise) ────────────────────────
+const PUBLIC_PATHS = [
+  "/api/auth",
+  "/login",
+  "/candidature",
+  "/_next",
+  "/logo.png",
+  "/favicon.ico",
+];
+
+function isPublic(pathname: string) {
+  return PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + "/") || pathname.startsWith(p));
+}
+
+// ── Rate limiting in-memory (Edge compatible) ────────────────────
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const LOGIN_MAX    = 10;
+const LOGIN_WINDOW = 60_000; // 1 minute
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || now > entry.resetAt) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW });
+    return true;
+  }
+  entry.count++;
+  return entry.count <= LOGIN_MAX;
+}
+
+// ── Middleware principal ─────────────────────────────────────────
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Routes publiques — jamais protégées
-  if (
-    pathname.startsWith("/api/auth") ||
-    pathname === "/login" ||
-    pathname.startsWith("/candidature") ||
-    pathname.startsWith("/_next") ||
-    pathname === "/logo.png" ||
-    pathname === "/favicon.ico"
-  ) {
-    return NextResponse.next();
+  // 1. Redirection HTTP → HTTPS en production (Nginx transmet X-Forwarded-Proto)
+  const proto = req.headers.get("x-forwarded-proto");
+  if (proto === "http" && process.env.NODE_ENV === "production") {
+    const httpsUrl = req.nextUrl.clone();
+    httpsUrl.protocol = "https:";
+    return NextResponse.redirect(httpsUrl, { status: 301 });
   }
 
-  // NextAuth v5 stocke la session dans ce cookie
+  // 2. Rate limiting sur l'authentification (10 req/min par IP)
+  if (pathname.startsWith("/api/auth") || pathname === "/login") {
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      req.headers.get("x-real-ip") ??
+      "unknown";
+    if (!checkRateLimit(ip)) {
+      return new NextResponse("Trop de tentatives — réessayez dans 1 minute", {
+        status: 429,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Retry-After": "60",
+        },
+      });
+    }
+  }
+
+  // 3. Routes publiques → passer sans vérif session
+  if (isPublic(pathname)) {
+    return withSecurityHeaders(NextResponse.next(), req);
+  }
+
+  // 4. Vérification session NextAuth v5
   const sessionToken =
     req.cookies.get("authjs.session-token")?.value ||
     req.cookies.get("__Secure-authjs.session-token")?.value ||
@@ -25,11 +72,25 @@ export function middleware(req: NextRequest) {
 
   if (!sessionToken) {
     const loginUrl = new URL("/login", req.nextUrl);
-    loginUrl.searchParams.set("callbackUrl", pathname);
+    loginUrl.searchParams.set("callbackUrl", encodeURIComponent(pathname));
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  return withSecurityHeaders(NextResponse.next(), req);
+}
+
+// ── En-têtes de sécurité additionnels au niveau middleware ───────
+function withSecurityHeaders(res: NextResponse, req: NextRequest): NextResponse {
+  // Pages privées : pas de cache navigateur/CDN
+  if (!req.nextUrl.pathname.startsWith("/_next/static")) {
+    res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  }
+  // Isolation des contextes de navigation
+  res.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  res.headers.set("Cross-Origin-Resource-Policy", "same-origin");
+  // Empêche les embedded resources non autorisées
+  res.headers.set("Cross-Origin-Embedder-Policy", "require-corp");
+  return res;
 }
 
 export const config = {
