@@ -87,6 +87,13 @@ export const DEFAULT_ROLES: Role[] = [
     })),
   },
   {
+    id: "dirigeant",
+    label: "Dirigeant",
+    color: "#7C3AED",
+    description: "Accès complet à tous les modules, vision globale de l'entreprise",
+    modules: allModules("admin"),
+  },
+  {
     id: "agent",
     label: "Agent commercial",
     color: "#059669",
