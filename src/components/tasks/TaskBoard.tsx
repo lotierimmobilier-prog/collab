@@ -7,20 +7,23 @@ import TaskDetail from "./TaskDetail";
 import NewTaskModal from "./NewTaskModal";
 import TaskFamilyManager from "./TaskFamilyManager";
 
-interface Group { id: string; name: string; }
-interface Family { id: string; name: string; color: string; icon?: string; groups: Group[]; }
+interface Group  { id: string; name: string; }
+interface Team   { id: string; name: string; color: string; icon?: string; }
+interface Family { id: string; name: string; color: string; icon?: string; groups: Group[]; teamId?: string | null; team?: Team | null; }
 
 export default function TaskBoard() {
   const { data: session } = useSession();
-  const isAdmin = session?.user?.roleId === "admin";
+  const isAdmin = session?.user?.roleId === "admin" || session?.user?.roleId === "direction";
 
   const [tasks, setTasks]           = useState<Task[]>([]);
   const [families, setFamilies]     = useState<Family[]>([]);
+  const [teams, setTeams]           = useState<Team[]>([]);
   const [loading, setLoading]       = useState(true);
   const [view, setView]             = useState<"board" | "list" | "hierarchy">("board");
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [showNew, setShowNew]       = useState(false);
   const [showFamilyMgr, setShowFamilyMgr] = useState(false);
+  const [activeTeam, setActiveTeam]       = useState<string>("all"); // "all" ou teamId
   const [filterFamily, setFilterFamily]   = useState<string>("all");
   const [filterGroup, setFilterGroup]     = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
@@ -31,9 +34,10 @@ export default function TaskBoard() {
 
   const fetchTasks = useCallback(async () => {
     try {
-      const [tr, fr] = await Promise.all([fetch("/api/tasks"), fetch("/api/task-families")]);
-      if (tr.ok) setTasks(await tr.json());
-      if (fr.ok) setFamilies(await fr.json());
+      const [tr, fr, tmr] = await Promise.all([fetch("/api/tasks"), fetch("/api/task-families"), fetch("/api/teams")]);
+      if (tr.ok)  setTasks(await tr.json());
+      if (fr.ok)  setFamilies(await fr.json());
+      if (tmr.ok) setTeams(await tmr.json());
     } finally { setLoading(false); }
   }, []);
 
@@ -53,8 +57,18 @@ export default function TaskBoard() {
   const currentFamily = families.find(f => f.id === filterFamily);
   const availableGroups = currentFamily?.groups ?? [];
 
+  // Familles visibles selon l'onglet équipe actif
+  const teamFamilyIds = activeTeam === "all"
+    ? null
+    : new Set(families.filter(f => f.teamId === activeTeam).map(f => f.id));
+
   const filtered = tasks.filter(t => {
     const tAny = t as unknown as Record<string, unknown>;
+    // Filtre onglet équipe : si une équipe est sélectionnée, ne montrer que les tâches des familles de cette équipe
+    if (activeTeam !== "all" && teamFamilyIds) {
+      const fid = tAny.familyId as string | undefined;
+      if (!fid || !teamFamilyIds.has(fid)) return false;
+    }
     if (filterFamily !== "all" && tAny.familyId !== filterFamily) return false;
     if (filterGroup  !== "all" && tAny.groupId  !== filterGroup)  return false;
     if (filterPriority !== "all" && t.priority !== filterPriority) return false;
@@ -96,8 +110,34 @@ export default function TaskBoard() {
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+
+      {/* Onglets équipes */}
+      {teams.length > 0 && (
+        <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "0 24px", display: "flex", gap: 0, alignItems: "flex-end", overflowX: "auto" }}>
+          {/* Onglet "Toutes" */}
+          <button onClick={() => { setActiveTeam("all"); setFilterFamily("all"); setFilterGroup("all"); }}
+            style={{ padding: "10px 18px", border: "none", borderBottom: activeTeam === "all" ? "2px solid #B8966A" : "2px solid transparent", background: "none", cursor: "pointer", fontSize: 13, fontWeight: activeTeam === "all" ? 700 : 400, color: activeTeam === "all" ? "#B8966A" : "#6b7280", whiteSpace: "nowrap", transition: "all 0.1s" }}>
+            Toutes les tâches
+          </button>
+          {teams.map(team => {
+            const teamTaskCount = filtered.filter(t => {
+              const fid = (t as unknown as Record<string, unknown>).familyId as string | undefined;
+              return fid && families.find(f => f.id === fid)?.teamId === team.id;
+            }).length;
+            return (
+              <button key={team.id} onClick={() => { setActiveTeam(team.id); setFilterFamily("all"); setFilterGroup("all"); }}
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 18px", border: "none", borderBottom: activeTeam === team.id ? `2px solid ${team.color}` : "2px solid transparent", background: "none", cursor: "pointer", fontSize: 13, fontWeight: activeTeam === team.id ? 700 : 400, color: activeTeam === team.id ? team.color : "#6b7280", whiteSpace: "nowrap", transition: "all 0.1s" }}>
+                {team.icon && <span>{team.icon}</span>}
+                {team.name}
+                {teamTaskCount > 0 && <span style={{ background: activeTeam === team.id ? team.color : "#e5e7eb", color: activeTeam === team.id ? "#fff" : "#6b7280", borderRadius: 10, padding: "0 6px", fontSize: 10, fontWeight: 600 }}>{teamTaskCount}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Toolbar */}
-      <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "12px 24px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "10px 24px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         {/* Search */}
         <div style={{ position: "relative", flex: "0 0 180px" }}>
           <span style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "#9ca3af" }}>🔍</span>

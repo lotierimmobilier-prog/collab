@@ -24,8 +24,32 @@ model User {
   sentMessages        InternalMessage[]  @relation("MessageSender")
   channelMemberships  ChannelMember[]
   notifications       Notification[]
+  teamMemberships     TeamMember[]
 
   @@map("users")
+}
+
+// ── Équipes ───────────────────────────────────────────────────
+model Team {
+  id      String       @id @default(cuid())
+  name    String       // "Gestion", "Transaction", "Syndic", "Direction"
+  color   String       @default("#B8966A")
+  icon    String?
+  order   Int          @default(0)
+  members TeamMember[]
+  families TaskFamily[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  teamId String
+  userId String
+  team   Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, userId])
+  @@map("team_members")
 }
 
 // ── Tâches hiérarchiques ─────────────────────────────────────
@@ -37,7 +61,9 @@ model TaskFamily {
   color       String      @default("#B8966A")
   icon        String?
   order       Int         @default(0)
+  teamId      String?     // null = visible par tous
   createdAt   DateTime    @default(now())
+  team        Team?       @relation(fields: [teamId], references: [id], onDelete: SetNull)
   groups      TaskGroup[]
   tasks       Task[]
 

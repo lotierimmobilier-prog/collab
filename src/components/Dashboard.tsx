@@ -138,6 +138,7 @@ function AdminView() {
       <Section title="Actions rapides">
         <ActionCard icon="👤" label="Gérer les utilisateurs" desc="Créer, modifier, désactiver" color="#B8966A" href="/admin/utilisateurs" />
         <ActionCard icon="🔐" label="Rôles & permissions" desc="Droits par module" color="#2563eb" href="/admin/roles" />
+        <ActionCard icon="👥" label="Équipes" desc="Gestion, Transaction, Syndic…" color="#7C3AED" href="/admin/equipes" />
         <ActionCard icon="📊" label="Comptabilité" desc="Encaissements & factures" color="#059669" href="/comptabilite" />
         <ActionCard icon="✉️" label="Messagerie" desc="Comptes mail configurés" color="#d97706" href="/messagerie" />
         <ActionCard icon="📅" label="Planning" desc="Agendas équipe" color="#0891b2" href="/planning" />

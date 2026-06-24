@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import React from "react";
 
 const GOLD    = "#B8966A";
 const GOLD_BG = "#F7F0E6";
@@ -10,21 +11,29 @@ const FAMILY_COLORS = ["#B8966A", "#0891b2", "#059669", "#dc2626", "#d97706", "#
 const FAMILY_ICONS  = ["📁", "🏠", "📊", "✅", "🎯", "💼", "📋", "🔧", "📅", "👥"];
 
 interface Group { id: string; name: string; description?: string; order: number; }
+interface Team  { id: string; name: string; color: string; icon?: string; }
 interface Family {
   id: string; name: string; description?: string;
-  color: string; icon?: string; order: number;
+  color: string; icon?: string; order: number; teamId?: string | null;
+  team?: Team | null;
   groups: Group[];
   _count?: { tasks: number };
 }
 
 export default function TaskFamilyManager({ onClose, isAdmin }: { onClose: () => void; isAdmin: boolean }) {
   const [families, setFamilies] = useState<Family[]>([]);
+  const [teams, setTeams]       = useState<Team[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editFamily, setEditFamily] = useState<Family | null>(null);
   const [newFamily, setNewFamily]   = useState(false);
   const [newGroup, setNewGroup]     = useState<string | null>(null); // familyId
 
-  useEffect(() => { loadFamilies(); }, []);
+  useEffect(() => { loadFamilies(); loadTeams(); }, []);
+
+  async function loadTeams() {
+    const r = await fetch("/api/teams");
+    if (r.ok) setTeams(await r.json());
+  }
 
   async function loadFamilies() {
     const r = await fetch("/api/task-families");
@@ -83,7 +92,15 @@ export default function TaskFamilyManager({ onClose, isAdmin }: { onClose: () =>
               <div style={{ padding: "12px 14px", background: family.color + "15", display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 18 }}>{family.icon ?? "📁"}</span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: DARK }}>{family.name}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontWeight: 600, fontSize: 14, color: DARK }}>{family.name}</span>
+                    {family.team && (
+                      <span style={{ fontSize: 10, fontWeight: 600, background: family.team.color + "18", color: family.team.color, padding: "1px 6px", borderRadius: 4 }}>
+                        {family.team.icon} {family.team.name}
+                      </span>
+                    )}
+                    {!family.teamId && <span style={{ fontSize: 10, color: "#9ca3af", background: "#f3f4f6", padding: "1px 6px", borderRadius: 4 }}>Tous</span>}
+                  </div>
                   {family.description && <div style={{ fontSize: 11, color: "#6b7280" }}>{family.description}</div>}
                   <div style={{ fontSize: 11, color: family.color }}>{family._count?.tasks ?? 0} tâche(s) · {family.groups.length} groupe(s)</div>
                 </div>
@@ -155,7 +172,7 @@ export default function TaskFamilyManager({ onClose, isAdmin }: { onClose: () =>
 
       {/* Modal édition famille */}
       {editFamily && (
-        <FamilyEditModal family={editFamily} onSave={data => updateFamily(editFamily.id, data)} onClose={() => setEditFamily(null)} />
+        <FamilyEditModal family={editFamily} teams={teams} onSave={data => updateFamily(editFamily.id, data)} onClose={() => setEditFamily(null)} />
       )}
     </>
   );
@@ -209,15 +226,16 @@ function FamilyForm({ onSave, onCancel }: { onSave: (d: { name: string; descript
   );
 }
 
-function FamilyEditModal({ family, onSave, onClose }: { family: Family; onSave: (d: Partial<Family>) => void; onClose: () => void }) {
-  const [name, setName]   = useState(family.name);
-  const [desc, setDesc]   = useState(family.description ?? "");
-  const [color, setColor] = useState(family.color);
-  const [icon, setIcon]   = useState(family.icon ?? FAMILY_ICONS[0]);
+function FamilyEditModal({ family, teams, onSave, onClose }: { family: Family; teams: Team[]; onSave: (d: Partial<Family>) => void; onClose: () => void }) {
+  const [name, setName]     = useState(family.name);
+  const [desc, setDesc]     = useState(family.description ?? "");
+  const [color, setColor]   = useState(family.color);
+  const [icon, setIcon]     = useState(family.icon ?? FAMILY_ICONS[0]);
+  const [teamId, setTeamId] = useState<string>(family.teamId ?? "");
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 60 }} />
-      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 400, background: "#fff", borderRadius: 14, zIndex: 70, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", overflow: "hidden" }}>
+      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 420, background: "#fff", borderRadius: 14, zIndex: 70, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", overflow: "hidden" }}>
         <div style={{ padding: "14px 16px", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between" }}>
           <span style={{ fontWeight: 700, color: DARK }}>Modifier la famille</span>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#9ca3af" }}>×</button>
@@ -225,12 +243,19 @@ function FamilyEditModal({ family, onSave, onClose }: { family: Family; onSave: 
         <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Nom *" style={{ height: 36, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 10px", fontSize: 13, outline: "none" }} />
           <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Description" style={{ height: 36, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 10px", fontSize: 13, outline: "none" }} />
+          <div>
+            <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 5 }}>Équipe — visible par :</div>
+            <select value={teamId} onChange={e => setTeamId(e.target.value)} style={{ width: "100%", height: 36, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 10px", fontSize: 13, outline: "none" }}>
+              <option value="">Toutes les équipes</option>
+              {teams.map(t => <option key={t.id} value={t.id}>{t.icon} {t.name}</option>)}
+            </select>
+          </div>
           <div style={{ display: "flex", gap: 6 }}>{FAMILY_COLORS.map(c => <div key={c} onClick={() => setColor(c)} style={{ width: 22, height: 22, borderRadius: "50%", background: c, cursor: "pointer", border: color === c ? "3px solid white" : "3px solid transparent", outline: color === c ? `2px solid ${c}` : "none", boxSizing: "border-box" }} />)}</div>
           <div style={{ display: "flex", gap: 6 }}>{FAMILY_ICONS.map(ic => <button key={ic} onClick={() => setIcon(ic)} style={{ fontSize: 16, background: icon === ic ? GOLD_BG : "transparent", border: icon === ic ? `1px solid ${GOLD}` : "1px solid transparent", borderRadius: 6, padding: "2px 4px", cursor: "pointer" }}>{ic}</button>)}</div>
         </div>
         <div style={{ padding: "12px 16px", borderTop: `1px solid ${BORDER}`, display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button onClick={onClose} style={{ background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 14px", fontSize: 13, cursor: "pointer" }}>Annuler</button>
-          <button onClick={() => onSave({ name, description: desc, color, icon })} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, cursor: "pointer" }}>Enregistrer</button>
+          <button onClick={() => onSave({ name, description: desc, color, icon, teamId: teamId || null })} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, cursor: "pointer" }}>Enregistrer</button>
         </div>
       </div>
     </>

@@ -16,7 +16,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ...(body.color       !== undefined && { color: body.color }),
       ...(body.icon        !== undefined && { icon: body.icon }),
       ...(body.order       !== undefined && { order: body.order }),
+      ...(body.teamId      !== undefined && { teamId: body.teamId || null }),
     },
+    include: { team: { select: { id: true, name: true, color: true, icon: true } } },
   });
   return NextResponse.json(family);
 }
