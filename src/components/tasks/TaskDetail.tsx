@@ -43,6 +43,16 @@ export default function TaskDetail({ task, onClose, onStatusChange, onUpdate }: 
   const [tags, setTags]           = useState<string[]>(task.tags ?? []);
   const [project, setProject]     = useState(task.project ?? "");
 
+  const COLORS = ["#B8966A","#059669","#2563EB","#7C3AED","#DC2626","#D97706"];
+  const colorForId = (id: string) => COLORS[id.charCodeAt(0) % COLORS.length];
+
+  const coIds   = tags.filter(t => t.startsWith("co:")).map(t => t.slice(3));
+  const pureTags = tags.filter(t => !t.startsWith("co:") && !t.startsWith("type:") && !t.startsWith("caller:") && !t.startsWith("phone:"));
+
+  function toggleCoAssignee(uid: string) {
+    setTags(prev => prev.includes(`co:${uid}`) ? prev.filter(t => t !== `co:${uid}`) : [...prev, `co:${uid}`]);
+  }
+
   const p = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES["moyenne"];
 
   useEffect(() => {
@@ -188,7 +198,7 @@ export default function TaskDetail({ task, onClose, onStatusChange, onUpdate }: 
               )}
             </MetaField>
 
-            {/* Assigné */}
+            {/* Assigné principal */}
             <MetaField label="Assigné à">
               {editMode ? (
                 <select value={assigneeId} onChange={e => setAssignee(e.target.value)} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, background: "#f9fafb", outline: "none" }}>
@@ -205,6 +215,40 @@ export default function TaskDetail({ task, onClose, onStatusChange, onUpdate }: 
                       <span style={{ fontSize: 12, color: "#374151" }}>{task.assignee}</span>
                     </>
                   ) : <span style={{ fontSize: 12, color: "#9ca3af" }}>—</span>}
+                </div>
+              )}
+            </MetaField>
+
+            {/* Co-assignés */}
+            <MetaField label="Co-assignés">
+              {editMode ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {users.filter(u => u.id !== assigneeId).map(u => {
+                    const checked = coIds.includes(u.id);
+                    const col = colorForId(u.id);
+                    return (
+                      <label key={u.id} style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", fontSize: 12 }}>
+                        <input type="checkbox" checked={checked} onChange={() => toggleCoAssignee(u.id)} style={{ accentColor: GOLD }} />
+                        <div style={{ width: 20, height: 20, borderRadius: "50%", background: col + "30", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 700, color: col }}>
+                          {(u.prenom[0] + u.nom[0]).toUpperCase()}
+                        </div>
+                        {u.prenom} {u.nom}
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {coIds.length === 0 ? <span style={{ fontSize: 12, color: "#9ca3af" }}>—</span> : coIds.map(id => {
+                    const u = users.find(x => x.id === id);
+                    if (!u) return null;
+                    const col = colorForId(id);
+                    return (
+                      <div key={id} title={`${u.prenom} ${u.nom}`} style={{ width: 24, height: 24, borderRadius: "50%", background: col + "30", border: `2px solid ${col}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: col }}>
+                        {(u.prenom[0] + u.nom[0]).toUpperCase()}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </MetaField>

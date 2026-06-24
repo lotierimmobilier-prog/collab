@@ -29,6 +29,7 @@ const nav: NavItem[] = [
   { id: "planning",  label: "Planning",           icon: "▦",  href: "/planning",         group: "Principal" },
   { id: "mail",      label: "Messagerie email",   icon: "@",  href: "/messagerie",       group: "Principal", badge: 3 },
   { id: "chat",      label: "Messages internes",  icon: "💬", href: "/messagerie-interne", group: "Principal" },
+  { id: "appels",    label: "Appels téléphoniques", icon: "📞", href: "/appels",           group: "Principal" },
 
   /* ── Gestion · Tableau de bord (pas de sous-groupe) ─────────── */
   { id: "gestion-loc", label: "Vue d'ensemble",   icon: "🏠", href: "/gestion-locative", group: "Gestion" },

@@ -1,6 +1,9 @@
 "use client";
 import { Task, PRIORITY_STYLES } from "@/lib/tasks";
 
+const COLORS = ["#B8966A","#059669","#2563EB","#7C3AED","#DC2626","#D97706"];
+const colorForId = (id: string) => COLORS[id.charCodeAt(0) % COLORS.length];
+
 export default function TaskCard({ task, onDragStart, onClick }: {
   task: Task;
   onDragStart: () => void;
@@ -23,13 +26,13 @@ export default function TaskCard({ task, onDragStart, onClick }: {
       onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)")}
       onMouseLeave={e => (e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.04)")}
     >
-      {/* Priority + tags */}
+      {/* Priority + tags (masque les tags internes co:/type:/caller:/phone:) */}
       <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
         <span style={{
           background: p.bg, color: p.text, borderRadius: 5,
           padding: "2px 7px", fontSize: 10, fontWeight: 600,
         }}>{p.label}</span>
-        {task.tags?.map(tag => (
+        {task.tags?.filter(t => !t.startsWith("co:") && !t.startsWith("type:") && !t.startsWith("caller:") && !t.startsWith("phone:")).map(tag => (
           <span key={tag} style={{
             background: "#f3f4f6", color: "#6b7280", borderRadius: 5,
             padding: "2px 7px", fontSize: 10,
@@ -64,7 +67,7 @@ export default function TaskCard({ task, onDragStart, onClick }: {
       )}
 
       {/* Footer */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
         {task.assigneeInitials && (
           <div style={{
             width: 24, height: 24, borderRadius: "50%", background: task.assigneeColor,
@@ -72,10 +75,20 @@ export default function TaskCard({ task, onDragStart, onClick }: {
             fontSize: 9, fontWeight: 700, color: "#374151",
           }}>{task.assigneeInitials}</div>
         )}
+        {task.tags?.filter(t => t.startsWith("co:")).map(t => {
+          const id = t.slice(3);
+          const col = colorForId(id);
+          const initials = id.slice(0,2).toUpperCase();
+          return (
+            <div key={id} title="Co-assigné" style={{ width: 24, height: 24, borderRadius: "50%", background: col + "30", border: `2px solid ${col}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 700, color: col }}>
+              {initials}
+            </div>
+          );
+        })}
+        <div style={{ flex: 1 }} />
         {task.dueDate && (
           <span style={{ fontSize: 10, color: "#9ca3af" }}>📅 {task.dueDate}</span>
         )}
-        <div style={{ flex: 1 }} />
         {(task.comments ?? 0) > 0 && (
           <span style={{ fontSize: 10, color: "#9ca3af" }}>💬 {task.comments}</span>
         )}
