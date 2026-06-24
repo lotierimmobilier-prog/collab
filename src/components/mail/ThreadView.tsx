@@ -374,24 +374,20 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
         {/* Répondu */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <button
-            onClick={() => isReplied ? setReplied(null) : setReplied(users[0]?.id ?? null)}
+            onClick={() => setReplied(isReplied ? null : (users[0]?.id ?? null))}
             style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${isReplied ? "#059669" : "#d1d5db"}`, background: isReplied ? "#059669" : "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", flexShrink: 0 }}
           >
             {isReplied ? "✓" : ""}
           </button>
-          <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 500 }}>Répondu</span>
-          {isReplied && (
-            <select
-              value={repliedById ?? ""}
-              onChange={e => setReplied(e.target.value || null)}
-              style={{ border: "1px solid #bbf7d0", borderRadius: 6, padding: "3px 8px", fontSize: 12, background: "#f0fdf4", color: "#059669", fontWeight: 600, outline: "none", cursor: "pointer" }}
-            >
-              {users.map(u => <option key={u.id} value={u.id}>{u.prenom} {u.nom}</option>)}
-            </select>
-          )}
-          {isReplied && repliedByUser && (
-            <span style={{ fontSize: 11, color: "#059669" }}>par {repliedByUser.prenom} {repliedByUser.nom}</span>
-          )}
+          <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 500 }}>Répondu par :</span>
+          <select
+            value={repliedById ?? ""}
+            onChange={e => setReplied(e.target.value || null)}
+            style={{ border: `1px solid ${isReplied ? "#bbf7d0" : "#e5e7eb"}`, borderRadius: 6, padding: "3px 8px", fontSize: 12, background: isReplied ? "#f0fdf4" : "#f9fafb", color: isReplied ? "#059669" : "#9ca3af", fontWeight: isReplied ? 600 : 400, outline: "none", cursor: "pointer" }}
+          >
+            <option value="">— Personne —</option>
+            {users.map(u => <option key={u.id} value={u.id}>{u.prenom} {u.nom}</option>)}
+          </select>
         </div>
       </div>
 
@@ -482,11 +478,22 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
         </div>
       )}
 
-      {/* Messages */}
+      {/* Messages — dédupliqués par messageId, on garde celui avec le plus de contenu */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-        {thread.messages.map((msg, i) => (
-          <MessageBubble key={msg.id} msg={msg} isLast={i === thread.messages.length - 1} loadingBody={loadingBody} />
-        ))}
+        {(() => {
+          const seen = new Map<string, MailMessage>();
+          for (const msg of thread.messages) {
+            const key = msg.id.replace(/^[^-]+-/, ""); // retire le préfixe accountId
+            const existing = seen.get(key);
+            if (!existing || (msg.body || msg.bodyText || "").length > (existing.body || existing.bodyText || "").length) {
+              seen.set(key, msg);
+            }
+          }
+          const deduped = Array.from(seen.values());
+          return deduped.map((msg, i) => (
+            <MessageBubble key={msg.id} msg={msg} isLast={i === deduped.length - 1} loadingBody={loadingBody} />
+          ));
+        })()}
       </div>
 
       {/* Boutons répondre (bas, quand le panneau réponse est fermé) */}
