@@ -104,7 +104,7 @@ export default function MailBoard() {
     setGmailConfigs(loadGmailConfigs());
 
     // Charger les emails persistés en BDD au démarrage
-    fetch("/api/mail/messages?limit=200")
+    fetch("/api/mail/messages?limit=500")
       .then(r => r.json())
       .then(d => {
         if (d.ok && d.messages?.length) {
@@ -531,7 +531,7 @@ export default function MailBoard() {
           )}
           {accounts.length > 0 && (
             <button onClick={() => { for (const a of accounts.filter(x => x.active)) downloadAllImap(a); }} disabled={!!syncing} style={{ width: "100%", background: "none", border: "1px dashed #B8966A", borderRadius: 8, padding: "7px 0", fontSize: 12, cursor: "pointer", color: "#B8966A" }}>
-              ⬇ Tout télécharger (tous les mails)
+              ⬇ Tout télécharger (6 derniers mois)
             </button>
           )}
           {hasAnyAccount && !syncing && (

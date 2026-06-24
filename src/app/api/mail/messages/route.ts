@@ -12,7 +12,10 @@ export async function GET(req: NextRequest) {
   const accountId = searchParams.get("accountId") || undefined;
   const limit     = parseInt(searchParams.get("limit") || "100");
 
-  const where: Record<string, unknown> = { folder };
+  const since = new Date();
+  since.setMonth(since.getMonth() - 6);
+
+  const where: Record<string, unknown> = { folder, date: { gte: since } };
   if (accountId) where.accountId = accountId;
 
   const messages = await prisma.emailMessage.findMany({
