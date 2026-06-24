@@ -165,8 +165,9 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
         body: JSON.stringify({ action: "summarize", messages: thread.messages, threadSubject: thread.subject }),
       });
       const d = await r.json();
+      if (d.error) { setAiSummary({ summary: `Erreur : ${d.error}`, points: [] }); return; }
       setAiSummary(d);
-    } catch { setAiSummary({ summary: "Erreur lors du résumé", points: [] }); }
+    } catch (e) { setAiSummary({ summary: `Erreur réseau : ${e instanceof Error ? e.message : String(e)}`, points: [] }); }
     finally { setAiLoading(null); }
   }
 
