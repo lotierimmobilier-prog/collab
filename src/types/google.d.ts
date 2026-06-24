@@ -1,4 +1,13 @@
-// Type declarations for Google Identity Services loaded from CDN at runtime
+// Type declarations for Google Identity Services & GAPI loaded from CDN at runtime
+
+declare const gapi: {
+  load(lib: string, callback: () => void): void;
+  client: {
+    load(url: string): Promise<void>;
+  };
+};
+
+
 
 declare namespace google {
   namespace accounts {
