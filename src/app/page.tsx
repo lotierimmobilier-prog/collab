@@ -8,7 +8,7 @@ export default function Home() {
       <Sidebar active="dashboard" />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <Topbar title="Tableau de bord" />
-        <main style={{ flex: 1, padding: "24px", overflowY: "auto" }}>
+        <main className="main-content" style={{ flex: 1, padding: "24px", overflowY: "auto" }}>
           <Dashboard />
         </main>
       </div>
