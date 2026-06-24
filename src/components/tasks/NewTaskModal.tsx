@@ -1,12 +1,19 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Task, Priority, Status, PRIORITY_STYLES, COLUMNS } from "@/lib/tasks";
 
-const MEMBERS = [
-  { initials: "JL", name: "Jérôme L.", color: "#F7F0E6" },
-  { initials: "MD", name: "Marie D.", color: "#dcfce7" },
-  { initials: "PR", name: "Paul R.", color: "#dbeafe" },
-];
+const AVATAR_COLORS = ["#F7F0E6", "#dcfce7", "#dbeafe", "#fce7f3", "#fef3c7", "#ede9fe"];
+
+interface Member { id: string; initials: string; name: string; color: string; }
+
+function userToMember(u: { id: string; prenom: string; nom: string }, i: number): Member {
+  return {
+    id: u.id,
+    initials: (u.prenom[0] ?? "") + (u.nom[0] ?? ""),
+    name: `${u.prenom} ${u.nom}`,
+    color: AVATAR_COLORS[i % AVATAR_COLORS.length],
+  };
+}
 
 export default function NewTaskModal({ onClose, onAdd }: {
   onClose: () => void;
@@ -15,11 +22,23 @@ export default function NewTaskModal({ onClose, onAdd }: {
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState<Priority>("moyenne");
   const [status, setStatus] = useState<Status>("todo");
-  const [assignee, setAssignee] = useState(MEMBERS[0]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [assignee, setAssignee] = useState<Member | null>(null);
   const [dueDate, setDueDate] = useState("");
   const [project, setProject] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch("/api/users")
+      .then(r => r.json())
+      .then((users: { id: string; prenom: string; nom: string; active: boolean }[]) => {
+        const active = users.filter(u => u.active).map(userToMember);
+        setMembers(active);
+        if (active.length > 0) setAssignee(active[0]);
+      })
+      .catch(() => {});
+  }, []);
 
   function addTag(e: React.KeyboardEvent) {
     if (e.key === "Enter" && tagInput.trim()) {
@@ -35,9 +54,9 @@ export default function NewTaskModal({ onClose, onAdd }: {
       title: title.trim(),
       status,
       priority,
-      assignee: assignee.name,
-      assigneeInitials: assignee.initials,
-      assigneeColor: assignee.color,
+      assignee: assignee?.name ?? "",
+      assigneeInitials: assignee?.initials ?? "?",
+      assigneeColor: assignee?.color ?? "#f3f4f6",
       dueDate: dueDate || undefined,
       tags: tags.length ? tags : undefined,
       project: project || undefined,
@@ -103,11 +122,13 @@ export default function NewTaskModal({ onClose, onAdd }: {
             <div>
               <FieldLabel>Assigné à</FieldLabel>
               <select
-                value={assignee.initials}
-                onChange={e => setAssignee(MEMBERS.find(m => m.initials === e.target.value)!)}
+                value={assignee?.id ?? ""}
+                onChange={e => setAssignee(members.find(m => m.id === e.target.value) ?? null)}
                 style={inputStyle}
+                disabled={members.length === 0}
               >
-                {MEMBERS.map(m => <option key={m.initials} value={m.initials}>{m.name}</option>)}
+                {members.length === 0 && <option value="">Chargement…</option>}
+                {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </div>
             <div>
