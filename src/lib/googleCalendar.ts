@@ -31,7 +31,6 @@ export interface GEvent {
 }
 
 const SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
-const DISCOVERY_DOC = "https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest";
 
 /* ─── Token storage ─────────────────────────────────────────── */
 const TOKEN_KEY = "collab_gtoken";
@@ -94,35 +93,20 @@ export function loadSelectedCalendars(): string[] {
 /* ─── Google API helpers ─────────────────────────────────────── */
 type WindowWithGsi = Window & {
   google?: typeof google;
-  gapi?: typeof gapi;
 };
 
 export async function loadGapiAndGis(): Promise<void> {
   const w = window as WindowWithGsi;
-  if (w.gapi && w.google) return;
+  if (w.google) return; // GIS déjà chargé
 
-  await Promise.all([
-    new Promise<void>((res, rej) => {
-      const s = document.createElement("script");
-      s.src = "https://apis.google.com/js/api.js";
-      s.onload = () => res();
-      s.onerror = () => rej(new Error("Failed to load GAPI"));
-      document.head.appendChild(s);
-    }),
-    new Promise<void>((res, rej) => {
-      const s = document.createElement("script");
-      s.src = "https://accounts.google.com/gsi/client";
-      s.onload = () => res();
-      s.onerror = () => rej(new Error("Failed to load GSI"));
-      document.head.appendChild(s);
-    }),
-  ]);
-
-  await new Promise<void>((res) => {
-    gapi.load("client", async () => {
-      await gapi.client.load(DISCOVERY_DOC);
-      res();
-    });
+  await new Promise<void>((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "https://accounts.google.com/gsi/client";
+    s.async = true;
+    s.defer = true;
+    s.onload = () => res();
+    s.onerror = () => rej(new Error("Impossible de charger Google Sign-In. Vérifiez votre connexion."));
+    document.head.appendChild(s);
   });
 }
 
