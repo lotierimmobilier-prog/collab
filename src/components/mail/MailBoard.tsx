@@ -380,6 +380,7 @@ export default function MailBoard() {
   }
   function setThreadLabels(threadId: string, newLabels: string[]) {
     setMessages(prev => { const u = prev.map(m => m.threadId === threadId ? { ...m, labels: newLabels } : m); rebuildThreads(u); return u; });
+    setSelectedThread(prev => prev?.id === threadId ? { ...prev, messages: prev.messages.map(m => ({ ...m, labels: newLabels })) } : prev);
     fetch("/api/mail/messages", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threadId, setLabels: newLabels }) }).catch(() => {});
   }
   function toggleStar(threadId: string) {
