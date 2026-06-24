@@ -17,7 +17,8 @@ const nav = [
   { id: "dashboard",  label: "Tableau de bord",    icon: "⊟",  href: "/",                group: "Principal" },
   { id: "tasks",      label: "Tâches",              icon: "✓",  href: "/taches",          group: "Principal" },
   { id: "planning",   label: "Planning",            icon: "▦",  href: "/planning",        group: "Principal" },
-  { id: "mail",       label: "Messagerie",          icon: "@",  href: "/messagerie",      group: "Principal", badge: 3 },
+  { id: "mail",       label: "Messagerie email",    icon: "@",  href: "/messagerie",      group: "Principal", badge: 3 },
+  { id: "chat",       label: "Messages internes",   icon: "💬", href: "/messagerie-interne", group: "Principal" },
   { id: "edl",        label: "États des lieux",     icon: "⌂",  href: "/etats-des-lieux", group: "Gestion locative" },
   { id: "locataires", label: "Dossiers locataires", icon: "◎",  href: "/locataires",      group: "Gestion locative" },
   { id: "compta",     label: "Tableau de bord",     icon: "∑",  href: "/comptabilite",    group: "Comptabilité" },
@@ -29,8 +30,9 @@ const nav = [
 ];
 
 const adminNav = [
-  { id: "admin-users", label: "Utilisateurs",  icon: "○", href: "/admin/utilisateurs" },
-  { id: "admin-roles", label: "Rôles & droits", icon: "◫", href: "/admin/roles" },
+  { id: "admin-users",    label: "Utilisateurs",  icon: "○", href: "/admin/utilisateurs" },
+  { id: "admin-roles",    label: "Rôles & droits", icon: "◫", href: "/admin/roles" },
+  { id: "admin-settings", label: "Paramètres",    icon: "⚙", href: "/admin/parametres" },
 ];
 
 const groups = ["Principal", "Gestion locative", "Comptabilité", "Agence"];

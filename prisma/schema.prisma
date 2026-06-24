@@ -20,5 +20,162 @@ model User {
   lastLogin       DateTime?
   avatar          String?
 
+  tasks               Task[]
+  sentMessages        InternalMessage[]  @relation("MessageSender")
+  channelMemberships  ChannelMember[]
+  notifications       Notification[]
+
   @@map("users")
+}
+
+// ── Tâches hiérarchiques ─────────────────────────────────────
+
+model TaskFamily {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  color       String      @default("#B8966A")
+  icon        String?
+  order       Int         @default(0)
+  createdAt   DateTime    @default(now())
+  groups      TaskGroup[]
+  tasks       Task[]
+
+  @@map("task_families")
+}
+
+model TaskGroup {
+  id          String     @id @default(cuid())
+  familyId    String
+  name        String
+  description String?
+  order       Int        @default(0)
+  createdAt   DateTime   @default(now())
+  family      TaskFamily @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+
+  @@map("task_groups")
+}
+
+model Task {
+  id           String      @id @default(cuid())
+  title        String
+  description  String?
+  status       String      @default("todo")
+  priority     String      @default("moyenne")
+  assigneeId   String?
+  assignee     User?       @relation(fields: [assigneeId], references: [id])
+  assigneeName String?
+  familyId     String?
+  family       TaskFamily? @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  groupId      String?
+  group        TaskGroup?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  dueDate      DateTime?
+  tags         String[]
+  project      String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@map("tasks")
+}
+
+// ── Événements agenda ────────────────────────────────────────
+
+model CalendarEvent {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  location    String?
+  start       DateTime
+  end         DateTime
+  allDay      Boolean  @default(false)
+  color       String   @default("#B8966A")
+  type        String   @default("autre")
+  createdBy   String
+  attendees   Json?    // [{type:"user"|"contact", id?, name, email}]
+  googleId    String?  // ID Google Calendar si synchronisé
+  notifSent   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("calendar_events")
+}
+
+// ── Messagerie interne ───────────────────────────────────────
+
+model Channel {
+  id          String          @id @default(cuid())
+  name        String
+  description String?
+  isDirect    Boolean         @default(false)
+  createdBy   String
+  createdAt   DateTime        @default(now())
+  members     ChannelMember[]
+  messages    InternalMessage[]
+
+  @@map("channels")
+}
+
+model ChannelMember {
+  id        String   @id @default(cuid())
+  channelId String
+  userId    String
+  joinedAt  DateTime @default(now())
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@map("channel_members")
+}
+
+model InternalMessage {
+  id        String   @id @default(cuid())
+  channelId String
+  senderId  String
+  content   String
+  createdAt DateTime @default(now())
+  readBy    String[]
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  sender  User    @relation("MessageSender", fields: [senderId], references: [id])
+
+  @@map("internal_messages")
+}
+
+// ── Notifications ────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+// ── Paramètres admin ─────────────────────────────────────────
+
+model Setting {
+  key       String @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+// ── Annonces ─────────────────────────────────────────────────
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  version   String?
+  createdAt DateTime @default(now())
+
+  @@map("announcements")
 }
