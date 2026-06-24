@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ImapFlow } from "imapflow";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { ImapFlow } = require("imapflow");
 
 export async function POST(req: NextRequest) {
   const { host, port, ssl, username, password, accountId, limit = 50 } = await req.json();
@@ -8,6 +9,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Paramètres incomplets" }, { status: 400 });
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = new ImapFlow({
     host,
     port: parseInt(port),
@@ -24,42 +26,44 @@ export async function POST(req: NextRequest) {
     const messages = [];
 
     try {
-      const mailbox = client.mailbox;
-      const total = mailbox && typeof mailbox === "object" && "exists" in mailbox ? (mailbox as { exists: number }).exists : 50;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mailbox = client.mailbox as any;
+      const total = mailbox?.exists ?? 50;
       const from = Math.max(1, total - limit + 1);
       const range = `${from}:*`;
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for await (const msg of client.fetch(range, {
         uid: true,
         flags: true,
         envelope: true,
         bodyStructure: true,
         source: false,
-      })) {
-        const env = msg.envelope;
-        const isUnread = !msg.flags?.has("\\Seen");
-        const isStarred = !!msg.flags?.has("\\Flagged");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      }) as AsyncIterable<any>) {
+        const env = msg.envelope ?? {};
+        const flags = msg.flags ?? new Set();
+        const isUnread = !flags.has("\\Seen");
+        const isStarred = flags.has("\\Flagged");
 
         const labels = ["inbox"];
         if (isStarred) labels.push("starred");
 
-        // Récupération du corps texte
-        let bodyText = "";
-        let bodyHtml = "";
+        let bodyText = msg.snippet ?? "";
+        let bodyHtml = `<p>${bodyText}</p>`;
+
         try {
-          const fullMsg = await client.fetchOne(String(msg.seq), { bodyParts: ["TEXT", "1", "1.1"] });
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const fullMsg = await client.fetchOne(String(msg.seq), { bodyParts: ["TEXT", "1"] }) as any;
           const parts = fullMsg?.bodyParts;
           if (parts) {
-            const text = parts.get("TEXT") ?? parts.get("1") ?? parts.get("1.1");
-            if (text) {
-              bodyText = Buffer.from(text).toString("utf-8").slice(0, 2000);
+            const raw = parts.get("TEXT") ?? parts.get("1");
+            if (raw) {
+              bodyText = Buffer.from(raw).toString("utf-8").slice(0, 2000);
               bodyHtml = `<p>${bodyText.replace(/\n/g, "<br/>")}</p>`;
             }
           }
-        } catch {
-          bodyText = "(corps non disponible)";
-          bodyHtml = "<p>(corps non disponible)</p>";
-        }
+        } catch { /* corps non disponible */ }
 
         const threadId = env.messageId
           ? env.messageId.replace(/[<>]/g, "").replace(/[^a-zA-Z0-9@._-]/g, "_")
@@ -93,7 +97,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      messages: messages.reverse(), // plus récents en premier
+      messages: messages.reverse(),
       count: messages.length,
       message: `${messages.length} message(s) synchronisé(s) depuis INBOX`,
     });
