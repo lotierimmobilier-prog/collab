@@ -6,7 +6,7 @@ const CSP = [
   "style-src 'self' 'unsafe-inline'",                       // styles inline React
   "img-src 'self' data: https:",                            // images distantes (avatars, logos)
   "font-src 'self' data:",
-  "connect-src 'self' https://api.anthropic.com https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com", // IA + Google OAuth
+  "connect-src 'self' https://api.anthropic.com https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://gmail.googleapis.com", // IA + Google OAuth + Gmail API
   "frame-ancestors 'none'",                                 // anti-clickjacking
   "form-action 'self'",
   "base-uri 'self'",
