@@ -407,7 +407,10 @@ model Bail {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  tenants     BailTenant[]
+  tenants       BailTenant[]
+  appels        AppelLoyer[]
+  encaissements Encaissement[]
+  depot         DepotGarantie?
 
   @@map("baux")
 }
@@ -421,4 +424,60 @@ model BailTenant {
 
   @@unique([bailId, tenantId])
   @@map("bail_tenants")
+}
+
+// ── Comptabilité ──────────────────────────────────────────────
+
+model AppelLoyer {
+  id          String   @id @default(cuid())
+  reference   String   @unique
+  bailId      String
+  bail        Bail     @relation(fields: [bailId], references: [id], onDelete: Cascade)
+  periode     String   // "2025-01" (YYYY-MM)
+  montantHC   Float
+  charges     Float    @default(0)
+  totalCC     Float
+  echeance    DateTime
+  status      String   @default("emis")  // emis, partiel, regle, impaye
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  encaissements Encaissement[]
+
+  @@map("appels_loyer")
+}
+
+model Encaissement {
+  id           String      @id @default(cuid())
+  reference    String      @unique
+  appelId      String?
+  appel        AppelLoyer? @relation(fields: [appelId], references: [id], onDelete: SetNull)
+  bailId       String
+  bail         Bail        @relation(fields: [bailId], references: [id], onDelete: Cascade)
+  montant      Float
+  dateReglement DateTime
+  modePaiement String      @default("virement")  // virement, cheque, especes, prelevement
+  reference_paiement String?
+  notes        String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@map("encaissements")
+}
+
+model DepotGarantie {
+  id           String   @id @default(cuid())
+  bailId       String   @unique
+  bail         Bail     @relation(fields: [bailId], references: [id], onDelete: Cascade)
+  montant      Float
+  dateRecep    DateTime
+  dateRestitution DateTime?
+  montantRestitue Float?
+  status       String   @default("conserve")  // conserve, restitue, partiel
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("depots_garantie")
 }
