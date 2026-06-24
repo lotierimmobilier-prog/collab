@@ -11,9 +11,9 @@ function makeClient(host: string, port: string, ssl: boolean, username: string, 
 }
 
 export async function POST(req: NextRequest) {
-  const { host, port, ssl, username, password, accountId, page = 1, pageSize = 25 } = await req.json();
+  const { host, port, ssl, username, password, accountId, query } = await req.json();
 
-  if (!host || !username || !password) {
+  if (!host || !username || !password || !query) {
     return NextResponse.json({ ok: false, error: "Paramètres incomplets" }, { status: 400 });
   }
 
@@ -22,23 +22,32 @@ export async function POST(req: NextRequest) {
   try {
     await client.connect();
     const lock = await client.getMailboxLock("INBOX");
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const total: number = (client.mailbox as any)?.exists ?? 0;
-    const totalPages    = total > 0 ? Math.ceil(total / pageSize) : 0;
-    const messages: Array<Record<string, unknown>> = [];
+    const messages = [];
 
     try {
-      if (total > 0) {
-        const from  = Math.max(1, total - page * pageSize + 1);
-        const to    = Math.max(1, total - (page - 1) * pageSize);
-        const range = `${from}:${to}`;
+      // Recherche IMAP côté serveur : sujet, corps, expéditeur
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const uids: number[] = await (client as any).search({
+        or: [
+          { subject: query },
+          { body: query },
+          { from: query },
+          { to: query },
+        ],
+      }, { uid: true });
 
+      // Limiter à 50 résultats max, les plus récents
+      const toFetch = uids.slice(-50);
+
+      if (toFetch.length > 0) {
+        const range = toFetch.join(",");
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        for await (const msg of client.fetch(range, { uid: true, flags: true, envelope: true }) as AsyncIterable<any>) {
-          const env     = msg.envelope ?? {};
-          const flags   = msg.flags ?? new Set();
-          const isUnread  = !flags.has("\\Seen");
+        for await (const msg of (client as any).fetch(range, {
+          uid: true, flags: true, envelope: true,
+        }, { uid: true }) as AsyncIterable<any>) {
+          const env = msg.envelope ?? {};
+          const flags = msg.flags ?? new Set();
+          const isUnread = !flags.has("\\Seen");
           const isStarred = flags.has("\\Flagged");
 
           const threadId = env.messageId
@@ -58,12 +67,11 @@ export async function POST(req: NextRequest) {
               name: a.name ?? a.address ?? "",
               email: a.address ?? "",
             })),
-            subject:  env.subject ?? "(Sans objet)",
-            body:     "",
-            bodyText: "",
-            date:     env.date?.toISOString() ?? new Date().toISOString(),
-            status:   isUnread ? "unread" : "read",
-            labels:   ["inbox", ...(isStarred ? ["starred"] : [])],
+            subject: env.subject ?? "(Sans objet)",
+            body: "", bodyText: "",
+            date: env.date?.toISOString() ?? new Date().toISOString(),
+            status: isUnread ? "unread" : "read",
+            labels: ["inbox", ...(isStarred ? ["starred"] : [])],
           });
         }
       }
@@ -77,13 +85,9 @@ export async function POST(req: NextRequest) {
       ok: true,
       messages: messages.reverse(),
       count: messages.length,
-      total,
-      totalPages,
-      page,
-      message: `${messages.length} message(s) — page ${page}/${totalPages} (${total} au total)`,
     });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Erreur de synchronisation";
+    const msg = err instanceof Error ? err.message : "Erreur de recherche";
     return NextResponse.json({ ok: false, error: msg }, { status: 200 });
   }
 }

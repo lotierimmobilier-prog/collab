@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   MailAccount, MailMessage, MailThread, MailLabel,
   DEFAULT_LABELS, threadFromMessages,
@@ -15,28 +15,47 @@ import ThreadList from "./ThreadList";
 import ThreadView from "./ThreadView";
 import GoogleMailConnect from "./GoogleMailConnect";
 
-const ACCOUNTS_KEY = "collab_mail_accounts";
-const LABELS_KEY   = "collab_mail_labels";
-const AI_KEY_STORE = "collab_ai_key";
+const ACCOUNTS_KEY  = "collab_mail_accounts";
+const LABELS_KEY    = "collab_mail_labels";
+const AI_KEY_STORE  = "collab_ai_key";
+const SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 export default function MailBoard() {
-  const [accounts, setAccounts] = useState<MailAccount[]>([]);
-  const [gmailConfigs, setGmailConfigs] = useState<GmailConfig[]>([]);
-  const [labels, setLabels]     = useState<MailLabel[]>(DEFAULT_LABELS);
-  const [messages, setMessages] = useState<MailMessage[]>([]);
-  const [threads, setThreads]   = useState<MailThread[]>([]);
-  const [activeLabel, setActiveLabel] = useState("inbox");
+  const [accounts, setAccounts]           = useState<MailAccount[]>([]);
+  const [gmailConfigs, setGmailConfigs]   = useState<GmailConfig[]>([]);
+  const [labels, setLabels]               = useState<MailLabel[]>(DEFAULT_LABELS);
+  const [messages, setMessages]           = useState<MailMessage[]>([]);
+  const [threads, setThreads]             = useState<MailThread[]>([]);
+  const [activeLabel, setActiveLabel]     = useState("inbox");
   const [activeAccount, setActiveAccount] = useState<string>("all");
   const [selectedThread, setSelectedThread] = useState<MailThread | null>(null);
-  const [search, setSearch] = useState("");
-  const [showImapConfig, setShowImapConfig] = useState(false);
+
+  // Recherche
+  const [search, setSearch]               = useState("");
+  const [searchInput, setSearchInput]     = useState("");
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState<MailMessage[] | null>(null); // null = pas de recherche active
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // UI
+  const [showImapConfig, setShowImapConfig]     = useState(false);
   const [showGmailConnect, setShowGmailConnect] = useState(false);
-  const [showLabels, setShowLabels] = useState(false);
-  const [showCompose, setShowCompose] = useState(false);
-  const [aiKey, setAiKey] = useState("");
-  const [syncing, setSyncing] = useState<string | null>(null);
-  const [syncStatus, setSyncStatus] = useState("");
-  const [loadingBody, setLoadingBody] = useState(false);
+  const [showLabels, setShowLabels]             = useState(false);
+  const [showCompose, setShowCompose]           = useState(false);
+  const [aiKey, setAiKey]                       = useState("");
+  const [syncing, setSyncing]                   = useState<string | null>(null);
+  const [syncStatus, setSyncStatus]             = useState("");
+  const [loadingBody, setLoadingBody]           = useState(false);
+  const [nextSyncIn, setNextSyncIn]             = useState(SYNC_INTERVAL / 1000);
+
+  // Pagination
+  const [listPage, setListPage] = useState(1);
+
+  // Ref pour accéder aux comptes dans le timer sans stale closure
+  const accountsRef    = useRef<MailAccount[]>([]);
+  const gmailConfigRef = useRef<GmailConfig[]>([]);
+  accountsRef.current    = accounts;
+  gmailConfigRef.current = gmailConfigs;
 
   useEffect(() => {
     const a = localStorage.getItem(ACCOUNTS_KEY);
@@ -49,14 +68,14 @@ export default function MailBoard() {
   }, []);
 
   function saveAccounts(a: MailAccount[]) { setAccounts(a); localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(a)); }
-  function saveLabels(l: MailLabel[]) { setLabels(l); localStorage.setItem(LABELS_KEY, JSON.stringify(l)); }
-  function saveAiKey(k: string) { setAiKey(k); localStorage.setItem(AI_KEY_STORE, k); }
+  function saveLabels(l: MailLabel[])     { setLabels(l);   localStorage.setItem(LABELS_KEY,    JSON.stringify(l)); }
+  function saveAiKey(k: string)           { setAiKey(k);    localStorage.setItem(AI_KEY_STORE,  k); }
 
   function ingestMessages(newMsgs: MailMessage[]) {
     setMessages(prev => {
       const existing = new Set(prev.map(m => m.id));
-      const fresh = newMsgs.filter(m => !existing.has(m.id));
-      const updated = [...fresh, ...prev];
+      const fresh    = newMsgs.filter(m => !existing.has(m.id));
+      const updated  = [...fresh, ...prev];
       rebuildThreads(updated);
       return updated;
     });
@@ -77,7 +96,7 @@ export default function MailBoard() {
   }
 
   /* ── Gmail sync ─────────────────────────────────────────── */
-  async function syncGmail(accountId: string, accessToken?: string) {
+  const syncGmail = useCallback(async (accountId: string, accessToken?: string) => {
     setSyncing(accountId);
     const cfg = loadGmailConfigs().find(c => c.accountId === accountId);
     setSyncStatus(`Synchronisation Gmail ${cfg?.email ?? ""}...`);
@@ -105,23 +124,24 @@ export default function MailBoard() {
     } finally {
       setSyncing(null);
     }
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  /* ── IMAP sync ──────────────────────────────────────────── */
-  async function syncImap(a: MailAccount) {
+  /* ── IMAP sync (page optionnelle) ──────────────────────── */
+  const syncImap = useCallback(async (a: MailAccount, page = 1) => {
     setSyncing(a.id);
-    setSyncStatus(`Synchronisation IMAP ${a.label}...`);
+    setSyncStatus(page > 1 ? `Chargement archives ${a.label} (page ${page})...` : `Synchronisation IMAP ${a.label}...`);
     try {
       const resp = await fetch("/api/mail/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ host: a.host, port: a.port, ssl: a.ssl, username: a.username, password: a.password, accountId: a.id, limit: 20 }),
+        body: JSON.stringify({ host: a.host, port: a.port, ssl: a.ssl, username: a.username, password: a.password, accountId: a.id, page, pageSize: 25 }),
       });
       const data = await resp.json();
       if (data.ok) {
         ingestMessages(data.messages ?? []);
-        setSyncStatus(`${data.count} message(s) depuis ${a.label}`);
-        saveAccounts(accounts.map(x => x.id === a.id ? { ...x, lastSync: new Date().toLocaleString("fr-FR") } : x));
+        setSyncStatus(`${data.count} message(s) depuis ${a.label} — page ${page}/${data.totalPages}`);
+        saveAccounts(accountsRef.current.map(x => x.id === a.id ? { ...x, lastSync: new Date().toLocaleString("fr-FR") } : x));
         setTimeout(() => setSyncStatus(""), 4000);
       } else {
         setSyncStatus(`Erreur : ${data.error}`);
@@ -129,15 +149,78 @@ export default function MailBoard() {
       }
     } catch { setSyncStatus("Erreur réseau"); setTimeout(() => setSyncStatus(""), 4000); }
     finally { setSyncing(null); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ── Sync toutes les 5 minutes ──────────────────────────── */
+  useEffect(() => {
+    const timer = setInterval(async () => {
+      setNextSyncIn(SYNC_INTERVAL / 1000);
+      for (const cfg of gmailConfigRef.current) await syncGmail(cfg.accountId);
+      for (const a of accountsRef.current.filter(x => x.active)) await syncImap(a, 1);
+    }, SYNC_INTERVAL);
+
+    // Countdown
+    const countdown = setInterval(() => setNextSyncIn(n => Math.max(0, n - 1)), 1000);
+
+    return () => { clearInterval(timer); clearInterval(countdown); };
+  }, [syncGmail, syncImap]);
+
+  /* ── Recherche IMAP ─────────────────────────────────────── */
+  async function runImapSearch(query: string) {
+    if (!query.trim()) { setSearchResults(null); setSearch(""); return; }
+    setSearch(query);
+    setSearchLoading(true);
+
+    // Recherche locale d'abord (instantanée)
+    const q = query.toLowerCase();
+    const localHits = messages.filter(m =>
+      m.subject.toLowerCase().includes(q) ||
+      m.bodyText.toLowerCase().includes(q) ||
+      m.from.email.toLowerCase().includes(q) ||
+      m.from.name.toLowerCase().includes(q)
+    );
+
+    // Recherche IMAP côté serveur sur chaque compte
+    const imapResults: MailMessage[] = [...localHits];
+    for (const a of accounts.filter(x => x.active)) {
+      try {
+        const resp = await fetch("/api/mail/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ host: a.host, port: a.port, ssl: a.ssl, username: a.username, password: a.password, accountId: a.id, query }),
+        });
+        const data = await resp.json();
+        if (data.ok && data.messages) {
+          // Ajouter uniquement les messages pas déjà chargés localement
+          const existing = new Set(imapResults.map(m => m.id));
+          for (const msg of data.messages) {
+            if (!existing.has(msg.id)) { imapResults.push(msg); existing.add(msg.id); }
+          }
+        }
+      } catch { /* silencieux */ }
+    }
+
+    setSearchResults(imapResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    setSearchLoading(false);
   }
+
+  function handleSearchInput(val: string) {
+    setSearchInput(val);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!val.trim()) { setSearchResults(null); setSearch(""); setSearchLoading(false); return; }
+    setSearchLoading(true);
+    searchTimer.current = setTimeout(() => runImapSearch(val), 600);
+  }
+
+  function clearSearch() { setSearchInput(""); setSearch(""); setSearchResults(null); setSearchLoading(false); setListPage(1); }
 
   /* ── Chargement du corps à la demande ──────────────────── */
   async function loadMessageBody(thread: MailThread) {
-    // Trouver si un message de ce thread vient d'un compte IMAP et n'a pas encore de corps
     const msg = thread.messages.find(m => !m.body || m.body === "");
     if (!msg) return;
     const account = accounts.find(a => a.id === msg.accountId);
-    if (!account) return; // Gmail : corps déjà chargé côté client
+    if (!account) return;
     const uid = (msg as MailMessage & { uid?: number }).uid;
     if (!uid) return;
 
@@ -166,7 +249,8 @@ export default function MailBoard() {
 
   async function syncAll() {
     for (const cfg of gmailConfigs) await syncGmail(cfg.accountId);
-    for (const a of accounts.filter(x => x.active)) await syncImap(a);
+    for (const a of accounts.filter(x => x.active)) await syncImap(a, 1);
+    setNextSyncIn(SYNC_INTERVAL / 1000);
   }
 
   /* ── Label / thread ops ─────────────────────────────────── */
@@ -185,27 +269,38 @@ export default function MailBoard() {
     setMessages(prev => { const u = prev.map(m => m.threadId === threadId ? { ...m, status: "read" as const } : m); rebuildThreads(u); return u; });
   }
 
-  const visibleThreads = threads.filter(t => {
-    const allMsgs = messages.filter(m => m.threadId === t.id);
-    const isGmailAcct = gmailConfigs.some(c => c.accountId === activeAccount);
-    if (activeAccount !== "all") {
-      if (isGmailAcct && t.accountId !== activeAccount) return false;
-      if (!isGmailAcct && t.accountId !== activeAccount) return false;
+  /* ── Threads visibles ───────────────────────────────────── */
+  const visibleThreads = (() => {
+    // Recherche active : on utilise les résultats IMAP
+    if (search && searchResults !== null) {
+      const resultIds = new Set(searchResults.map(m => m.id));
+      // Reconstruire les threads à partir des résultats
+      const map = new Map<string, MailMessage[]>();
+      for (const m of searchResults) {
+        if (!map.has(m.threadId)) map.set(m.threadId, []);
+        map.get(m.threadId)!.push(m);
+      }
+      return [...map.values()].map(threadFromMessages)
+        .sort((a, b) => new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime());
+      void resultIds;
     }
-    if (search) {
-      const q = search.toLowerCase();
-      if (!allMsgs.some(m => m.subject.toLowerCase().includes(q) || m.bodyText.toLowerCase().includes(q) || m.from.email.toLowerCase().includes(q))) return false;
-    }
-    if (activeLabel === "inbox") return allMsgs.some(m => m.labels.includes("inbox") && !m.labels.includes("trash"));
-    if (activeLabel === "trash") return allMsgs.some(m => m.labels.includes("trash"));
-    return allMsgs.some(m => m.labels.includes(activeLabel));
-  });
 
-  const unread = (labelId: string) => threads.filter(t => messages.some(m => m.threadId === t.id && m.labels.includes(labelId) && m.status === "unread")).length;
-  const customLabels = labels.filter(l => !l.system);
-  const systemLabels = labels.filter(l => l.system);
-  const totalUnread = messages.filter(m => m.status === "unread" && m.labels.includes("inbox") && !m.labels.includes("trash")).length;
+    return threads.filter(t => {
+      const allMsgs = messages.filter(m => m.threadId === t.id);
+      if (activeAccount !== "all" && t.accountId !== activeAccount) return false;
+      if (activeLabel === "inbox") return allMsgs.some(m => m.labels.includes("inbox") && !m.labels.includes("trash"));
+      if (activeLabel === "trash") return allMsgs.some(m => m.labels.includes("trash"));
+      return allMsgs.some(m => m.labels.includes(activeLabel));
+    });
+  })();
+
+  const unread     = (labelId: string) => threads.filter(t => messages.some(m => m.threadId === t.id && m.labels.includes(labelId) && m.status === "unread")).length;
+  const customLabels  = labels.filter(l => !l.system);
+  const systemLabels  = labels.filter(l => l.system);
+  const totalUnread   = messages.filter(m => m.status === "unread" && m.labels.includes("inbox") && !m.labels.includes("trash")).length;
   const hasAnyAccount = accounts.length > 0 || gmailConfigs.length > 0;
+
+  const fmtCountdown = (s: number) => s < 60 ? `${s}s` : `${Math.ceil(s / 60)}min`;
 
   return (
     <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
@@ -217,14 +312,27 @@ export default function MailBoard() {
           </button>
         </div>
 
+        {/* Barre de recherche */}
         <div style={{ padding: "0 12px 10px", position: "relative" }}>
-          <span style={{ position: "absolute", left: 22, top: "50%", transform: "translateY(-50%)", color: "#9ca3af", fontSize: 13 }}>🔍</span>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher..." style={{ width: "100%", paddingLeft: 30, height: 32, border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, outline: "none", background: "#f9fafb", boxSizing: "border-box" }} />
+          <span style={{ position: "absolute", left: 22, top: "50%", transform: "translateY(-50%)", color: "#9ca3af", fontSize: 13, pointerEvents: "none" }}>
+            {searchLoading ? "⏳" : "🔍"}
+          </span>
+          <input
+            value={searchInput}
+            onChange={e => { handleSearchInput(e.target.value); setListPage(1); }}
+            onKeyDown={e => e.key === "Enter" && runImapSearch(searchInput)}
+            placeholder="Rechercher dans les mails..."
+            style={{ width: "100%", paddingLeft: 30, paddingRight: searchInput ? 26 : 8, height: 32, border: `1px solid ${searchInput ? "#B8966A" : "#e5e7eb"}`, borderRadius: 8, fontSize: 12, outline: "none", background: "#f9fafb", boxSizing: "border-box" }}
+          />
+          {searchInput && (
+            <button onClick={clearSearch} style={{ position: "absolute", right: 18, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 14, padding: 0 }}>×</button>
+          )}
         </div>
 
+        {/* Labels */}
         <NavLabel>Boîte</NavLabel>
         {systemLabels.map(l => (
-          <NavItem key={l.id} active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); }}>
+          <NavItem key={l.id} active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); clearSearch(); setListPage(1); }}>
             <span style={{ fontSize: 14 }}>{labelIcon(l.id)}</span>
             <span style={{ flex: 1 }}>{l.name}</span>
             {unread(l.id) > 0 && <Badge>{unread(l.id)}</Badge>}
@@ -236,7 +344,7 @@ export default function MailBoard() {
           <button onClick={() => setShowLabels(true)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 16 }}>+</button>
         </div>
         {customLabels.map(l => (
-          <NavItem key={l.id} active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); }}>
+          <NavItem key={l.id} active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); clearSearch(); setListPage(1); }}>
             <span style={{ width: 10, height: 10, borderRadius: "50%", background: l.color, flexShrink: 0 }} />
             <span style={{ flex: 1, fontSize: 12 }}>{l.name}</span>
           </NavItem>
@@ -252,7 +360,7 @@ export default function MailBoard() {
               {totalUnread > 0 && <Badge>{totalUnread}</Badge>}
             </NavItem>
             {gmailConfigs.map(cfg => {
-              const tok = loadGmailToken(cfg.accountId);
+              const tok   = loadGmailToken(cfg.accountId);
               const valid = isGmailTokenValid(tok);
               return (
                 <NavItem key={cfg.accountId} active={activeAccount === cfg.accountId} onClick={() => setActiveAccount(cfg.accountId)}>
@@ -279,13 +387,13 @@ export default function MailBoard() {
                   <div style={{ fontSize: 12, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.label}</div>
                   <div style={{ fontSize: 10, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.email}</div>
                 </div>
-                <button onClick={e => { e.stopPropagation(); syncImap(a); }} disabled={syncing === a.id} title="Synchroniser" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#9ca3af" }}>🔄</button>
+                <button onClick={e => { e.stopPropagation(); syncImap(a, 1); }} disabled={syncing === a.id} title="Synchroniser" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#9ca3af" }}>🔄</button>
               </NavItem>
             ))}
           </>
         )}
 
-        {/* Add account buttons */}
+        {/* Boutons comptes + sync */}
         <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
           <button onClick={() => setShowGmailConnect(true)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "7px 0", fontSize: 12, cursor: "pointer", color: "#374151", fontWeight: 500, boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
             <GIcon /> Ajouter Gmail
@@ -297,6 +405,14 @@ export default function MailBoard() {
             <button onClick={syncAll} disabled={!!syncing} style={{ width: "100%", background: "none", border: "1px solid #E8D9C0", borderRadius: 8, padding: "7px 0", fontSize: 12, cursor: "pointer", color: "#B8966A" }}>
               🔄 Tout synchroniser
             </button>
+          )}
+          {hasAnyAccount && !syncing && (
+            <div style={{ fontSize: 10, color: "#d1d5db", textAlign: "center" }}>
+              Prochaine synchro : {fmtCountdown(nextSyncIn)}
+            </div>
+          )}
+          {syncing && (
+            <div style={{ fontSize: 10, color: "#B8966A", textAlign: "center" }}>🔄 Sync en cours…</div>
           )}
         </div>
 
@@ -310,24 +426,34 @@ export default function MailBoard() {
 
       {/* MAIN */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        {syncStatus && (
-          <div style={{ background: syncing ? "#eff6ff" : syncStatus.startsWith("Erreur") ? "#fef2f2" : "#f0fdf4", borderBottom: "1px solid #e5e7eb", padding: "7px 16px", fontSize: 12, color: syncing ? "#1e40af" : syncStatus.startsWith("Erreur") ? "#991b1b" : "#166534", display: "flex", alignItems: "center", gap: 8 }}>
-            {syncing && "🔄 "}{syncStatus}
+        {/* Bandeau statut sync / recherche */}
+        {(syncStatus || (search && searchResults !== null)) && (
+          <div style={{ background: syncing ? "#eff6ff" : syncStatus.startsWith("Erreur") ? "#fef2f2" : search ? "#F7F0E6" : "#f0fdf4", borderBottom: "1px solid #e5e7eb", padding: "7px 16px", fontSize: 12, color: syncing ? "#1e40af" : syncStatus.startsWith("Erreur") ? "#991b1b" : search ? "#92400e" : "#166534", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span>
+              {syncing && "🔄 "}{syncStatus}
+              {search && searchResults !== null && !syncStatus && (
+                <>🔍 <strong>{searchResults.length}</strong> résultat(s) pour &quot;{search}&quot;</>
+              )}
+            </span>
+            {search && <button onClick={clearSearch} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "#92400e", textDecoration: "underline" }}>Effacer la recherche</button>}
           </div>
         )}
+
         <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
           <ThreadList
             threads={visibleThreads}
-            messages={messages}
+            messages={search && searchResults !== null ? [...messages, ...searchResults.filter(r => !messages.find(m => m.id === r.id))] : messages}
             labels={labels}
             accounts={accounts}
             selectedId={selectedThread?.id}
+            activeLabel={activeLabel}
+            customLabels={customLabels}
+            page={listPage}
+            onPageChange={p => { setListPage(p); setSelectedThread(null); }}
             onSelect={t => { setSelectedThread(t); markRead(t.id); loadMessageBody(t); }}
             onStar={toggleStar}
             onTrash={trash}
             onApplyLabel={applyLabel}
-            customLabels={customLabels}
-            activeLabel={activeLabel}
           />
 
           {selectedThread ? (
@@ -406,7 +532,7 @@ function GIcon() {
       <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
       <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
       <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
     </svg>
   );
 }
@@ -415,7 +541,9 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend }: {
   accounts: MailAccount[]; gmailConfigs: GmailConfig[];
   labels: MailLabel[]; onClose: () => void; onSend: (m: MailMessage) => void;
 }) {
-  const [to, setTo] = useState(""); const [subject, setSubject] = useState(""); const [body, setBody] = useState("");
+  const [to, setTo]           = useState("");
+  const [subject, setSubject] = useState("");
+  const [body, setBody]       = useState("");
   const [accountId, setAccountId] = useState(gmailConfigs[0]?.accountId ?? accounts[0]?.id ?? "");
   const [selLabels, setSelLabels] = useState(["inbox", "sent"]);
 
@@ -424,7 +552,7 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend }: {
     const gCfg = gmailConfigs.find(c => c.accountId === accountId);
     const aCfg = accounts.find(a => a.id === accountId);
     const fromEmail = gCfg?.email ?? aCfg?.email ?? "moi@agence.fr";
-    const fromName = gCfg?.name ?? aCfg?.name ?? "Moi";
+    const fromName  = gCfg?.name  ?? aCfg?.name  ?? "Moi";
     onSend({ id: Date.now().toString(), threadId: Date.now().toString(), accountId: accountId || "local", from: { name: fromName, email: fromEmail }, to: to.split(",").map(e => ({ name: e.trim(), email: e.trim() })), subject, body: `<p>${body.replace(/\n/g, "<br/>")}</p>`, bodyText: body, date: new Date().toISOString(), status: "read", labels: selLabels });
   }
 
