@@ -58,8 +58,43 @@ export default function MailBoard() {
   gmailConfigRef.current = gmailConfigs;
 
   useEffect(() => {
-    const a = localStorage.getItem(ACCOUNTS_KEY);
-    if (a) setAccounts(JSON.parse(a));
+    // Charger les comptes depuis la BDD (persistance serveur)
+    fetch("/api/mail/accounts")
+      .then(r => r.json())
+      .then((dbAccounts: Record<string, unknown>[]) => {
+        if (Array.isArray(dbAccounts) && dbAccounts.length > 0) {
+          const mapped: MailAccount[] = dbAccounts.map(a => ({
+            id:       String(a.id),
+            dbId:     String(a.id),
+            label:    String(a.label),
+            email:    String(a.email),
+            name:     String(a.name ?? a.email),
+            protocol: (a.protocol as "imap"|"pop3") ?? "imap",
+            host:     String(a.host),
+            port:     Number(a.port) || 993,
+            ssl:      Boolean(a.ssl ?? true),
+            username: String(a.username ?? a.email),
+            password: "",  // masqué — les routes server récupèrent depuis DB via accountId
+            smtpHost: String(a.smtpHost ?? ""),
+            smtpPort: Number(a.smtpPort) || 587,
+            smtpSsl:  Boolean(a.smtpSsl ?? true),
+            color:    String(a.color ?? "#B8966A"),
+            active:   Boolean(a.active ?? true),
+            isShared: Boolean(a.isShared ?? false),
+            sharedUserIds: (a.sharedUserIds as string[]) ?? [],
+          }));
+          setAccounts(mapped);
+        } else {
+          // Fallback localStorage (migration)
+          const a = localStorage.getItem(ACCOUNTS_KEY);
+          if (a) setAccounts(JSON.parse(a));
+        }
+      })
+      .catch(() => {
+        const a = localStorage.getItem(ACCOUNTS_KEY);
+        if (a) setAccounts(JSON.parse(a));
+      });
+
     const l = localStorage.getItem(LABELS_KEY);
     if (l) setLabels(JSON.parse(l));
     const k = localStorage.getItem(AI_KEY_STORE);
@@ -94,7 +129,39 @@ export default function MailBoard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function saveAccounts(a: MailAccount[]) { setAccounts(a); localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(a)); }
+  async function saveAccounts(a: MailAccount[]) {
+    setAccounts(a);
+    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(a)); // garde le fallback local
+  }
+
+  async function addAccountToDb(acc: MailAccount): Promise<MailAccount> {
+    try {
+      const r = await fetch("/api/mail/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label: acc.label, email: acc.email, name: acc.name,
+          protocol: acc.protocol, host: acc.host, port: acc.port, ssl: acc.ssl,
+          username: acc.username, password: acc.password,
+          smtpHost: acc.smtpHost, smtpPort: acc.smtpPort, smtpSsl: acc.smtpSsl,
+          color: acc.color, isShared: acc.isShared ?? false, sharedUserIds: acc.sharedUserIds ?? [],
+        }),
+      });
+      if (r.ok) {
+        const saved = await r.json();
+        return { ...acc, id: saved.id, dbId: saved.id, password: "" };
+      }
+    } catch { /* silencieux */ }
+    return acc;
+  }
+
+  async function removeAccountFromDb(acc: MailAccount) {
+    const id = acc.dbId ?? acc.id;
+    if (!id || id.startsWith("local-")) return;
+    try {
+      await fetch("/api/mail/accounts", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    } catch { /* silencieux */ }
+  }
   function saveLabels(l: MailLabel[])     { setLabels(l);   localStorage.setItem(LABELS_KEY,    JSON.stringify(l)); }
   function saveAiKey(k: string)           { setAiKey(k);    localStorage.setItem(AI_KEY_STORE,  k); }
 
@@ -162,7 +229,7 @@ export default function MailBoard() {
       const resp = await fetch("/api/mail/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ host: a.host, port: a.port, ssl: a.ssl, username: a.username, password: a.password, accountId: a.id, page, pageSize: 25 }),
+        body: JSON.stringify({ host: a.host, port: a.port, ssl: a.ssl, username: a.username, password: a.password, accountId: a.dbId ?? a.id, page, pageSize: 25 }),
       });
       const data = await resp.json();
       if (data.ok) {
@@ -274,7 +341,7 @@ export default function MailBoard() {
         const resp = await fetch("/api/mail/body", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ host: account.host, port: account.port, ssl: account.ssl, username: account.username, password: account.password, uid }),
+          body: JSON.stringify({ host: account.host, port: account.port, ssl: account.ssl, username: account.username, password: account.password, uid, accountId: account.dbId ?? account.id }),
         });
         const data = await resp.json();
         if (data.ok) {
@@ -555,7 +622,25 @@ export default function MailBoard() {
       </div>
 
       {showCompose && <ComposeModal accounts={accounts} gmailConfigs={gmailConfigs} labels={customLabels} onClose={() => setShowCompose(false)} onSend={msg => { addMessage(msg); setShowCompose(false); }} />}
-      {showImapConfig && <AccountConfigPanel accounts={accounts} onSave={saveAccounts} onClose={() => setShowImapConfig(false)} />}
+      {showImapConfig && <AccountConfigPanel accounts={accounts} onSave={async (newList) => {
+        // Détecter les comptes ajoutés (pas de dbId)
+        const updatedList: MailAccount[] = [];
+        for (const acc of newList) {
+          if (!acc.dbId && acc.password) {
+            const saved = await addAccountToDb(acc);
+            updatedList.push(saved);
+          } else {
+            updatedList.push(acc);
+          }
+        }
+        // Détecter les comptes supprimés
+        for (const old of accounts) {
+          if (!newList.find(a => a.id === old.id)) {
+            await removeAccountFromDb(old);
+          }
+        }
+        await saveAccounts(updatedList);
+      }} onClose={() => setShowImapConfig(false)} />}
       {showGmailConnect && (
         <GoogleMailConnect
           onSynced={(accountId, token) => {
@@ -604,8 +689,8 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
   replyTo?: { to: string; subject: string; inReplyTo?: string; accountId?: string };
 }) {
   const allAccounts = [
-    ...gmailConfigs.map(c => ({ id: c.accountId, label: `${c.email}`, email: c.email, name: c.name ?? c.email, smtpHost: "", smtpPort: 587, smtpSsl: true, username: c.email, password: "", signature: "", color: "#4285f4" })),
-    ...accounts.map(a => ({ id: a.id, label: `${a.label} — ${a.email}`, email: a.email, name: a.name, smtpHost: a.smtpHost, smtpPort: a.smtpPort, smtpSsl: a.smtpSsl, username: a.username, password: a.password, signature: a.signature ?? "", color: a.color })),
+    ...gmailConfigs.map(c => ({ id: c.accountId, dbId: undefined as string|undefined, label: `${c.email}`, email: c.email, name: c.name ?? c.email, smtpHost: "", smtpPort: 587, smtpSsl: true, username: c.email, password: "", signature: "", color: "#4285f4" })),
+    ...accounts.map(a => ({ id: a.id, dbId: a.dbId, label: `${a.label} — ${a.email}`, email: a.email, name: a.name, smtpHost: a.smtpHost, smtpPort: a.smtpPort, smtpSsl: a.smtpSsl, username: a.username, password: a.password, signature: a.signature ?? "", color: a.color })),
   ];
 
   const firstId = replyTo?.accountId ?? allAccounts[0]?.id ?? "";
@@ -663,6 +748,7 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
           html: fullHtml,
           fromEmail: acct?.email,
           fromName: acct?.name,
+          accountId: acct?.dbId ?? acct?.id,
           smtpHost: acct?.smtpHost,
           smtpPort: acct?.smtpPort,
           smtpSsl: acct?.smtpSsl,

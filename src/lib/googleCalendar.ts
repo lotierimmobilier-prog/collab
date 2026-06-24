@@ -68,6 +68,9 @@ export function saveConfig(config: GCalConfig) {
   localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 export function loadConfig(): GCalConfig | null {
+  // Client ID configuré côté serveur → pas besoin de saisie utilisateur
+  const envClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  if (envClientId) return { clientId: envClientId };
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(CONFIG_KEY);

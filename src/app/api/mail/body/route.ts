@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { ImapFlow } = require("imapflow");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { simpleParser } = require("mailparser");
 
 export async function POST(req: NextRequest) {
-  const { host, port, ssl, username, password, uid } = await req.json();
+  const body = await req.json();
+  let { host, port, ssl, username, password } = body;
+  const { uid, accountId } = body;
+
+  if (accountId && (!host || !password)) {
+    const dbAcc = await prisma.mailAccountConfig.findUnique({ where: { id: accountId } });
+    if (!dbAcc) return NextResponse.json({ ok: false, error: "Compte introuvable" }, { status: 404 });
+    host = dbAcc.host; port = String(dbAcc.port); ssl = dbAcc.ssl; username = dbAcc.username; password = dbAcc.password;
+  }
 
   if (!host || !username || !password || !uid) {
     return NextResponse.json({ ok: false, error: "Paramètres incomplets" }, { status: 400 });

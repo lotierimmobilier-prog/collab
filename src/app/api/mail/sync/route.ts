@@ -27,7 +27,20 @@ async function identifySender(email: string): Promise<{ senderType: string; send
 }
 
 export async function POST(req: NextRequest) {
-  const { host, port, ssl, username, password, accountId, page = 1, pageSize = 25 } = await req.json();
+  const body = await req.json();
+  let { host, port, ssl, username, password } = body;
+  const { accountId, page = 1, pageSize = 25 } = body;
+
+  // Si accountId fourni → récupérer les credentials depuis la DB
+  if (accountId && (!host || !password)) {
+    const dbAcc = await prisma.mailAccountConfig.findUnique({ where: { id: accountId } });
+    if (!dbAcc) return NextResponse.json({ ok: false, error: "Compte introuvable" }, { status: 404 });
+    host     = dbAcc.host;
+    port     = String(dbAcc.port);
+    ssl      = dbAcc.ssl;
+    username = dbAcc.username;
+    password = dbAcc.password;
+  }
 
   if (!host || !username || !password) {
     return NextResponse.json({ ok: false, error: "Paramètres incomplets" }, { status: 400 });

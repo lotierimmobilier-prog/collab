@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 import nodemailer from "nodemailer";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const { to, cc, subject, body, html, fromEmail, fromName, smtpHost, smtpPort, smtpSsl, username, password, replyToMessageId, inReplyTo } = await req.json();
+  const reqBody = await req.json();
+  let { smtpHost, smtpPort, smtpSsl, username, password } = reqBody;
+  const { to, cc, subject, body, html, fromEmail, fromName, replyToMessageId, inReplyTo, accountId } = reqBody;
+
+  if (accountId && (!smtpHost || !password)) {
+    const dbAcc = await prisma.mailAccountConfig.findUnique({ where: { id: accountId } });
+    if (dbAcc) { smtpHost = dbAcc.smtpHost; smtpPort = dbAcc.smtpPort; smtpSsl = dbAcc.smtpSsl; username = dbAcc.username; password = dbAcc.password; }
+  }
 
   if (!smtpHost || !username || !password) {
     return NextResponse.json({ error: "Configuration SMTP manquante" }, { status: 400 });
