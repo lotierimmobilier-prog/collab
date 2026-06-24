@@ -85,11 +85,9 @@ function withSecurityHeaders(res: NextResponse, req: NextRequest): NextResponse 
   if (!req.nextUrl.pathname.startsWith("/_next/static")) {
     res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
   }
-  // Isolation des contextes de navigation
-  res.headers.set("Cross-Origin-Opener-Policy", "same-origin");
-  res.headers.set("Cross-Origin-Resource-Policy", "same-origin");
-  // Empêche les embedded resources non autorisées
-  res.headers.set("Cross-Origin-Embedder-Policy", "require-corp");
+  // COOP : autoriser les popups OAuth (Google, etc.)
+  // COEP désactivé — trop restrictif pour ressources Google/CDN externes
+  res.headers.set("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
   return res;
 }
 

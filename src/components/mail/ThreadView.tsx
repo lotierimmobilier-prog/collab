@@ -315,6 +315,57 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
         </div>
       )}
 
+      {/* ── Zone réponse — épinglée EN HAUT, avant les messages ── */}
+      {showReply && (
+        <div style={{ borderBottom: "2px solid #e5e7eb", background: "#fff", flexShrink: 0 }}>
+          {/* En-tête : destinataire + outils IA */}
+          <div style={{ background: GOLD_BG, padding: "10px 20px", borderBottom: `1px solid ${BORDER}`, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: GOLD, flexShrink: 0 }}>✦ Réponse à</span>
+            <span style={{ fontSize: 12, color: "#374151", fontWeight: 500 }}>{lastMsg.from.name || lastMsg.from.email}</span>
+            <div style={{ flex: 1 }} />
+            <select value={aiTone} onChange={e => setAiTone(e.target.value)} style={{ height: 26, border: `1px solid ${BORDER}`, borderRadius: 6, fontSize: 11, padding: "0 6px", background: "#fff", color: "#374151" }}>
+              <option value="professionnel">Professionnel</option>
+              <option value="cordial">Cordial</option>
+              <option value="formel">Formel</option>
+              <option value="concis">Concis</option>
+            </select>
+            <input value={aiInstruction} onChange={e => setAiInstruction(e.target.value)} placeholder="Instruction IA…" style={{ width: 160, height: 26, border: `1px solid ${BORDER}`, borderRadius: 6, fontSize: 11, padding: "0 8px", outline: "none", background: "#fff" }} />
+            <button onClick={generateAIReply} disabled={generating} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: generating ? 0.7 : 1 }}>
+              {generating ? "…" : "✦ Générer"}
+            </button>
+            {aiError && <span style={{ fontSize: 11, color: "#dc2626" }}>{aiError}</span>}
+            <button onClick={() => { setShowReply(false); setReplyBody(""); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 18, lineHeight: 1, marginLeft: 4 }}>×</button>
+          </div>
+
+          {/* Corps de la réponse */}
+          <textarea
+            autoFocus
+            value={replyBody}
+            onChange={e => setReplyBody(e.target.value)}
+            placeholder={generating ? "Auguste rédige la réponse…" : "Votre réponse…"}
+            rows={6}
+            style={{ width: "100%", border: "none", padding: "12px 20px", fontSize: 13, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box", background: generating ? "#fafaf8" : "#fff", color: generating ? "#9ca3af" : "#111827" }}
+          />
+
+          {/* Actions */}
+          <div style={{ padding: "8px 20px 12px", borderTop: "1px solid #f3f4f6", display: "flex", gap: 8, alignItems: "center" }}>
+            <button onClick={sendReply} disabled={!replyBody.trim() || generating}
+              style={{ background: replyBody.trim() && !generating ? GOLD : "#e5e7eb", color: replyBody.trim() && !generating ? "#fff" : "#9ca3af", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              ↑ Envoyer
+            </button>
+            <button onClick={() => { setShowReply(false); setReplyBody(""); }}
+              style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer", color: "#374151" }}>
+              Annuler
+            </button>
+            {replyBody && (
+              <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: 4 }}>
+                {replyBody.length} caractères
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Messages */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
         {thread.messages.map((msg, i) => (
@@ -322,43 +373,19 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
         ))}
       </div>
 
-      {/* Reply area */}
-      <div style={{ borderTop: "1px solid #e5e7eb", padding: "12px 20px", background: "#fff" }}>
-        {!showReply ? (
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => setShowReply(true)} style={{ background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer", color: GOLD, fontWeight: 500 }}>
-              ↩ Répondre
-            </button>
-            <button onClick={draftReply} disabled={aiLoading === "draft"} style={{ background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 14px", fontSize: 12, cursor: "pointer", color: GOLD }}>
-              ✦ Réponse IA
-            </button>
-          </div>
-        ) : (
-          <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, overflow: "hidden" }}>
-            <div style={{ background: GOLD_BG, padding: "10px 14px", borderBottom: "1px solid #e5e7eb", display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: GOLD, flexShrink: 0, marginTop: 4 }}>✨ Assistant IA</span>
-              <select value={aiTone} onChange={e => setAiTone(e.target.value)} style={{ height: 28, border: `1px solid ${BORDER}`, borderRadius: 6, fontSize: 11, padding: "0 6px", background: "#fff", color: "#374151" }}>
-                <option value="professionnel">Professionnel</option>
-                <option value="cordial">Cordial</option>
-                <option value="formel">Formel</option>
-                <option value="concis">Concis</option>
-              </select>
-              <input value={aiInstruction} onChange={e => setAiInstruction(e.target.value)} placeholder="Instruction personnalisée..." style={{ flex: 1, minWidth: 180, height: 28, border: `1px solid ${BORDER}`, borderRadius: 6, fontSize: 11, padding: "0 8px", outline: "none" }} />
-              <button onClick={generateAIReply} disabled={generating} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: generating ? 0.7 : 1 }}>
-                {generating ? "..." : "Générer"}
-              </button>
-              {aiError && <div style={{ width: "100%", fontSize: 11, color: "#dc2626" }}>{aiError}</div>}
-            </div>
-            <div style={{ padding: "8px 14px 4px", fontSize: 12, color: "#9ca3af" }}>À : {lastMsg.from.name} &lt;{lastMsg.from.email}&gt;</div>
-            <textarea value={replyBody} onChange={e => setReplyBody(e.target.value)} placeholder="Rédigez votre réponse..." rows={6}
-              style={{ width: "100%", border: "none", borderTop: "1px solid #f3f4f6", padding: "10px 14px", fontSize: 13, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box" }} />
-            <div style={{ padding: "8px 14px", borderTop: "1px solid #f3f4f6", display: "flex", gap: 8 }}>
-              <button onClick={sendReply} disabled={!replyBody.trim()} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: !replyBody.trim() ? 0.5 : 1 }}>Envoyer</button>
-              <button onClick={() => { setShowReply(false); setReplyBody(""); }} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 8, padding: "7px 14px", fontSize: 13, cursor: "pointer", color: "#374151" }}>Annuler</button>
-            </div>
-          </div>
-        )}
-      </div>
+      {/* Boutons répondre (bas, quand le panneau réponse est fermé) */}
+      {!showReply && (
+        <div style={{ borderTop: "1px solid #e5e7eb", padding: "12px 20px", background: "#fff", display: "flex", gap: 8, flexShrink: 0 }}>
+          <button onClick={() => setShowReply(true)}
+            style={{ background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer", color: GOLD, fontWeight: 500 }}>
+            ↩ Répondre
+          </button>
+          <button onClick={draftReply} disabled={aiLoading === "draft"}
+            style={{ background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 14px", fontSize: 12, cursor: "pointer", color: GOLD, opacity: aiLoading === "draft" ? 0.6 : 1 }}>
+            {aiLoading === "draft" ? "✦ Rédaction…" : "✦ Réponse IA"}
+          </button>
+        </div>
+      )}
 
       {/* Modal tâche */}
       {taskModal && (
