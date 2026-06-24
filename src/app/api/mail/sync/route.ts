@@ -37,8 +37,8 @@ export async function POST(req: NextRequest) {
         source: false,
       })) {
         const env = msg.envelope;
-        const isUnread = !msg.flags.has("\\Seen");
-        const isStarred = msg.flags.has("\\Flagged");
+        const isUnread = !msg.flags?.has("\\Seen");
+        const isStarred = !!msg.flags?.has("\\Flagged");
 
         const labels = ["inbox"];
         if (isStarred) labels.push("starred");
