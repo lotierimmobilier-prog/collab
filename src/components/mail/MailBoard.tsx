@@ -582,24 +582,9 @@ export default function MailBoard() {
             />
           </div>
 
-          {/* Zone lecture — flex restant */}
+          {/* Zone liste uniquement — ThreadView en popup */}
           <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex" }}>
-            {selectedThread ? (
-              <ThreadView
-                thread={selectedThread}
-                labels={labels}
-                accounts={accounts}
-                aiKey={aiKey}
-                loadingBody={loadingBody}
-                onClose={() => setSelectedThread(null)}
-                onReply={msg => { addMessage(msg); setSelectedThread(prev => prev ? { ...prev, messages: [...prev.messages, msg] } : null); }}
-                onApplyLabel={id => applyLabel(selectedThread.id, id)}
-                onRemoveLabel={id => removeLabel(selectedThread.id, id)}
-                onStar={() => toggleStar(selectedThread.id)}
-                onTrash={() => trash(selectedThread.id)}
-                customLabels={customLabels}
-              />
-            ) : (
+            {!hasAnyAccount && (
               <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#f9fafb", gap: 12 }}>
                 <div style={{ fontSize: 48, opacity: 0.3 }}>✉</div>
                 <div style={{ fontSize: 14, fontWeight: 500, color: "#6b7280" }}>
@@ -652,6 +637,30 @@ export default function MailBoard() {
         />
       )}
       {showLabels && <LabelManager labels={labels} onSave={saveLabels} onClose={() => setShowLabels(false)} />}
+
+      {/* Thread popup — par-dessus tout */}
+      {selectedThread && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 60, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px" }}
+          onClick={e => { if (e.target === e.currentTarget) setSelectedThread(null); }}
+        >
+          <div style={{ width: "min(900px, 96vw)", height: "calc(100vh - 48px)", maxHeight: 860, background: "#fff", borderRadius: 16, boxShadow: "0 24px 80px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <ThreadView
+              thread={selectedThread}
+              labels={labels}
+              accounts={accounts}
+              aiKey={aiKey}
+              loadingBody={loadingBody}
+              onClose={() => setSelectedThread(null)}
+              onReply={msg => { addMessage(msg); setSelectedThread(prev => prev ? { ...prev, messages: [...prev.messages, msg] } : null); }}
+              onApplyLabel={id => applyLabel(selectedThread.id, id)}
+              onRemoveLabel={id => removeLabel(selectedThread.id, id)}
+              onStar={() => toggleStar(selectedThread.id)}
+              onTrash={() => trash(selectedThread.id)}
+              customLabels={customLabels}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
