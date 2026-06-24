@@ -47,7 +47,9 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
 
   // Classification automatique
   const [classifying, setClassifying]       = useState(false);
-  const [classifySuggestion, setClassifySuggestion] = useState<{ labels: string[]; assignedToId: string | null; priority: string; reason: string } | null>(null);
+  const [classifySuggestion, setClassifySuggestion] = useState<{ labels: string[]; assignedToId: string | null; priority: string; reason: string; hasMemory?: boolean; fromMemory?: boolean } | null>(null);
+  const [memorySaving, setMemorySaving]     = useState(false);
+  const [memoryMsg, setMemoryMsg]           = useState("");
 
   // Panneau IA
   const [aiLoading, setAiLoading]           = useState<string | null>(null);
@@ -359,20 +361,58 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
         {/* Suggestion de classification IA */}
         {classifying && <span style={{ fontSize: 11, color: "#9ca3af" }}>✦ Classification en cours…</span>}
         {classifySuggestion && classifySuggestion.labels.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#FEF9C3", border: "1px solid #FDE68A", borderRadius: 8, padding: "4px 10px", fontSize: 11 }}>
-            <span style={{ color: "#92400E", fontWeight: 600 }}>✦ Suggéré :</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: classifySuggestion.hasMemory ? "#EFF6FF" : "#FEF9C3", border: `1px solid ${classifySuggestion.hasMemory ? "#BFDBFE" : "#FDE68A"}`, borderRadius: 8, padding: "4px 10px", fontSize: 11, flexWrap: "wrap" }}>
+            <span style={{ color: classifySuggestion.hasMemory ? "#1D4ED8" : "#92400E", fontWeight: 600 }}>
+              {classifySuggestion.hasMemory ? "🧠 Mémorisé :" : "✦ Auguste suggère :"}
+            </span>
             {classifySuggestion.labels.map(lid => {
               const lbl = customLabels.find(l => l.id === lid);
-              return lbl ? <span key={lid} style={{ background: lbl.color + "25", color: lbl.color, borderRadius: 4, padding: "1px 7px", fontWeight: 600 }}>{lbl.name}</span> : null;
+              return lbl ? <span key={lid} style={{ background: lbl.color + "22", color: lbl.color, borderRadius: 4, padding: "1px 7px", fontWeight: 600, border: `1px solid ${lbl.color}44` }}>{lbl.name}</span> : null;
             })}
-            <button onClick={() => {
+            {classifySuggestion.assignedToId && (() => {
+              const u = users.find(u => u.id === classifySuggestion.assignedToId);
+              return u ? <span style={{ background: "#EFF6FF", color: "#2563EB", borderRadius: 4, padding: "1px 7px", fontWeight: 600 }}>→ {u.prenom}</span> : null;
+            })()}
+            {classifySuggestion.reason && <span style={{ color: "#6b7280", fontStyle: "italic", fontSize: 10 }}>{classifySuggestion.reason}</span>}
+            <button onClick={async () => {
+              const msg = firstMsg || lastMsg;
               classifySuggestion.labels.forEach(lid => onApplyLabel(lid));
               if (classifySuggestion.assignedToId) setAssigned(classifySuggestion.assignedToId);
+              // Mémoriser automatiquement à l'application
+              if (msg?.from?.email) {
+                setMemorySaving(true);
+                await fetch("/api/mail/memory", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ fromEmail: msg.from.email, labelIds: classifySuggestion.labels, assignedToId: classifySuggestion.assignedToId }),
+                });
+                setMemorySaving(false);
+                setMemoryMsg("Mémorisé ✓");
+                setTimeout(() => setMemoryMsg(""), 2000);
+              }
               setClassifySuggestion(null);
-            }} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 5, padding: "2px 8px", fontSize: 10, fontWeight: 600, cursor: "pointer", marginLeft: 4 }}>Appliquer</button>
+            }} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 5, padding: "2px 8px", fontSize: 10, fontWeight: 600, cursor: "pointer", marginLeft: 4 }}>
+              {memorySaving ? "…" : "Appliquer & mémoriser"}
+            </button>
+            {classifySuggestion.hasMemory && (() => {
+              const msg = firstMsg || lastMsg;
+              return (
+                <button onClick={async () => {
+                  if (msg?.from?.email) {
+                    await fetch(`/api/mail/memory?email=${encodeURIComponent(msg.from.email)}`, { method: "DELETE" });
+                    setMemoryMsg("Oublié ✓");
+                    setTimeout(() => setMemoryMsg(""), 2000);
+                  }
+                  setClassifySuggestion(null);
+                }} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 5, padding: "2px 8px", fontSize: 10, color: "#6b7280", cursor: "pointer" }}>
+                  Oublier
+                </button>
+              );
+            })()}
             <button onClick={() => setClassifySuggestion(null)} style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: 12 }}>×</button>
           </div>
         )}
+        {memoryMsg && <span style={{ fontSize: 10, color: "#059669", fontWeight: 600 }}>{memoryMsg}</span>}
 
         {/* Doit répondre */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

@@ -105,6 +105,18 @@ model Task {
   @@map("tasks")
 }
 
+// ── Mémoire de classification des mails ──────────────────────
+model MailLabelMemory {
+  id           String   @id @default(cuid())
+  fromEmail    String   @unique
+  labelIds     String[]
+  assignedToId String?
+  note         String?  // contexte mémorisé (ex: "propriétaire immeuble X")
+  updatedAt    DateTime @updatedAt
+
+  @@map("mail_label_memory")
+}
+
 // ── Événements agenda ────────────────────────────────────────
 
 model CalendarEvent {
