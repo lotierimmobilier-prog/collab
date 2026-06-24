@@ -577,6 +577,7 @@ export default function MailBoard() {
               messages={search && searchResults !== null ? [...messages, ...searchResults.filter(r => !messages.find(m => m.id === r.id))] : messages}
               labels={labels}
               accounts={accounts}
+              gmailConfigs={gmailConfigs}
               selectedId={selectedThread?.id}
               activeLabel={activeLabel}
               activeAccount={activeAccount}
