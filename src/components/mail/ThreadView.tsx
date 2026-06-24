@@ -342,7 +342,8 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#f9fafb", minWidth: 0, minHeight: 0 }}>
       {/* Header */}
       <div style={{ padding: "14px 20px", borderBottom: "1px solid #e5e7eb", background: "#fff", flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, paddingRight: 40 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+          {/* Titre + libellés */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: "#111827", lineHeight: 1.3, margin: 0 }}>{thread.subject}</h2>
@@ -382,12 +383,18 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
               </div>
             </div>
           </div>
-          {/* Boutons header — à gauche de la croix absolue */}
-          <div style={{ display: "flex", gap: 5, flexShrink: 0, alignSelf: "flex-start", marginTop: 2 }}>
+
+          {/* Boutons droite : ★ 🗑 × */}
+          <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
             <button onClick={onStar} title="Suivre"
-              style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${threadLabelIds.has("starred") ? "#FDE68A" : "#e5e7eb"}`, background: threadLabelIds.has("starred") ? "#FEF9C3" : "#f9fafb", cursor: "pointer", fontSize: 13, color: threadLabelIds.has("starred") ? "#f59e0b" : "#9ca3af", display: "flex", alignItems: "center", justifyContent: "center" }}>★</button>
+              style={{ width: 30, height: 30, borderRadius: 7, border: `1px solid ${threadLabelIds.has("starred") ? "#FDE68A" : "#e5e7eb"}`, background: threadLabelIds.has("starred") ? "#FEF9C3" : "#f9fafb", cursor: "pointer", fontSize: 14, color: threadLabelIds.has("starred") ? "#f59e0b" : "#9ca3af", display: "flex", alignItems: "center", justifyContent: "center" }}>★</button>
             <button onClick={onTrash} title="Corbeille"
-              style={{ width: 28, height: 28, borderRadius: 6, border: "1px solid #fecaca", background: "#fff5f5", cursor: "pointer", fontSize: 13, color: "#ef4444", display: "flex", alignItems: "center", justifyContent: "center" }}>🗑</button>
+              style={{ width: 30, height: 30, borderRadius: 7, border: "1px solid #fecaca", background: "#fff5f5", cursor: "pointer", fontSize: 14, color: "#ef4444", display: "flex", alignItems: "center", justifyContent: "center" }}>🗑</button>
+            <button onClick={onClose} title="Fermer"
+              style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f3f4f6", cursor: "pointer", fontSize: 17, color: "#6b7280", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, lineHeight: 1 }}
+              onMouseEnter={e => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.color = "#ef4444"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "#f3f4f6"; e.currentTarget.style.color = "#6b7280"; }}
+            >×</button>
           </div>
         </div>
 
@@ -720,8 +727,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
       )}
 
       {/* Messages — dédupliqués par messageId, on garde celui avec le plus de contenu */}
-      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-      <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "16px 20px 80px", display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 20px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
         {(() => {
           const seen = new Map<string, MailMessage>();
           for (const msg of thread.messages) {
@@ -736,7 +742,6 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
             <MessageBubble key={msg.id} msg={msg} isLast={i === deduped.length - 1} loadingBody={loadingBody} />
           ));
         })()}
-      </div>
       </div>
 
       {/* Boutons répondre (bas, quand le panneau réponse est fermé) */}
