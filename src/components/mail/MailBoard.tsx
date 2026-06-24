@@ -15,6 +15,7 @@ import ThreadList from "./ThreadList";
 import ThreadView from "./ThreadView";
 import GoogleMailConnect from "./GoogleMailConnect";
 import SignatureEditor from "./SignatureEditor";
+import RichTextEditor from "./RichTextEditor";
 
 const ACCOUNTS_KEY  = "collab_mail_accounts";
 const LABELS_KEY    = "collab_mail_labels";
@@ -845,13 +846,15 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
     setError("");
 
     const storedSig = typeof window !== "undefined" ? (localStorage.getItem(SIG_KEY) ?? "") : "";
-    // La signature est désormais du HTML — on détecte si c'est du HTML ou du texte brut
     const sigIsHtml = storedSig.trim().startsWith("<");
     const sigHtml   = sigIsHtml ? storedSig : storedSig.replace(/\n/g, "<br/>");
-    const sigText   = sigIsHtml ? storedSig.replace(/<[^>]+>/g, "") : storedSig;
-    const fullBody  = body + (sigText ? `\n\n--\n${sigText}` : "");
-    const fullHtml  = `<div style="font-family:sans-serif;font-size:14px;line-height:1.6">${body.replace(/\n/g,"<br/>")}</div>` +
-                      (sigHtml ? `<br/><hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0"/><div style="font-family:sans-serif;font-size:12px">${sigHtml}</div>` : "");
+    const sigText   = storedSig.replace(/<[^>]+>/g, "");
+    // body est maintenant du HTML (RichTextEditor)
+    const bodyIsHtml = body.trim().startsWith("<");
+    const bodyHtml   = bodyIsHtml ? body : `<div style="font-family:sans-serif;font-size:14px;line-height:1.7">${body.replace(/\n/g,"<br/>")}</div>`;
+    const bodyText   = body.replace(/<[^>]+>/g, "");
+    const fullBody   = bodyText + (sigText ? `\n\n--\n${sigText}` : "");
+    const fullHtml   = bodyHtml + (sigHtml ? `<br/><hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0"/><div style="font-family:sans-serif;font-size:12px">${sigHtml}</div>` : "");
 
     try {
       const r = await fetch("/api/mail/send", {
@@ -959,13 +962,15 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
             <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Objet du message" style={{ flex: 1, border: "none", fontSize: 13, outline: "none", fontFamily: "inherit", fontWeight: 500 }} />
           </div>
 
-          <textarea
-            value={body}
-            onChange={e => setBody(e.target.value)}
-            placeholder="Rédigez votre message…"
-            rows={8}
-            style={{ width: "100%", border: "none", padding: "12px 0", fontSize: 13, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box" }}
-          />
+          <div style={{ padding: "8px 0" }}>
+            <RichTextEditor
+              value={body}
+              onChange={setBody}
+              placeholder="Rédigez votre message…"
+              minHeight={180}
+              autoFocus
+            />
+          </div>
 
           {/* Aperçu signature */}
           {(() => {

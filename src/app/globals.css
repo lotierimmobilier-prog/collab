@@ -9,3 +9,10 @@ body {
   background: #f9fafb;
   color: #111827;
 }
+
+/* Placeholder pour les zones contentEditable (RichTextEditor) */
+[contenteditable][data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  pointer-events: none;
+}
