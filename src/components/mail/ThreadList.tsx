@@ -42,9 +42,12 @@ export default function ThreadList({
   onClassifyAll, classifying,
   onBulkTrash, onBulkLabel, onBulkAssign, onBulkMarkRead,
 }: Props) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode]   = useState(false);
+  const [selected, setSelected]       = useState<Set<string>>(new Set());
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [showAssignPicker, setShowAssignPicker] = useState(false);
+
+  function exitSelectMode() { setSelectMode(false); setSelected(new Set()); }
 
   const totalPages = Math.max(1, Math.ceil(threads.length / PAGE_SIZE));
   const safePage   = Math.min(page, totalPages);
@@ -100,28 +103,36 @@ export default function ThreadList({
   return (
     <div style={{ width: "100%", flexShrink: 0, borderBottom: "1px solid #e5e7eb", background: "#fff", display: "flex", flexDirection: "column" }}>
 
-      {/* ── Barre compteur / sélection globale ── */}
+      {/* ── Barre compteur / actions ── */}
       <div style={{ padding: "4px 10px", borderBottom: "1px solid #f3f4f6", fontSize: 10, color: "#9ca3af", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, minHeight: 32 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* Checkbox tout sélectionner */}
-          <input type="checkbox" checked={allSelected} ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
-            onChange={toggleAll}
-            style={{ width: 14, height: 14, accentColor: GOLD, cursor: "pointer", flexShrink: 0 }}
-            title={allSelected ? "Tout désélectionner" : "Tout sélectionner"}
-          />
+          {selectMode && (
+            <input type="checkbox" checked={allSelected} ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
+              onChange={toggleAll}
+              style={{ width: 14, height: 14, accentColor: GOLD, cursor: "pointer", flexShrink: 0 }}
+              title={allSelected ? "Tout désélectionner" : "Tout sélectionner"}
+            />
+          )}
           {someSelected
             ? <span style={{ fontWeight: 600, color: "#374151" }}>{selected.size} sélectionné{selected.size > 1 ? "s" : ""}</span>
             : <span>{threads.length} conversation{threads.length > 1 ? "s" : ""}</span>
           }
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {totalPages > 1 && !someSelected && <span>Page {safePage}/{totalPages}</span>}
-          {!someSelected && onClassifyAll && (
+          {totalPages > 1 && !someSelected && !selectMode && <span>Page {safePage}/{totalPages}</span>}
+          {!selectMode && onClassifyAll && (
             <button onClick={onClassifyAll} disabled={classifying}
               style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: classifying ? "#f9fafb" : "#FFFBEB", cursor: classifying ? "default" : "pointer", fontSize: 10, fontWeight: 600, color: classifying ? "#9ca3af" : GOLD, whiteSpace: "nowrap" }}>
               {classifying ? "⏳ Classification…" : "✨ Classer avec Auguste"}
             </button>
           )}
+          {/* Bouton Sélectionner / Annuler */}
+          <button
+            onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+            style={{ padding: "3px 8px", borderRadius: 6, border: `1px solid ${selectMode ? GOLD : "#e5e7eb"}`, background: selectMode ? GOLD_BG : "#fff", cursor: "pointer", fontSize: 10, fontWeight: 600, color: selectMode ? GOLD : "#6b7280", whiteSpace: "nowrap" }}
+          >
+            {selectMode ? "✕ Annuler" : "Sélectionner"}
+          </button>
         </div>
       </div>
 
@@ -188,9 +199,9 @@ export default function ThreadList({
           {/* Supprimer */}
           <BulkBtn icon="🗑" label="Supprimer" danger onClick={() => { onBulkTrash?.(selIds); clearSelection(); }} />
 
-          {/* Annuler */}
-          <button onClick={clearSelection} style={{ marginLeft: "auto", background: "none", border: "none", fontSize: 11, color: "#6b7280", cursor: "pointer", padding: "3px 6px", borderRadius: 5, textDecoration: "underline" }}>
-            Annuler
+          {/* Annuler sélection */}
+          <button onClick={() => { clearSelection(); }} style={{ marginLeft: "auto", background: "none", border: "none", fontSize: 11, color: "#6b7280", cursor: "pointer", padding: "3px 6px", borderRadius: 5, textDecoration: "underline" }}>
+            Tout désélectionner
           </button>
         </div>
       )}
@@ -221,20 +232,24 @@ export default function ThreadList({
           const repliedName  = repliedUser ? `${repliedUser.prenom} ${repliedUser.nom}` : repliedId ? "—" : null;
 
           return (
-            <div key={t.id} onClick={() => { if (!someSelected) onSelect(t); }}
-              style={{ padding: "8px 10px", borderBottom: "1px solid #f3f4f6", cursor: someSelected ? "default" : "pointer", background: isChecked ? "#FEF9F0" : selectedId === t.id ? "#F7F0E6" : "#fff", borderLeft: `3px solid ${isChecked ? GOLD : selectedId === t.id ? GOLD : "transparent"}`, position: "relative", transition: "background 0.1s" }}
+            <div key={t.id}
+              onClick={() => selectMode ? toggleOne(t.id, { stopPropagation: () => {} } as React.MouseEvent) : onSelect(t)}
+              style={{ padding: "8px 10px", borderBottom: "1px solid #f3f4f6", cursor: "pointer", background: isChecked ? "#FEF9F0" : selectedId === t.id ? "#F7F0E6" : "#fff", borderLeft: `3px solid ${isChecked ? GOLD : selectedId === t.id ? GOLD : "transparent"}`, position: "relative", transition: "background 0.1s" }}
               onMouseEnter={e => !isChecked && selectedId !== t.id && (e.currentTarget.style.background = "#f9fafb")}
               onMouseLeave={e => !isChecked && selectedId !== t.id && (e.currentTarget.style.background = "#fff")}
             >
-              <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
 
-                {/* Checkbox + avatar */}
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flexShrink: 0 }} onClick={e => toggleOne(t.id, e)}>
+                {/* Checkbox (côté gauche, visible seulement en mode sélection) */}
+                {selectMode && (
                   <input type="checkbox" checked={isChecked} onChange={() => {}}
-                    style={{ width: 14, height: 14, accentColor: GOLD, cursor: "pointer", marginTop: 2 }} />
-                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: isChecked ? GOLD + "30" : color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: isChecked ? GOLD : "#fff", border: isChecked ? `2px solid ${GOLD}` : "none" }}>
-                    {initials(fromName)}
-                  </div>
+                    onClick={e => toggleOne(t.id, e)}
+                    style={{ width: 14, height: 14, accentColor: GOLD, cursor: "pointer", flexShrink: 0 }} />
+                )}
+
+                {/* Avatar */}
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: isChecked ? GOLD + "30" : color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: isChecked ? GOLD : "#fff", border: isChecked ? `2px solid ${GOLD}` : "none", flexShrink: 0 }}>
+                  {initials(fromName)}
                 </div>
 
                 {/* Corps */}
