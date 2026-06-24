@@ -32,7 +32,9 @@ export interface MailAttachment {
   id: string;
   name: string;
   size: number;
-  type: string;
+  mime?: string;
+  type?: string;
+  data?: string; // base64, pour téléchargement
 }
 
 export interface MailMessage {

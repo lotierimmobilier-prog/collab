@@ -233,14 +233,15 @@ export default function MailBoard() {
       });
       const data = await resp.json();
       if (data.ok) {
+        const patch = { body: data.bodyHtml, bodyText: data.bodyText, attachments: data.attachments ?? [] };
         setMessages(prev => {
-          const updated = prev.map(m => m.id === msg.id ? { ...m, body: data.bodyHtml, bodyText: data.bodyText } : m);
+          const updated = prev.map(m => m.id === msg.id ? { ...m, ...patch } : m);
           rebuildThreads(updated);
           return updated;
         });
         setSelectedThread(prev => prev ? {
           ...prev,
-          messages: prev.messages.map(m => m.id === msg.id ? { ...m, body: data.bodyHtml, bodyText: data.bodyText } : m),
+          messages: prev.messages.map(m => m.id === msg.id ? { ...m, ...patch } : m),
         } : null);
       }
     } catch { /* silencieux */ }
