@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",       // Next.js HMR + inline scripts
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com",  // Next.js HMR + GIS
   "style-src 'self' 'unsafe-inline'",                       // styles inline React
   "img-src 'self' data: https:",                            // images distantes (avatars, logos)
   "font-src 'self' data:",

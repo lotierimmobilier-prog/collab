@@ -23,10 +23,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Destinataire et objet requis" }, { status: 400 });
   }
 
+  const port = parseInt(String(smtpPort ?? 587), 10);
+  // Port 465 = SSL direct (secure:true), port 587/25 = STARTTLS (secure:false)
+  const isDirectSsl = smtpSsl === true && port === 465;
   const transport = nodemailer.createTransport({
     host: smtpHost,
-    port: smtpPort ?? 587,
-    secure: smtpSsl ?? (smtpPort === 465),
+    port,
+    secure: isDirectSsl,
+    requireTLS: !isDirectSsl && port !== 25,
     auth: { user: username, pass: password },
     tls: { rejectUnauthorized: false },
   });
