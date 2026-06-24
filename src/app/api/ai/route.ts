@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// ── Définition des outils disponibles pour Auguste ──────────
+// ── Outils disponibles pour Auguste ─────────────────────────
 const TOOLS: Anthropic.Tool[] = [
   {
     name: "get_tasks",
@@ -13,38 +13,38 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: "object" as const,
       properties: {
-        status:   { type: "string", enum: ["todo","inprogress","review","done"], description: "Filtrer par statut" },
-        priority: { type: "string", enum: ["urgent","haute","moyenne","basse"], description: "Filtrer par priorité" },
+        status:     { type: "string", enum: ["todo","inprogress","review","done"] },
+        priority:   { type: "string", enum: ["urgent","haute","moyenne","basse"] },
         assigneeId: { type: "string", description: "Filtrer par ID utilisateur assigné" },
       },
     },
   },
   {
     name: "create_task",
-    description: "Crée une nouvelle tâche et l'assigne à un utilisateur.",
+    description: "Crée une nouvelle tâche dans le logiciel. N'appelle cet outil QUE si tu as un titre clair. Sinon demande-le.",
     input_schema: {
       type: "object" as const,
       properties: {
-        title:       { type: "string",  description: "Titre de la tâche (obligatoire)" },
+        title:       { type: "string",  description: "Titre de la tâche (OBLIGATOIRE — ne pas inventer)" },
         description: { type: "string",  description: "Description détaillée" },
-        status:      { type: "string",  enum: ["todo","inprogress","review","done"], description: "Statut initial (défaut: todo)" },
-        priority:    { type: "string",  enum: ["urgent","haute","moyenne","basse"],  description: "Priorité (défaut: moyenne)" },
-        assigneeId:  { type: "string",  description: "ID de l'utilisateur à assigner" },
-        dueDate:     { type: "string",  description: "Date d'échéance format YYYY-MM-DD" },
-        tags:        { type: "array", items: { type: "string" }, description: "Étiquettes" },
-        familyId:    { type: "string",  description: "ID de la famille de tâches" },
-        groupId:     { type: "string",  description: "ID du groupe de tâches" },
+        status:      { type: "string",  enum: ["todo","inprogress","review","done"] },
+        priority:    { type: "string",  enum: ["urgent","haute","moyenne","basse"] },
+        assigneeId:  { type: "string",  description: "ID exact de l'utilisateur à assigner (obtenu via get_users)" },
+        dueDate:     { type: "string",  description: "Date d'échéance YYYY-MM-DD" },
+        tags:        { type: "array",   items: { type: "string" } },
+        familyId:    { type: "string" },
+        groupId:     { type: "string" },
       },
       required: ["title"],
     },
   },
   {
     name: "update_task",
-    description: "Modifie une tâche existante (statut, priorité, assigné, etc.).",
+    description: "Modifie une tâche existante.",
     input_schema: {
       type: "object" as const,
       properties: {
-        id:          { type: "string", description: "ID de la tâche" },
+        id:          { type: "string", description: "ID de la tâche (obtenu via get_tasks)" },
         title:       { type: "string" },
         description: { type: "string" },
         status:      { type: "string", enum: ["todo","inprogress","review","done"] },
@@ -57,49 +57,66 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "get_calendar_events",
-    description: "Récupère les événements de l'agenda pour une période donnée.",
+    description: "Récupère les événements de l'agenda.",
     input_schema: {
       type: "object" as const,
       properties: {
-        from: { type: "string", description: "Date début ISO (ex: 2026-06-01)" },
-        to:   { type: "string", description: "Date fin ISO (ex: 2026-06-30)" },
+        from: { type: "string", description: "Date début ISO" },
+        to:   { type: "string", description: "Date fin ISO" },
       },
     },
   },
   {
     name: "create_calendar_event",
-    description: "Crée un événement dans l'agenda avec possibilité d'inviter des participants.",
+    description: "Crée un rendez-vous ou événement dans l'agenda. N'appelle cet outil QUE si tu as une date ET une heure précises. Sinon demande-les.",
     input_schema: {
       type: "object" as const,
       properties: {
-        title:       { type: "string",  description: "Titre de l'événement (obligatoire)" },
-        start:       { type: "string",  description: "Date/heure début ISO ex: 2026-06-25T14:00:00" },
-        end:         { type: "string",  description: "Date/heure fin ISO" },
-        description: { type: "string",  description: "Description" },
-        location:    { type: "string",  description: "Lieu" },
+        title:       { type: "string",  description: "Titre (OBLIGATOIRE)" },
+        start:       { type: "string",  description: "Début ISO ex: 2026-06-25T14:00:00 (OBLIGATOIRE — calculer depuis la date du jour fournie en contexte)" },
+        end:         { type: "string",  description: "Fin ISO. Si non précisé: start + 1h pour RDV, + 2h pour visite/EDL" },
+        description: { type: "string" },
+        location:    { type: "string",  description: "Lieu ou adresse" },
         type:        { type: "string",  enum: ["rdv","visite","edl","signature","formation","autre"] },
-        color:       { type: "string",  description: "Couleur hex ex: #B8966A" },
-        allDay:      { type: "boolean", description: "Toute la journée ?" },
+        color:       { type: "string",  description: "Couleur hex" },
+        allDay:      { type: "boolean" },
         attendees:   {
           type: "array",
-          description: "Participants à inviter",
+          description: "Participants — utiliser type='user' avec l'ID exact si membre de l'agence",
           items: {
             type: "object",
             properties: {
               type:  { type: "string", enum: ["user","contact"] },
-              id:    { type: "string", description: "ID utilisateur si type=user" },
+              id:    { type: "string" },
               name:  { type: "string" },
               email: { type: "string" },
             },
           },
         },
       },
-      required: ["title","start","end"],
+      required: ["title", "start"],
+    },
+  },
+  {
+    name: "update_calendar_event",
+    description: "Modifie un événement agenda existant.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        id:          { type: "string", description: "ID de l'événement" },
+        title:       { type: "string" },
+        start:       { type: "string" },
+        end:         { type: "string" },
+        location:    { type: "string" },
+        description: { type: "string" },
+        type:        { type: "string", enum: ["rdv","visite","edl","signature","formation","autre"] },
+      },
+      required: ["id"],
     },
   },
   {
     name: "get_users",
-    description: "Récupère la liste des utilisateurs actifs de l'agence.",
+    description: "Récupère la liste des utilisateurs actifs. Appelle cet outil avant d'assigner une tâche ou inviter à un événement.",
     input_schema: { type: "object" as const, properties: {} },
   },
   {
@@ -113,26 +130,38 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {} },
   },
   {
+    name: "get_channels",
+    description: "Récupère les conversations de messagerie interne.",
+    input_schema: { type: "object" as const, properties: {} },
+  },
+  {
     name: "send_internal_message",
-    description: "Envoie un message interne à un utilisateur ou dans un groupe.",
+    description: "Envoie un message interne dans un channel.",
     input_schema: {
       type: "object" as const,
       properties: {
-        channelId: { type: "string", description: "ID du channel (obligatoire)" },
-        content:   { type: "string", description: "Contenu du message" },
+        channelId: { type: "string" },
+        content:   { type: "string" },
       },
       required: ["channelId","content"],
     },
   },
-  {
-    name: "get_channels",
-    description: "Récupère la liste des conversations et groupes de messagerie interne de l'utilisateur.",
-    input_schema: { type: "object" as const, properties: {} },
-  },
 ];
 
-// ── Exécution des outils côté serveur ───────────────────────
-async function executeTool(name: string, input: Record<string, unknown>, userId: string, userRole: string) {
+// ── Exécution des outils ─────────────────────────────────────
+interface SideEffect {
+  type: string;
+  id:   string;
+  title: string;
+  detail?: string;
+}
+
+async function executeTool(
+  name: string,
+  input: Record<string, unknown>,
+  userId: string,
+  sideEffects: SideEffect[]
+) {
   switch (name) {
 
     case "get_tasks": {
@@ -156,90 +185,149 @@ async function executeTool(name: string, input: Record<string, unknown>, userId:
     }
 
     case "create_task": {
+      if (!input.title) return { error: "Titre manquant — demander à l'utilisateur" };
       const task = await prisma.task.create({
         data: {
           title:       input.title as string,
           description: input.description as string | undefined,
-          status:      (input.status as string)   || "todo",
-          priority:    (input.priority as string)  || "moyenne",
-          assigneeId:  input.assigneeId as string  | undefined,
+          status:      (input.status  as string) || "todo",
+          priority:    (input.priority as string) || "moyenne",
+          assigneeId:  input.assigneeId as string | undefined,
           dueDate:     input.dueDate ? new Date(input.dueDate as string) : undefined,
-          tags:        (input.tags as string[])    || [],
-          familyId:    input.familyId as string    | undefined,
-          groupId:     input.groupId as string     | undefined,
+          tags:        (input.tags as string[]) || [],
+          familyId:    input.familyId as string | undefined,
+          groupId:     input.groupId  as string | undefined,
         },
+        include: { assignee: { select: { prenom: true, nom: true } } },
       });
-      // Notification à l'assigné
       if (input.assigneeId && input.assigneeId !== userId) {
         await prisma.notification.create({
           data: {
             userId: input.assigneeId as string,
-            type: "task", title: `Nouvelle tâche : ${input.title}`,
-            body: `Assignée par Auguste`, link: "/taches",
+            type: "task",
+            title: `Nouvelle tâche : ${task.title}`,
+            body: "Assignée par Auguste",
+            link: "/taches",
           },
         });
       }
-      return { ok: true, id: task.id, title: task.title, status: task.status };
+      sideEffects.push({
+        type: "task_created",
+        id: task.id,
+        title: task.title,
+        detail: task.assignee ? `Assignée à ${task.assignee.prenom} ${task.assignee.nom}` : undefined,
+      });
+      return {
+        ok: true, id: task.id, title: task.title, status: task.status,
+        assignee: task.assignee ? `${task.assignee.prenom} ${task.assignee.nom}` : null,
+      };
     }
 
     case "update_task": {
       const task = await prisma.task.update({
         where: { id: input.id as string },
         data: {
-          ...(input.title       !== undefined && { title: input.title as string }),
+          ...(input.title       !== undefined && { title:       input.title       as string }),
           ...(input.description !== undefined && { description: input.description as string }),
-          ...(input.status      !== undefined && { status: input.status as string }),
-          ...(input.priority    !== undefined && { priority: input.priority as string }),
-          ...(input.assigneeId  !== undefined && { assigneeId: input.assigneeId as string }),
+          ...(input.status      !== undefined && { status:      input.status      as string }),
+          ...(input.priority    !== undefined && { priority:    input.priority    as string }),
+          ...(input.assigneeId  !== undefined && { assigneeId:  input.assigneeId  as string }),
           ...(input.dueDate     !== undefined && { dueDate: input.dueDate ? new Date(input.dueDate as string) : null }),
         },
       });
+      sideEffects.push({ type: "task_updated", id: task.id, title: task.title });
       return { ok: true, id: task.id, title: task.title, status: task.status };
     }
 
     case "get_calendar_events": {
       const calWhere: Record<string, unknown> = {};
       if (input.from) calWhere.start = { gte: new Date(input.from as string) };
-      if (input.to)   calWhere.end   = { lte: new Date(input.to as string) };
+      if (input.to)   calWhere.end   = { lte: new Date(input.to   as string) };
       const events = await prisma.calendarEvent.findMany({
         where: calWhere,
-        orderBy: { start: "asc" }, take: 50,
+        orderBy: { start: "asc" },
+        take: 50,
       });
       return events.map(e => ({
-        id: e.id, title: e.title, start: e.start.toISOString(),
-        end: e.end.toISOString(), location: e.location, type: e.type,
-        attendees: e.attendees,
+        id: e.id, title: e.title,
+        start: e.start.toISOString(), end: e.end.toISOString(),
+        location: e.location, type: e.type, attendees: e.attendees,
       }));
     }
 
     case "create_calendar_event": {
+      if (!input.title) return { error: "Titre manquant" };
+      if (!input.start) return { error: "Date/heure manquante — demander à l'utilisateur" };
+
+      const startDate = new Date(input.start as string);
+      if (isNaN(startDate.getTime())) return { error: "Date invalide" };
+
+      // Fin par défaut selon le type
+      let endDate: Date;
+      if (input.end) {
+        endDate = new Date(input.end as string);
+      } else {
+        const type = (input.type as string) || "rdv";
+        const duration = ["visite","edl"].includes(type) ? 2 * 3600000 : 3600000;
+        endDate = new Date(startDate.getTime() + duration);
+      }
+
       const event = await prisma.calendarEvent.create({
         data: {
           title:       input.title as string,
           description: input.description as string | undefined,
-          location:    input.location as string    | undefined,
-          start:       new Date(input.start as string),
-          end:         new Date(input.end as string),
+          location:    input.location as string | undefined,
+          start:       startDate,
+          end:         endDate,
           allDay:      !!(input.allDay),
           color:       (input.color as string) || "#B8966A",
-          type:        (input.type as string)  || "autre",
+          type:        (input.type  as string) || "autre",
           createdBy:   userId,
           attendees:   input.attendees ?? undefined,
         },
       });
-      // Notifications aux utilisateurs mentionnés
+
+      // Notifications aux participants
       const atts = (input.attendees as { type?: string; id?: string; name: string }[]) || [];
-      for (const a of atts.filter(x => x.type === "user" && x.id)) {
+      for (const a of atts.filter(x => x.type === "user" && x.id && x.id !== userId)) {
         await prisma.notification.create({
           data: {
-            userId: a.id!, type: "calendar",
-            title: `Nouvel événement : ${input.title}`,
-            body: new Date(input.start as string).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }),
+            userId: a.id!,
+            type: "calendar",
+            title: `Nouvel événement : ${event.title}`,
+            body: startDate.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }),
             link: "/planning",
           },
         });
       }
-      return { ok: true, id: event.id, title: event.title, start: event.start.toISOString() };
+
+      sideEffects.push({
+        type: "event_created",
+        id: event.id,
+        title: event.title,
+        detail: `${startDate.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}${event.location ? ` · ${event.location}` : ""}`,
+      });
+      return {
+        ok: true, id: event.id, title: event.title,
+        start: event.start.toISOString(), end: event.end.toISOString(),
+        location: event.location, type: event.type,
+      };
+    }
+
+    case "update_calendar_event": {
+      const evtData: Record<string, unknown> = {};
+      if (input.title)       evtData.title       = input.title;
+      if (input.description) evtData.description = input.description;
+      if (input.location)    evtData.location    = input.location;
+      if (input.type)        evtData.type        = input.type;
+      if (input.start)       evtData.start       = new Date(input.start as string);
+      if (input.end)         evtData.end         = new Date(input.end   as string);
+      const event = await prisma.calendarEvent.update({
+        where: { id: input.id as string },
+        data: evtData,
+      });
+      sideEffects.push({ type: "event_updated", id: event.id, title: event.title });
+      return { ok: true, id: event.id, title: event.title };
     }
 
     case "get_users": {
@@ -255,13 +343,17 @@ async function executeTool(name: string, input: Record<string, unknown>, userId:
         include: { groups: true },
         orderBy: { order: "asc" },
       });
-      return families.map(f => ({ id: f.id, name: f.name, color: f.color, groups: f.groups.map(g => ({ id: g.id, name: g.name })) }));
+      return families.map(f => ({
+        id: f.id, name: f.name, color: f.color,
+        groups: f.groups.map(g => ({ id: g.id, name: g.name })),
+      }));
     }
 
     case "get_notifications": {
       const notifs = await prisma.notification.findMany({
         where: { userId, read: false },
-        orderBy: { createdAt: "desc" }, take: 20,
+        orderBy: { createdAt: "desc" },
+        take: 20,
       });
       return notifs.map(n => ({ id: n.id, type: n.type, title: n.title, body: n.body, createdAt: n.createdAt.toISOString() }));
     }
@@ -269,30 +361,49 @@ async function executeTool(name: string, input: Record<string, unknown>, userId:
     case "get_channels": {
       const memberships = await prisma.channelMember.findMany({
         where: { userId },
-        include: { channel: { include: { members: { include: { user: { select: { id: true, prenom: true, nom: true } } } } } } },
+        include: {
+          channel: {
+            include: {
+              members: { include: { user: { select: { id: true, prenom: true, nom: true } } } },
+            },
+          },
+        },
       });
       return memberships.map(m => ({
-        id: m.channel.id, name: m.channel.name, isDirect: m.channel.isDirect,
+        id: m.channel.id,
+        name: m.channel.name,
+        isDirect: m.channel.isDirect,
         members: m.channel.members.map(mb => ({ id: mb.user.id, name: `${mb.user.prenom} ${mb.user.nom}` })),
       }));
     }
 
     case "send_internal_message": {
-      // Vérifier que l'utilisateur est membre
       const membership = await prisma.channelMember.findUnique({
         where: { channelId_userId: { channelId: input.channelId as string, userId } },
       });
       if (!membership) return { error: "Accès refusé à ce channel" };
       const msg = await prisma.internalMessage.create({
-        data: { channelId: input.channelId as string, senderId: userId, content: input.content as string, readBy: [userId] },
+        data: {
+          channelId: input.channelId as string,
+          senderId:  userId,
+          content:   input.content as string,
+          readBy:    [userId],
+        },
       });
-      // Notifications aux autres membres
-      const others = await prisma.channelMember.findMany({ where: { channelId: input.channelId as string, userId: { not: userId } } });
+      const others = await prisma.channelMember.findMany({
+        where: { channelId: input.channelId as string, userId: { not: userId } },
+      });
       for (const o of others) {
         await prisma.notification.create({
-          data: { userId: o.userId, type: "message", title: "Message d'Auguste", body: (input.content as string).slice(0, 80), link: "/messagerie-interne" },
+          data: {
+            userId: o.userId, type: "message",
+            title: "Message d'Auguste",
+            body: (input.content as string).slice(0, 80),
+            link: "/messagerie-interne",
+          },
         });
       }
+      sideEffects.push({ type: "message_sent", id: msg.id, title: input.content as string });
       return { ok: true, messageId: msg.id };
     }
 
@@ -306,38 +417,61 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const { messages } = await req.json();
+  const { messages, today } = await req.json();
   if (!Array.isArray(messages) || messages.length === 0)
     return NextResponse.json({ error: "Messages requis" }, { status: 400 });
 
   const userId   = session.user.id;
   const userName = `${session.user.prenom ?? ""} ${session.user.nom ?? ""}`.trim();
   const userRole = session.user.roleId ?? "user";
+  const todayStr = today || new Date().toISOString().split("T")[0];
 
   const SYSTEM = `Tu es Auguste, l'assistant IA de l'agence immobilière Lotier Immobilier.
-Tu aides les collaborateurs de l'agence à gérer leur travail quotidien.
+Tu aides les collaborateurs à gérer leur travail quotidien depuis la plateforme Collab.
 
 Utilisateur connecté : ${userName} (rôle: ${userRole})
+Date du jour : ${todayStr} — utilise cette date pour calculer les dates relatives ("demain", "vendredi", "la semaine prochaine", etc.)
 
-Tu as accès à toutes les données et actions de la plateforme Collab via tes outils :
-- Tâches : consulter, créer, modifier
-- Agenda : consulter les événements, créer des rendez-vous
-- Messagerie interne : lire les conversations, envoyer des messages
-- Utilisateurs : voir les membres de l'agence
-- Notifications : consulter les alertes non lues
+Tu as accès aux données réelles et peux agir directement sur le logiciel :
+- Tâches : lire, créer, modifier
+- Agenda / RDV : lire, créer, modifier
+- Messagerie interne : lire, envoyer
+- Utilisateurs : consulter la liste
+- Notifications : consulter
 
-RÈGLES D'ACTION :
-1. Utilise tes outils pour répondre aux questions avec des données RÉELLES (pas inventées)
-2. Avant de créer/modifier quelque chose, confirme brièvement ce que tu vas faire
-3. Si l'utilisateur demande de créer une tâche ou un RDV, utilise directement l'outil
-4. Pour les droits : l'utilisateur a le rôle "${userRole}" — respecte les permissions
-5. Toujours répondre en français, de façon concise et professionnelle
-6. Indique clairement quand une action a été réalisée (ex: "✅ Tâche créée : ...")
+══ RÈGLES DE CRÉATION (TRÈS IMPORTANTES) ══
 
-Domaines d'expertise : immobilier, baux, gestion locative, loi Alur, comptabilité immobilière.
-Pour les questions légales, indique que ta connaissance est arrêtée en août 2025.`;
+AVANT de créer une tâche, vérifie que tu as :
+✓ Un titre clair et précis → sinon DEMANDE : "Quel titre pour cette tâche ?"
+✓ L'assigné (optionnel) → si mentionné, appelle get_users pour trouver l'ID exact
+✓ La priorité (optionnel, défaut: moyenne)
+✓ L'échéance (optionnel)
 
-  // Boucle agentic — jusqu'à 5 cycles d'outils
+AVANT de créer un rendez-vous/événement, vérifie que tu as :
+✓ Un titre → sinon DEMANDE
+✓ Une DATE et une HEURE précises → sinon DEMANDE : "Pour quelle date et à quelle heure ?"
+  - Calcule les dates relatives depuis ${todayStr}
+  - "demain" = le lendemain de ${todayStr}
+  - "vendredi" = le prochain vendredi
+✓ Un lieu (optionnel, demande si type=visite ou edl)
+✓ Les participants (optionnel) → si mentionnés, trouve leur ID via get_users
+
+NE JAMAIS créer avec des données inventées ou incorrectes.
+Si une info est ambiguë, DEMANDE avant d'agir.
+Si plusieurs infos manquent, pose-les toutes en une seule question.
+
+══ APRÈS CRÉATION ══
+Confirme toujours clairement ce qui a été fait, par exemple :
+- "✅ Tâche créée : **Appeler le locataire Dupont** · Priorité : urgente · Assignée à Marie"
+- "📅 Rendez-vous créé : **Visite rue des Lilas** · Vendredi 27 juin à 14h · Lieu : 12 rue des Lilas"
+
+══ TON ET STYLE ══
+- Réponds en français, concis et professionnel
+- Utilise du markdown (gras **texte**, listes)
+- Pour les questions légales : base-toi sur la loi française, indique si ta connaissance est limitée à août 2025`;
+
+  const sideEffects: SideEffect[] = [];
+
   const apiMessages: Anthropic.MessageParam[] = messages.map((m: { role: string; content: string }) => ({
     role: m.role as "user" | "assistant",
     content: m.content,
@@ -345,16 +479,16 @@ Pour les questions légales, indique que ta connaissance est arrêtée en août 
 
   let finalText = "";
 
-  for (let cycle = 0; cycle < 5; cycle++) {
+  // Boucle agentic — jusqu'à 6 cycles
+  for (let cycle = 0; cycle < 6; cycle++) {
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 2048,
+      max_tokens: 1024,
       system: SYSTEM,
       tools: TOOLS,
       messages: apiMessages,
     });
 
-    // Pas d'appel d'outil — réponse finale
     if (response.stop_reason !== "tool_use") {
       finalText = response.content
         .filter(b => b.type === "text")
@@ -363,15 +497,18 @@ Pour les questions légales, indique que ta connaissance est arrêtée en août 
       break;
     }
 
-    // Extraire texte intermédiaire + appels d'outils
     const assistantContent = response.content;
     apiMessages.push({ role: "assistant", content: assistantContent });
 
-    // Exécuter chaque outil
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     for (const block of assistantContent) {
       if (block.type !== "tool_use") continue;
-      const result = await executeTool(block.name, block.input as Record<string, unknown>, userId, userRole);
+      const result = await executeTool(
+        block.name,
+        block.input as Record<string, unknown>,
+        userId,
+        sideEffects
+      );
       toolResults.push({
         type: "tool_result",
         tool_use_id: block.id,
@@ -382,5 +519,5 @@ Pour les questions légales, indique que ta connaissance est arrêtée en août 
     apiMessages.push({ role: "user", content: toolResults });
   }
 
-  return NextResponse.json({ reply: finalText });
+  return NextResponse.json({ reply: finalText, sideEffects });
 }

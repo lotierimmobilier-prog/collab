@@ -39,6 +39,17 @@ export default function TaskBoard() {
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
+  // Rafraîchir quand Auguste crée/modifie une tâche
+  useEffect(() => {
+    const handler = () => fetchTasks();
+    window.addEventListener("collab:task_created", handler);
+    window.addEventListener("collab:task_updated", handler);
+    return () => {
+      window.removeEventListener("collab:task_created", handler);
+      window.removeEventListener("collab:task_updated", handler);
+    };
+  }, [fetchTasks]);
+
   const currentFamily = families.find(f => f.id === filterFamily);
   const availableGroups = currentFamily?.groups ?? [];
 

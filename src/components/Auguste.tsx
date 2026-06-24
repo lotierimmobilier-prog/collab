@@ -64,13 +64,24 @@ export default function Auguste() {
     setAction(null);
 
     try {
+      const today = new Date().toISOString().split("T")[0];
       const r = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: newMsgs }),
+        body: JSON.stringify({ messages: newMsgs, today }),
       });
       const data = await r.json();
-      setMsgs(prev => [...prev, { role: "assistant", content: data.reply ?? "Désolé, une erreur est survenue." }]);
+      const reply = data.reply ?? "Désolé, une erreur est survenue.";
+      setMsgs(prev => [...prev, { role: "assistant", content: reply }]);
+
+      // Dispatcher les side effects pour rafraîchir les modules concernés
+      if (data.sideEffects?.length) {
+        for (const effect of data.sideEffects) {
+          window.dispatchEvent(new CustomEvent(`collab:${effect.type}`, { detail: effect }));
+        }
+        // Event générique pour tout module qui voudrait écouter
+        window.dispatchEvent(new CustomEvent("collab:refresh", { detail: data.sideEffects }));
+      }
     } catch {
       setMsgs(prev => [...prev, { role: "assistant", content: "Impossible de contacter Auguste. Vérifiez votre connexion." }]);
     } finally {

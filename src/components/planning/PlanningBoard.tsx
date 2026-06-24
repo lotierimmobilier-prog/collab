@@ -57,13 +57,45 @@ export default function PlanningBoard() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<string | null>(null);
 
-  // Load saved config on mount
+  // Charger les événements depuis la BDD
+  const fetchDbEvents = useCallback(async () => {
+    try {
+      const r = await fetch("/api/calendar");
+      if (!r.ok) return;
+      const data = await r.json();
+      const events: LocalEvent[] = (data || []).map((e: Record<string, unknown>) => ({
+        id:          e.id as string,
+        title:       e.title as string,
+        start:       e.start as string,
+        end:         e.end as string,
+        color:       (e.color as string) || "#B8966A",
+        description: e.description as string | undefined,
+        location:    e.location as string | undefined,
+        type:        "local" as const,
+      }));
+      setLocalEvents(events);
+    } catch { /* silencieux */ }
+  }, []);
+
+  // Load saved config + events BDD on mount
   useEffect(() => {
     const cfg = loadConfig();
     if (cfg) setConfig(cfg);
     const token = loadToken();
     if (token && isTokenValid(token)) setConnected(true);
-  }, []);
+    fetchDbEvents();
+  }, [fetchDbEvents]);
+
+  // Rafraîchir quand Auguste crée/modifie un événement
+  useEffect(() => {
+    const handler = () => fetchDbEvents();
+    window.addEventListener("collab:event_created", handler);
+    window.addEventListener("collab:event_updated", handler);
+    return () => {
+      window.removeEventListener("collab:event_created", handler);
+      window.removeEventListener("collab:event_updated", handler);
+    };
+  }, [fetchDbEvents]);
 
   const getTimeRange = useCallback(() => {
     const d = new Date(currentDate);
@@ -156,8 +188,8 @@ export default function PlanningBoard() {
     if (token && isTokenValid(token)) await syncGoogle(token.access_token, updated);
   }
 
-  function addLocalEvent(evt: LocalEvent) {
-    setLocalEvents(p => [...p, evt]);
+  function addLocalEvent(_evt: LocalEvent) {
+    fetchDbEvents(); // Recharge depuis BDD pour avoir l'ID réel
     setShowNewEvent(null);
   }
 
