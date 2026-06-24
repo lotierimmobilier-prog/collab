@@ -711,6 +711,12 @@ export default function MailBoard() {
           onClick={e => { if (e.target === e.currentTarget) setSelectedThread(null); }}
         >
           <div style={{ width: "min(920px, 96vw)", height: "calc(100vh - 32px)", background: "#fff", borderRadius: 16, boxShadow: "0 24px 80px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
+            {/* Croix fermeture */}
+            <button onClick={() => setSelectedThread(null)}
+              style={{ position: "absolute", top: 12, right: 14, zIndex: 10, width: 30, height: 30, borderRadius: "50%", background: "#f3f4f6", border: "1px solid #e5e7eb", cursor: "pointer", fontSize: 16, color: "#6b7280", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, lineHeight: 1 }}
+              onMouseEnter={e => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.color = "#ef4444"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "#f3f4f6"; e.currentTarget.style.color = "#6b7280"; }}
+            >×</button>
             <ThreadView
               thread={selectedThread}
               labels={labels}
