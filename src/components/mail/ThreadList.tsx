@@ -1,6 +1,9 @@
 "use client";
+import { useState } from "react";
 import { MailThread, MailMessage, MailLabel, MailAccount } from "@/lib/mail";
 
+const GOLD    = "#B8966A";
+const GOLD_BG = "#F7F0E6";
 const PAGE_SIZE = 15;
 
 interface GmailCfg { accountId: string; email: string; name: string }
@@ -26,12 +29,40 @@ interface Props {
   onAccountFilter: (id: string) => void;
   onClassifyAll?: () => void;
   classifying?: boolean;
+  onBulkTrash?: (ids: string[]) => void;
+  onBulkLabel?: (ids: string[], labelId: string) => void;
+  onBulkAssign?: (ids: string[], userId: string | null) => void;
+  onBulkMarkRead?: (ids: string[], read: boolean) => void;
 }
 
-export default function ThreadList({ threads, messages, labels, accounts, gmailConfigs = [], users = [], selectedId, activeLabel, activeAccount, customLabels, page, onPageChange, onSelect, onStar, onTrash, onApplyLabel, onAccountFilter, onClassifyAll, classifying }: Props) {
+export default function ThreadList({
+  threads, messages, labels, accounts, gmailConfigs = [], users = [],
+  selectedId, activeLabel, activeAccount, customLabels, page, onPageChange,
+  onSelect, onStar, onTrash, onApplyLabel, onAccountFilter,
+  onClassifyAll, classifying,
+  onBulkTrash, onBulkLabel, onBulkAssign, onBulkMarkRead,
+}: Props) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showLabelPicker, setShowLabelPicker] = useState(false);
+  const [showAssignPicker, setShowAssignPicker] = useState(false);
+
   const totalPages = Math.max(1, Math.ceil(threads.length / PAGE_SIZE));
   const safePage   = Math.min(page, totalPages);
   const paged      = threads.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const pagedIds   = paged.map(t => t.id);
+  const allSelected = pagedIds.length > 0 && pagedIds.every(id => selected.has(id));
+  const someSelected = selected.size > 0;
+
+  function toggleOne(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function toggleAll() {
+    if (allSelected) setSelected(prev => { const n = new Set(prev); pagedIds.forEach(id => n.delete(id)); return n; });
+    else setSelected(prev => { const n = new Set(prev); pagedIds.forEach(id => n.add(id)); return n; });
+  }
+  function clearSelection() { setSelected(new Set()); }
+  const selIds = Array.from(selected);
 
   function isUnread(t: MailThread) { return messages.some(m => m.threadId === t.id && m.status === "unread"); }
   function isStarred(t: MailThread) { return messages.some(m => m.threadId === t.id && m.labels.includes("starred")); }
@@ -54,8 +85,7 @@ export default function ThreadList({ threads, messages, labels, accounts, gmailC
   }
   function accountOf(t: MailThread) { return accounts.find(a => a.id === t.accountId); }
   function formatDate(iso: string) {
-    const d = new Date(iso);
-    const now = new Date();
+    const d = new Date(iso); const now = new Date();
     if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
     if (now.getTime() - d.getTime() < 7 * 86400000) return d.toLocaleDateString("fr-FR", { weekday: "short" });
     return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
@@ -64,30 +94,108 @@ export default function ThreadList({ threads, messages, labels, accounts, gmailC
     const parts = name.trim().split(/\s+/);
     return parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
   }
-
   const COLORS = ["#B8966A","#2563EB","#059669","#7C3AED","#DC2626","#0891B2","#D97706"];
   function avatarColor(str: string) { let h = 0; for (const c of str) h = (h * 31 + c.charCodeAt(0)) % COLORS.length; return COLORS[h]; }
 
-  const showAccountFilter = accounts.length + gmailConfigs.length > 1;
-
   return (
     <div style={{ width: "100%", flexShrink: 0, borderBottom: "1px solid #e5e7eb", background: "#fff", display: "flex", flexDirection: "column" }}>
-      {/* Filtre compte géré par les checkboxes de la sidebar */}
 
-      {/* Barre compteur + bouton Auguste */}
-      <div style={{ padding: "4px 10px", borderBottom: "1px solid #f3f4f6", fontSize: 10, color: "#9ca3af", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
-        <span>{threads.length} conversation{threads.length > 1 ? "s" : ""}</span>
+      {/* ── Barre compteur / sélection globale ── */}
+      <div style={{ padding: "4px 10px", borderBottom: "1px solid #f3f4f6", fontSize: 10, color: "#9ca3af", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, minHeight: 32 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Checkbox tout sélectionner */}
+          <input type="checkbox" checked={allSelected} ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
+            onChange={toggleAll}
+            style={{ width: 14, height: 14, accentColor: GOLD, cursor: "pointer", flexShrink: 0 }}
+            title={allSelected ? "Tout désélectionner" : "Tout sélectionner"}
+          />
+          {someSelected
+            ? <span style={{ fontWeight: 600, color: "#374151" }}>{selected.size} sélectionné{selected.size > 1 ? "s" : ""}</span>
+            : <span>{threads.length} conversation{threads.length > 1 ? "s" : ""}</span>
+          }
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {totalPages > 1 && <span>Page {safePage}/{totalPages}</span>}
-          {onClassifyAll && (
-            <button onClick={onClassifyAll} disabled={classifying} title="Auguste classe et attribue les mails non traités" style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: classifying ? "#f9fafb" : "#FFFBEB", cursor: classifying ? "default" : "pointer", fontSize: 10, fontWeight: 600, color: classifying ? "#9ca3af" : "#B8966A", whiteSpace: "nowrap" }}>
+          {totalPages > 1 && !someSelected && <span>Page {safePage}/{totalPages}</span>}
+          {!someSelected && onClassifyAll && (
+            <button onClick={onClassifyAll} disabled={classifying}
+              style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: classifying ? "#f9fafb" : "#FFFBEB", cursor: classifying ? "default" : "pointer", fontSize: 10, fontWeight: 600, color: classifying ? "#9ca3af" : GOLD, whiteSpace: "nowrap" }}>
               {classifying ? "⏳ Classification…" : "✨ Classer avec Auguste"}
             </button>
           )}
         </div>
       </div>
 
-      {/* Liste */}
+      {/* ── Barre d'actions groupées (apparaît dès qu'une sélection) ── */}
+      {someSelected && (
+        <div style={{ padding: "6px 10px", borderBottom: "1px solid #e5e7eb", background: "#F7F0E6", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+
+          {/* Marquer lu */}
+          <BulkBtn icon="✉" label="Lu" onClick={() => { onBulkMarkRead?.(selIds, true); clearSelection(); }} />
+          <BulkBtn icon="✉" label="Non lu" onClick={() => { onBulkMarkRead?.(selIds, false); clearSelection(); }} />
+
+          {/* Libellé */}
+          <div style={{ position: "relative" }}>
+            <BulkBtn icon="🏷" label="Libellé" onClick={() => { setShowLabelPicker(s => !s); setShowAssignPicker(false); }} />
+            {showLabelPicker && (
+              <>
+                <div onClick={() => setShowLabelPicker(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+                <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 50, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", minWidth: 160, padding: "6px 0", marginTop: 2 }}>
+                  {customLabels.map(l => (
+                    <div key={l.id} onClick={() => { onBulkLabel?.(selIds, l.id); setShowLabelPicker(false); clearSelection(); }}
+                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", cursor: "pointer", fontSize: 12 }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "#f9fafb")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <span style={{ width: 10, height: 10, borderRadius: "50%", background: l.color, flexShrink: 0 }} />
+                      {l.name}
+                    </div>
+                  ))}
+                  {customLabels.length === 0 && <div style={{ padding: "8px 12px", fontSize: 12, color: "#9ca3af" }}>Aucun libellé</div>}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Attribuer */}
+          <div style={{ position: "relative" }}>
+            <BulkBtn icon="👤" label="Attribuer" onClick={() => { setShowAssignPicker(s => !s); setShowLabelPicker(false); }} />
+            {showAssignPicker && (
+              <>
+                <div onClick={() => setShowAssignPicker(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+                <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 50, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", minWidth: 160, padding: "6px 0", marginTop: 2 }}>
+                  <div onClick={() => { onBulkAssign?.(selIds, null); setShowAssignPicker(false); clearSelection(); }}
+                    style={{ padding: "7px 12px", cursor: "pointer", fontSize: 12, color: "#9ca3af" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "#f9fafb")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                  >— Non assigné —</div>
+                  {users.map(u => (
+                    <div key={u.id} onClick={() => { onBulkAssign?.(selIds, u.id); setShowAssignPicker(false); clearSelection(); }}
+                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", cursor: "pointer", fontSize: 12 }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "#f9fafb")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <div style={{ width: 22, height: 22, borderRadius: "50%", background: GOLD_BG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: GOLD }}>
+                        {u.prenom[0]}{u.nom[0]}
+                      </div>
+                      {u.prenom} {u.nom}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Supprimer */}
+          <BulkBtn icon="🗑" label="Supprimer" danger onClick={() => { onBulkTrash?.(selIds); clearSelection(); }} />
+
+          {/* Annuler */}
+          <button onClick={clearSelection} style={{ marginLeft: "auto", background: "none", border: "none", fontSize: 11, color: "#6b7280", cursor: "pointer", padding: "3px 6px", borderRadius: 5, textDecoration: "underline" }}>
+            Annuler
+          </button>
+        </div>
+      )}
+
+      {/* ── Liste ── */}
       <div style={{ flex: 1, overflowY: "auto" }}>
         {paged.length === 0 ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: 13, flexDirection: "column", gap: 8, paddingTop: 40 }}>
@@ -105,52 +213,47 @@ export default function ThreadList({ threads, messages, labels, accounts, gmailC
           const msgCount  = messages.filter(m => m.threadId === t.id).length;
           const fromName  = last?.from.name || last?.from.email || "—";
           const color     = avatarColor(fromName);
+          const isChecked = selected.has(t.id);
 
-          // Résoudre l'utilisateur assigné
           const assignedUser = assignedId ? users.find(u => u.id === assignedId) : null;
           const assignedName = assignedUser ? `${assignedUser.prenom} ${assignedUser.nom}` : assignedId ? "—" : null;
           const repliedUser  = repliedId ? users.find(u => u.id === repliedId) : null;
           const repliedName  = repliedUser ? `${repliedUser.prenom} ${repliedUser.nom}` : repliedId ? "—" : null;
 
           return (
-            <div key={t.id} onClick={() => onSelect(t)}
-              style={{ padding: "8px 10px", borderBottom: "1px solid #f3f4f6", cursor: "pointer", background: selectedId === t.id ? "#F7F0E6" : "#fff", borderLeft: `3px solid ${selectedId === t.id ? "#B8966A" : "transparent"}`, position: "relative", transition: "background 0.1s" }}
-              onMouseEnter={e => selectedId !== t.id && (e.currentTarget.style.background = "#f9fafb")}
-              onMouseLeave={e => selectedId !== t.id && (e.currentTarget.style.background = "#fff")}
+            <div key={t.id} onClick={() => { if (!someSelected) onSelect(t); }}
+              style={{ padding: "8px 10px", borderBottom: "1px solid #f3f4f6", cursor: someSelected ? "default" : "pointer", background: isChecked ? "#FEF9F0" : selectedId === t.id ? "#F7F0E6" : "#fff", borderLeft: `3px solid ${isChecked ? GOLD : selectedId === t.id ? GOLD : "transparent"}`, position: "relative", transition: "background 0.1s" }}
+              onMouseEnter={e => !isChecked && selectedId !== t.id && (e.currentTarget.style.background = "#f9fafb")}
+              onMouseLeave={e => !isChecked && selectedId !== t.id && (e.currentTarget.style.background = "#fff")}
             >
               <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
 
-                {/* Avatar */}
-                <div style={{ width: 32, height: 32, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0, marginTop: 1 }}>
-                  {initials(fromName)}
+                {/* Checkbox + avatar */}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flexShrink: 0 }} onClick={e => toggleOne(t.id, e)}>
+                  <input type="checkbox" checked={isChecked} onChange={() => {}}
+                    style={{ width: 14, height: 14, accentColor: GOLD, cursor: "pointer", marginTop: 2 }} />
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: isChecked ? GOLD + "30" : color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: isChecked ? GOLD : "#fff", border: isChecked ? `2px solid ${GOLD}` : "none" }}>
+                    {initials(fromName)}
+                  </div>
                 </div>
 
                 {/* Corps */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  {/* Ligne 1 : Expéditeur + date */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
-                      {unread && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#B8966A", flexShrink: 0, display: "inline-block" }} />}
-                      <span style={{ fontSize: 12, fontWeight: unread ? 700 : 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {fromName}
-                      </span>
+                      {unread && <span style={{ width: 6, height: 6, borderRadius: "50%", background: GOLD, flexShrink: 0, display: "inline-block" }} />}
+                      <span style={{ fontSize: 12, fontWeight: unread ? 700 : 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fromName}</span>
                       {msgCount > 1 && <span style={{ fontSize: 10, color: "#9ca3af", flexShrink: 0 }}>({msgCount})</span>}
                       {acct && <div style={{ width: 5, height: 5, borderRadius: "50%", background: acct.color, flexShrink: 0 }} />}
                     </div>
                     <span style={{ fontSize: 10, color: "#9ca3af", flexShrink: 0, marginLeft: 4 }}>{last ? formatDate(last.date) : ""}</span>
                   </div>
-
-                  {/* Ligne 2 : Sujet */}
                   <div style={{ fontSize: 11, fontWeight: unread ? 600 : 400, color: unread ? "#111827" : "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 1 }}>
                     {t.subject}
                   </div>
-
-                  {/* Ligne 3 : Aperçu */}
                   <div style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: tLabels.length > 0 ? 3 : 0 }}>
                     {last?.bodyText?.slice(0, 80) || ""}
                   </div>
-
-                  {/* Ligne 4 : Labels personnalisés */}
                   {tLabels.length > 0 && (
                     <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
                       {tLabels.map(l => (
@@ -160,31 +263,24 @@ export default function ThreadList({ threads, messages, labels, accounts, gmailC
                   )}
                 </div>
 
-                {/* Colonne droite : assignation + répondu + actions */}
+                {/* Colonne droite */}
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0, minWidth: 52 }} onClick={e => e.stopPropagation()}>
-                  {/* Actions hover */}
-                  <div style={{ display: "flex", gap: 2 }}>
-                    <button onClick={() => onStar(t.id)} title="Suivre" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: starred ? "#f59e0b" : "#e5e7eb", lineHeight: 1, padding: "1px 2px" }}>★</button>
-                    <button onClick={() => onTrash(t.id)} title="Corbeille" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 10, color: "#e5e7eb", lineHeight: 1, padding: "1px 2px" }}>🗑</button>
-                  </div>
-
-                  {/* Badge assigné */}
+                  {!someSelected && (
+                    <div style={{ display: "flex", gap: 2 }}>
+                      <button onClick={() => onStar(t.id)} title="Suivre" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: starred ? "#f59e0b" : "#e5e7eb", lineHeight: 1, padding: "1px 2px" }}>★</button>
+                      <button onClick={() => onTrash(t.id)} title="Corbeille" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 10, color: "#e5e7eb", lineHeight: 1, padding: "1px 2px" }}>🗑</button>
+                    </div>
+                  )}
                   {assignedName && !repliedName && (
                     <div title={`À répondre : ${assignedName}`} style={{ display: "flex", alignItems: "center", gap: 3, background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 6, padding: "2px 5px" }}>
                       <span style={{ fontSize: 9, color: "#1D4ED8", fontWeight: 700 }}>→</span>
-                      <span style={{ fontSize: 9, color: "#1D4ED8", fontWeight: 600, maxWidth: 44, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {assignedName.split(" ")[0]}
-                      </span>
+                      <span style={{ fontSize: 9, color: "#1D4ED8", fontWeight: 600, maxWidth: 44, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{assignedName.split(" ")[0]}</span>
                     </div>
                   )}
-
-                  {/* Badge répondu */}
                   {repliedName && (
                     <div title={`Répondu par : ${repliedName}`} style={{ display: "flex", alignItems: "center", gap: 3, background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 6, padding: "2px 5px" }}>
                       <span style={{ fontSize: 10, color: "#15803D", fontWeight: 700 }}>✓</span>
-                      <span style={{ fontSize: 9, color: "#15803D", fontWeight: 600, maxWidth: 44, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {repliedName.split(" ")[0]}
-                      </span>
+                      <span style={{ fontSize: 9, color: "#15803D", fontWeight: 600, maxWidth: 44, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{repliedName.split(" ")[0]}</span>
                     </div>
                   )}
                 </div>
@@ -211,9 +307,21 @@ export default function ThreadList({ threads, messages, labels, accounts, gmailC
   );
 }
 
+function BulkBtn({ icon, label, onClick, danger }: { icon: string; label: string; onClick: () => void; danger?: boolean }) {
+  return (
+    <button onClick={onClick}
+      style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: `1px solid ${danger ? "#FECACA" : "#e5e7eb"}`, background: danger ? "#FEF2F2" : "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600, color: danger ? "#DC2626" : "#374151", whiteSpace: "nowrap" }}
+      onMouseEnter={e => { e.currentTarget.style.background = danger ? "#FEE2E2" : "#f3f4f6"; }}
+      onMouseLeave={e => { e.currentTarget.style.background = danger ? "#FEF2F2" : "#fff"; }}
+    >
+      <span>{icon}</span> {label}
+    </button>
+  );
+}
+
 function PageBtn({ children, onClick, disabled, active }: { children: React.ReactNode; onClick: () => void; disabled?: boolean; active?: boolean }) {
   return (
-    <button onClick={onClick} disabled={disabled} style={{ minWidth: 26, height: 26, border: active ? "1px solid #B8966A" : "1px solid #e5e7eb", borderRadius: 5, background: active ? "#B8966A" : "#fff", color: active ? "#fff" : disabled ? "#d1d5db" : "#374151", fontSize: 11, cursor: disabled ? "default" : "pointer", fontWeight: active ? 600 : 400, padding: "0 5px" }}>
+    <button onClick={onClick} disabled={disabled} style={{ minWidth: 26, height: 26, border: active ? `1px solid ${GOLD}` : "1px solid #e5e7eb", borderRadius: 5, background: active ? GOLD : "#fff", color: active ? "#fff" : disabled ? "#d1d5db" : "#374151", fontSize: 11, cursor: disabled ? "default" : "pointer", fontWeight: active ? 600 : 400, padding: "0 5px" }}>
       {children}
     </button>
   );

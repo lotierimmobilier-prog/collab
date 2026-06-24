@@ -392,6 +392,30 @@ export default function MailBoard() {
   }
   function trash(threadId: string) { applyLabel(threadId, "trash"); if (selectedThread?.id === threadId) setSelectedThread(null); }
 
+  /* ── Actions groupées ───────────────────────────────────────── */
+  function bulkTrash(ids: string[]) {
+    ids.forEach(id => trash(id));
+  }
+  function bulkLabel(ids: string[], labelId: string) {
+    ids.forEach(id => applyLabel(id, labelId));
+  }
+  function bulkAssign(ids: string[], userId: string | null) {
+    ids.forEach(id => {
+      const cur = messages.filter(m => m.threadId === id).flatMap(m => m.labels);
+      const base = cur.filter(l => !l.startsWith("assigned:"));
+      const next = userId ? [...base, `assigned:${userId}`] : base;
+      setThreadLabels(id, [...new Set(next)]);
+    });
+  }
+  function bulkMarkRead(ids: string[], read: boolean) {
+    setMessages(prev => {
+      const u = prev.map(m => ids.includes(m.threadId) ? { ...m, status: (read ? "read" : "unread") as import("@/lib/mail").MailStatus } : m);
+      rebuildThreads(u);
+      return u;
+    });
+    fetch("/api/mail/messages", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threadIds: ids, status: read ? "read" : "unread" }) }).catch(() => {});
+  }
+
   /* ── Classification automatique par Auguste ─────────────────── */
   const [classifying, setClassifying] = useState(false);
 
@@ -646,6 +670,10 @@ export default function MailBoard() {
               onAccountFilter={() => { /* filtrage géré par checkboxes sidebar */ }}
               onClassifyAll={classifyAllWithAuguste}
               classifying={classifying}
+              onBulkTrash={bulkTrash}
+              onBulkLabel={bulkLabel}
+              onBulkAssign={bulkAssign}
+              onBulkMarkRead={bulkMarkRead}
             />
           </div>
 
