@@ -252,7 +252,8 @@ Réponds en JSON valide uniquement :
 
   return NextResponse.json({ error: "Action inconnue" }, { status: 400 });
   } catch (err) {
-    console.error("[mail/ai] Erreur:", err);
-    return NextResponse.json({ error: "Erreur de connexion à Auguste" }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[mail/ai] Erreur:", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
