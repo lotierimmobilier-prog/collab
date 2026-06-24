@@ -70,21 +70,28 @@ export async function POST(req: NextRequest) {
     const instrPart = instruction ? `\nInstruction supplémentaire : ${instruction}` : "";
     const kb = await getKnowledge();
 
-    // Contexte historique automatique
-    const fromEmail = (messages?.[0]?.from?.email || "").toLowerCase();
+    // Contexte historique — optionnel, ne bloque pas si erreur
+    const fromEmail = ((messages as {from?:{email?:string}}[])?.[0]?.from?.email || "").toLowerCase();
     let histCtx = "";
     if (fromEmail) {
-      const past = await prisma.emailMessage.findMany({
-        where: { OR: [{ fromEmail: { equals: fromEmail, mode: "insensitive" } }, { toEmail: { contains: fromEmail, mode: "insensitive" } }] },
-        orderBy: { date: "desc" }, take: 8,
-        select: { fromEmail: true, fromName: true, subject: true, bodyText: true, date: true },
-      });
-      if (past.length > 0) histCtx = `\n\n--- HISTORIQUE DES ÉCHANGES avec ${fromEmail} (${past.length} mails) ---\n` + past.map(m => `[${new Date(m.date).toLocaleDateString("fr-FR")}] ${m.fromName ?? m.fromEmail} — ${m.subject}: ${(m.bodyText || "").slice(0, 400)}`).join("\n---\n");
+      try {
+        const past = await prisma.emailMessage.findMany({
+          where: { OR: [{ fromEmail: { equals: fromEmail, mode: "insensitive" } }, { toEmail: { contains: fromEmail, mode: "insensitive" } }] },
+          orderBy: { date: "desc" }, take: 5,
+          select: { fromEmail: true, fromName: true, subject: true, bodyText: true, date: true },
+        });
+        if (past.length > 0) {
+          histCtx = `\n\n--- HISTORIQUE (${past.length} échanges précédents) ---\n` +
+            past.map(m => `[${new Date(m.date).toLocaleDateString("fr-FR")}] ${m.fromName ?? m.fromEmail} — ${m.subject}: ${(m.bodyText || "").slice(0, 200)}`).join("\n");
+        }
+      } catch { /* historique indisponible, on continue sans */ }
     }
 
+    const prompt = `Rédige une réponse à cet email. Ton : ${toneLabel[tone] ?? "professionnel et bienveillant"}. Agence Lotier Immobilier.${instrPart}${kb}${histCtx}\n\n${ctx}\n\nRéponds UNIQUEMENT en JSON valide :\n{"reply":"texte","subject":"Re: ${threadSubject}"}`;
+
     const resp = await client.messages.create({
-      model: "claude-sonnet-4-6", max_tokens: 1500, system: SYSTEM,
-      messages: [{ role: "user", content: `Rédige une réponse à cet email. Ton : ${toneLabel[tone] ?? "professionnel et bienveillant"}. Agence immobilière Lotier Immobilier. Utilise l'historique des échanges pour personnaliser la réponse et éviter de répéter ce qui a déjà été dit.${instrPart}${kb}${histCtx}\n\n--- EMAIL ACTUEL ---\n${ctx}\n\nRéponds UNIQUEMENT en JSON valide sans markdown :\n{"reply": "texte de la reponse", "subject": "Re: ${threadSubject}"}` }],
+      model: "claude-sonnet-4-6", max_tokens: 1200, system: SYSTEM,
+      messages: [{ role: "user", content: prompt }],
     });
     const raw = resp.content.find(b => b.type === "text")?.text ?? "";
     const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
