@@ -28,6 +28,7 @@ interface AiTask       { title: string; description: string; priority: string; a
 interface AiRdv        { found: boolean; title: string; start?: string; end?: string; location?: string; type?: string; attendeeId?: string; attendeeName?: string; confidence: number }
 interface SenderInfo   { senderType: string; name?: string; role?: string }
 interface FullAnalysis { name: string; totalEmails: number; totalInDb: number; firstContact: string; lastContact: string; summary: string; topics: string[]; actions: string[]; sentiment: string; priority: string; notes: string }
+interface LegalAdvice  { question: string; answer: string; articles: string[]; warnings: string[]; suggestion: string }
 
 const SENDER_BADGE: Record<string, { label: string; color: string; bg: string }> = {
   user:    { label: "Collègue",      color: "#2563EB", bg: "#EFF6FF" },
@@ -61,6 +62,13 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
   const [taskSaving, setTaskSaving]         = useState(false);
   const [rdvSaving, setRdvSaving]           = useState(false);
   const [actionResult, setActionResult]     = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // Conseil juridique
+  const [showLegal, setShowLegal]           = useState(false);
+  const [legalQuestion, setLegalQuestion]   = useState("");
+  const [legalResult, setLegalResult]       = useState<LegalAdvice | null>(null);
+  const [legalLoading, setLegalLoading]     = useState(false);
+  const [legalError, setLegalError]         = useState("");
 
   const lastMsg   = thread.messages[thread.messages.length - 1];
   const firstMsg  = thread.messages[0];
@@ -208,6 +216,30 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
       setRdvModal(d);
     } catch { /* silencieux */ }
     finally { setAiLoading(null); }
+  }
+
+  // ── Conseil juridique ───────────────────────────────────────
+  async function askLegal() {
+    if (!legalQuestion.trim()) return;
+    setLegalLoading(true); setLegalError(""); setLegalResult(null);
+    try {
+      const resp = await fetch("/api/mail/ai", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "legal_advice", messages: thread.messages, threadSubject: thread.subject, question: legalQuestion }),
+      });
+      const data = await resp.json();
+      if (data.error) { setLegalError(data.error); return; }
+      setLegalResult(data);
+    } catch { setLegalError("Erreur de connexion à Auguste"); }
+    finally { setLegalLoading(false); }
+  }
+
+  function injectLegalInReply() {
+    if (!legalResult) return;
+    const block = `\n\n---\nSur le plan juridique :\n${legalResult.suggestion || legalResult.answer}`;
+    setReplyBody(prev => prev + block);
+    setShowReply(true);
+    setShowLegal(false);
   }
 
   // ── Génération réponse IA via Auguste ───────────────────────
@@ -452,6 +484,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
         <AiBtn loading={aiLoading === "task"}      onClick={suggestTask}     icon="✅" label="Créer une tâche" />
         <AiBtn loading={aiLoading === "rdv"}       onClick={detectRdv}       icon="📅" label="Valider un RDV" />
         <AiBtn loading={aiLoading === "full"}      onClick={runFullAnalysis} icon="🔍" label="Analyse complète" />
+        <AiBtn loading={false} onClick={() => { setShowLegal(s => !s); setLegalResult(null); setLegalError(""); }} icon="⚖" label="Juridique" active={showLegal} />
 
         {actionResult && (
           <span style={{ fontSize: 12, color: actionResult.ok ? "#059669" : "#dc2626", fontWeight: 500, marginLeft: 8 }}>
@@ -526,6 +559,76 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── Panneau juridique ── */}
+      {showLegal && (
+        <div style={{ background: "#F0FDF4", borderBottom: "1px solid #BBF7D0", padding: "14px 20px", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#15803D" }}>⚖ Conseil juridique — Auguste</span>
+            <button onClick={() => setShowLegal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 16 }}>×</button>
+          </div>
+
+          {/* Champ question */}
+          <div style={{ display: "flex", gap: 8, marginBottom: legalResult ? 14 : 0 }}>
+            <input
+              value={legalQuestion}
+              onChange={e => setLegalQuestion(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && askLegal()}
+              placeholder="Ex : Délai légal de préavis pour un F2 en zone tendue ? Que dit la loi ALUR sur les charges récupérables ?"
+              style={{ flex: 1, height: 34, border: "1px solid #BBF7D0", borderRadius: 8, padding: "0 12px", fontSize: 12, outline: "none", background: "#fff" }}
+            />
+            <button onClick={askLegal} disabled={legalLoading || !legalQuestion.trim()}
+              style={{ background: "#15803D", color: "#fff", border: "none", borderRadius: 8, padding: "0 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: legalLoading || !legalQuestion.trim() ? 0.6 : 1, whiteSpace: "nowrap" }}>
+              {legalLoading ? "…" : "✦ Analyser"}
+            </button>
+          </div>
+
+          {legalError && <div style={{ fontSize: 12, color: "#DC2626", marginTop: 8 }}>{legalError}</div>}
+
+          {/* Résultat */}
+          {legalResult && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {/* Réponse principale */}
+              <div style={{ background: "#fff", border: "1px solid #BBF7D0", borderRadius: 10, padding: "12px 16px" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Analyse</div>
+                <p style={{ fontSize: 13, color: "#1C1A17", margin: 0, lineHeight: 1.65 }}>{legalResult.answer}</p>
+              </div>
+
+              {/* Articles de loi */}
+              {legalResult.articles?.length > 0 && (
+                <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 10, padding: "10px 16px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#1D4ED8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Textes de référence</div>
+                  <ul style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 3 }}>
+                    {legalResult.articles.map((a, i) => <li key={i} style={{ fontSize: 12, color: "#1e40af" }}>{a}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              {/* Points d'attention */}
+              {legalResult.warnings?.length > 0 && (
+                <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "10px 16px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#92400E", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Points d'attention</div>
+                  <ul style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 3 }}>
+                    {legalResult.warnings.map((w, i) => <li key={i} style={{ fontSize: 12, color: "#92400E" }}>{w}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              {/* Suggestion de formulation + bouton intégrer */}
+              {legalResult.suggestion && (
+                <div style={{ background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 10, padding: "10px 16px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Formulation suggérée</div>
+                  <p style={{ fontSize: 12, color: "#166534", margin: "0 0 10px", lineHeight: 1.6, fontStyle: "italic" }}>{legalResult.suggestion}</p>
+                  <button onClick={injectLegalInReply}
+                    style={{ background: "#15803D", color: "#fff", border: "none", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                    ↳ Intégrer dans la réponse
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -735,11 +838,11 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
 
 // ── Sous-composants ──────────────────────────────────────────
 
-function AiBtn({ loading, onClick, icon, label }: { loading: boolean; onClick: () => void; icon: string; label: string }) {
+function AiBtn({ loading, onClick, icon, label, active }: { loading: boolean; onClick: () => void; icon: string; label: string; active?: boolean }) {
   return (
-    <button onClick={onClick} disabled={loading} style={{ display: "flex", alignItems: "center", gap: 5, background: loading ? "#f3f4f6" : "#fff", border: `1px solid ${loading ? "#e5e7eb" : "#E8D9C0"}`, borderRadius: 7, padding: "5px 10px", fontSize: 12, cursor: loading ? "default" : "pointer", color: loading ? "#9ca3af" : "#5C5449", fontWeight: 500, transition: "all 0.15s" }}
-      onMouseEnter={e => !loading && (e.currentTarget.style.borderColor = GOLD, e.currentTarget.style.color = GOLD)}
-      onMouseLeave={e => !loading && (e.currentTarget.style.borderColor = "#E8D9C0", e.currentTarget.style.color = "#5C5449")}
+    <button onClick={onClick} disabled={loading} style={{ display: "flex", alignItems: "center", gap: 5, background: active ? "#F0FDF4" : loading ? "#f3f4f6" : "#fff", border: `1px solid ${active ? "#86EFAC" : loading ? "#e5e7eb" : "#E8D9C0"}`, borderRadius: 7, padding: "5px 10px", fontSize: 12, cursor: loading ? "default" : "pointer", color: active ? "#15803D" : loading ? "#9ca3af" : "#5C5449", fontWeight: active ? 600 : 500, transition: "all 0.15s" }}
+      onMouseEnter={e => !loading && !active && (e.currentTarget.style.borderColor = GOLD, e.currentTarget.style.color = GOLD)}
+      onMouseLeave={e => !loading && !active && (e.currentTarget.style.borderColor = "#E8D9C0", e.currentTarget.style.color = "#5C5449")}
     >
       {loading ? <Spinner /> : icon} {label}
     </button>

@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const { action, messages, threadSubject, senderEmail, tone = "professionnel", instruction = "" } = await req.json();
+  const { action, messages, threadSubject, senderEmail, tone = "professionnel", instruction = "", question = "" } = await req.json();
   const ctx = buildThreadContext(messages || []);
 
   if (action === "summarize") {
@@ -140,6 +140,25 @@ export async function POST(req: NextRequest) {
     } catch {
       return NextResponse.json({ label: "autre", assigneeId: null });
     }
+  }
+
+  if (action === "legal_advice") {
+    const q: string = question || "Analyse les aspects juridiques de cet échange.";
+    const prompt = `Tu es Auguste, expert juridique immobilier français (loi Alur, loi du 6 juillet 1989, loi Hoguet, Code civil, CCH).
+Contexte de l'échange email :
+${ctx}
+
+Question posée : ${q || "Analyse les aspects juridiques de cet échange."}
+
+Réponds en JSON valide uniquement :
+{"answer":"analyse juridique claire et précise en 3-5 phrases","articles":["Article ou loi 1","Article ou loi 2"],"warnings":["Point d'attention 1","Point d'attention 2"],"suggestion":"formulation prête à intégrer dans un email professionnel (1-2 phrases)"}`;
+
+    const resp = await client.messages.create({
+      model: "claude-sonnet-4-6", max_tokens: 1000, system: SYSTEM,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const raw = resp.content.find(b => b.type === "text")?.text ?? "{}";
+    return NextResponse.json(safeJson(raw));
   }
 
   if (action === "identify_sender") {
