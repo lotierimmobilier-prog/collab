@@ -210,7 +210,7 @@ export default function TaskBoard() {
                       }}>{task.status === "done" ? "✓" : ""}</span>
 
                       <span style={{
-                        fontSize: 13, color: "#111827", flex: 1,
+                        fontSize: 13, flex: 1,
                         textDecoration: task.status === "done" ? "line-through" : "none",
                         color: task.status === "done" ? "#9ca3af" : "#111827",
                       }}>{task.title}</span>
