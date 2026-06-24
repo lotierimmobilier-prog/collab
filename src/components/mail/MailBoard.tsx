@@ -497,6 +497,7 @@ export default function MailBoard() {
             accounts={accounts}
             selectedId={selectedThread?.id}
             activeLabel={activeLabel}
+            activeAccount={activeAccount}
             customLabels={customLabels}
             page={listPage}
             onPageChange={p => { setListPage(p); setSelectedThread(null); }}
@@ -504,6 +505,7 @@ export default function MailBoard() {
             onStar={toggleStar}
             onTrash={trash}
             onApplyLabel={applyLabel}
+            onAccountFilter={id => { setActiveAccount(id); setSelectedThread(null); setListPage(1); }}
           />
 
           {selectedThread ? (

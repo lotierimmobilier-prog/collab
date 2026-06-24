@@ -10,6 +10,7 @@ interface Props {
   accounts: MailAccount[];
   selectedId?: string;
   activeLabel: string;
+  activeAccount: string;
   customLabels: MailLabel[];
   page: number;
   onPageChange: (p: number) => void;
@@ -17,9 +18,10 @@ interface Props {
   onStar: (id: string) => void;
   onTrash: (id: string) => void;
   onApplyLabel: (threadId: string, labelId: string) => void;
+  onAccountFilter: (id: string) => void;
 }
 
-export default function ThreadList({ threads, messages, labels, accounts, selectedId, activeLabel, customLabels, page, onPageChange, onSelect, onStar, onTrash, onApplyLabel }: Props) {
+export default function ThreadList({ threads, messages, labels, accounts, selectedId, activeLabel, activeAccount, customLabels, page, onPageChange, onSelect, onStar, onTrash, onApplyLabel, onAccountFilter }: Props) {
   const totalPages = Math.max(1, Math.ceil(threads.length / PAGE_SIZE));
   const safePage   = Math.min(page, totalPages);
   const paged      = threads.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
@@ -49,10 +51,34 @@ export default function ThreadList({ threads, messages, labels, accounts, select
     return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
   }
 
+  const showAccountFilter = accounts.length > 1;
+
   return (
     <div style={{ width: 320, flexShrink: 0, borderRight: "1px solid #e5e7eb", background: "#fff", display: "flex", flexDirection: "column" }}>
+      {/* Filtre par compte */}
+      {showAccountFilter && (
+        <div style={{ padding: "6px 10px", borderBottom: "1px solid #f3f4f6", display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+          <button
+            onClick={() => onAccountFilter("all")}
+            style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 20, border: activeAccount === "all" ? "1.5px solid #B8966A" : "1px solid #e5e7eb", background: activeAccount === "all" ? "#F7F0E6" : "#f9fafb", fontSize: 11, fontWeight: activeAccount === "all" ? 600 : 400, color: activeAccount === "all" ? "#B8966A" : "#6b7280", cursor: "pointer" }}
+          >
+            Tous
+          </button>
+          {accounts.map(a => (
+            <button
+              key={a.id}
+              onClick={() => onAccountFilter(a.id)}
+              title={a.label}
+              style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 8px", borderRadius: 20, border: activeAccount === a.id ? `1.5px solid ${a.color}` : "1px solid #e5e7eb", background: activeAccount === a.id ? a.color + "18" : "#f9fafb", fontSize: 11, fontWeight: activeAccount === a.id ? 600 : 400, color: activeAccount === a.id ? a.color : "#6b7280", cursor: "pointer", maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            >
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: a.color, flexShrink: 0, display: "inline-block" }} />
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
       {/* Compteur */}
-      <div style={{ padding: "6px 14px", borderBottom: "1px solid #f3f4f6", fontSize: 11, color: "#9ca3af", display: "flex", justifyContent: "space-between" }}>
+      <div style={{ padding: "5px 14px", borderBottom: "1px solid #f3f4f6", fontSize: 11, color: "#9ca3af", display: "flex", justifyContent: "space-between" }}>
         <span>{threads.length} conversation{threads.length > 1 ? "s" : ""}</span>
         {totalPages > 1 && <span>Page {safePage}/{totalPages}</span>}
       </div>

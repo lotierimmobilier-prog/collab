@@ -67,13 +67,23 @@ export const DEFAULT_ROLES: Role[] = [
     modules: allModules("admin"),
   },
   {
-    id: "collaborateur",
-    label: "Collaborateur",
-    color: "#0891b2",
-    description: "Accès en écriture aux modules opérationnels, pas à l'administration",
+    id: "gestionnaire",
+    label: "Gestionnaire",
+    color: "#059669",
+    description: "Accès complet au module Gestion locative (propriétaires, biens, baux, locataires)",
     modules: MODULES.map(m => ({
       moduleId: m.id,
-      right: m.id === "admin" || m.id === "compta" ? "aucun" : "ecriture",
+      right: (["dashboard", "tasks", "planning", "gestion", "fournisseurs", "ods", "mail", "chat"].includes(m.id)) ? "ecriture" : "aucun",
+    })),
+  },
+  {
+    id: "syndic",
+    label: "Syndic",
+    color: "#2563eb",
+    description: "Accès au module Syndic (copropriétés, assemblées, charges, travaux)",
+    modules: MODULES.map(m => ({
+      moduleId: m.id,
+      right: (["dashboard", "tasks", "planning", "syndic", "fournisseurs", "ods", "mail", "chat"].includes(m.id)) ? "ecriture" : "aucun",
     })),
   },
   {

@@ -1,14 +1,15 @@
 "use client";
 import { useState } from "react";
 
-type Role = "admin" | "dirigeant" | "agent" | "comptable" | "collaborateur";
+type Role = "admin" | "dirigeant" | "agent" | "comptable" | "gestionnaire" | "syndic";
 
 const ROLES: { id: Role; label: string; icon: string }[] = [
-  { id: "admin",         label: "Administrateur",  icon: "⚙️" },
-  { id: "dirigeant",    label: "Dirigeant",        icon: "🏢" },
-  { id: "agent",        label: "Agent commercial", icon: "🤝" },
-  { id: "comptable",    label: "Comptable",        icon: "📊" },
-  { id: "collaborateur",label: "Collaborateur",    icon: "👤" },
+  { id: "admin",        label: "Administrateur",  icon: "⚙️" },
+  { id: "dirigeant",   label: "Dirigeant",        icon: "🏢" },
+  { id: "agent",       label: "Agent commercial", icon: "🤝" },
+  { id: "comptable",   label: "Comptable",        icon: "📊" },
+  { id: "gestionnaire",label: "Gestionnaire",     icon: "🏠" },
+  { id: "syndic",      label: "Syndic",           icon: "◫" },
 ];
 
 const DAYS   = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
@@ -228,26 +229,39 @@ function ComptableView() {
   );
 }
 
-function CollaborateurView() {
+function GestionnaireView() {
   return (
     <>
-      <Section title="Mes indicateurs">
-        <KpiCard label="Tâches assignées" value={9} sub="3 urgentes" icon="✔️" color="#dc2626" href="/taches" />
-        <KpiCard label="Rdv aujourd'hui" value={3} sub="prochain à 14h" icon="📅" color="#2563eb" href="/planning" />
-        <KpiCard label="Messages non lus" value={5} sub="boîte principale" icon="✉️" color="#B8966A" href="/messagerie" />
-        <KpiCard label="Tâches terminées" value={12} sub="cette semaine" icon="✓" color="#059669" />
-      </Section>
-      <Section title="Ma semaine">
-        <RingCard label="Tâches faites" value={12} max={21} color="#059669" sub="objectif semaine" />
-        <RingCard label="Rdv planifiés" value={8} max={15} color="#2563eb" sub="cette semaine" />
-        <RingCard label="Msgs traités" value={18} max={23} color="#B8966A" sub="boîte principale" />
-        <RingCard label="Urgences traitées" value={2} max={3} color="#dc2626" sub="sur 3 signalées" />
+      <Section title="Gestion locative">
+        <KpiCard label="Biens gérés" value={24} sub="18 occupés" icon="🏡" color="#059669" href="/biens" />
+        <KpiCard label="Baux actifs" value={18} sub="2 à renouveler" icon="📄" color="#2563eb" href="/baux" />
+        <KpiCard label="Loyers en attente" value={3} sub="ce mois" icon="€" color="#dc2626" href="/baux" />
+        <KpiCard label="Propriétaires" value={11} sub="portefeuille" icon="👤" color="#B8966A" href="/proprietaires" />
       </Section>
       <Section title="Accès rapides">
-        <ActionCard icon="✔️" label="Mes tâches" desc="Kanban personnel" color="#B8966A" href="/taches" />
-        <ActionCard icon="📅" label="Mon planning" desc="Agenda & rendez-vous" color="#2563eb" href="/planning" />
-        <ActionCard icon="✉️" label="Messagerie" desc="Boîtes mail" color="#d97706" href="/messagerie" />
-        <ActionCard icon="📁" label="Dossiers locataires" desc="Consultation" color="#059669" href="/locataires" />
+        <ActionCard icon="🏡" label="Biens" desc="Gérer les lots" color="#059669" href="/biens" />
+        <ActionCard icon="📄" label="Baux" desc="Contrats & locataires" color="#2563eb" href="/baux" />
+        <ActionCard icon="📋" label="ODS" desc="Ordres de service" color="#B8966A" href="/ordres-de-service" />
+        <ActionCard icon="⌂"  label="États des lieux" desc="Entrée / sortie" color="#d97706" href="/etats-des-lieux" />
+      </Section>
+    </>
+  );
+}
+
+function SyndicView() {
+  return (
+    <>
+      <Section title="Syndic de copropriété">
+        <KpiCard label="Copropriétés" value={5} sub="gérées" icon="🏢" color="#2563eb" href="/syndic/coproprietés" />
+        <KpiCard label="Assemblées" value={2} sub="à planifier" icon="◉" color="#d97706" href="/syndic/assemblees" />
+        <KpiCard label="Charges à valider" value={7} sub="ce trimestre" icon="∑" color="#dc2626" href="/syndic/charges" />
+        <KpiCard label="Travaux en cours" value={3} sub="chantiers" icon="🔧" color="#059669" href="/syndic/travaux" />
+      </Section>
+      <Section title="Accès rapides">
+        <ActionCard icon="🏢" label="Copropriétés" desc="Gérer les immeubles" color="#2563eb" href="/syndic/coproprietés" />
+        <ActionCard icon="◉" label="Assemblées" desc="AG & convocations" color="#d97706" href="/syndic/assemblees" />
+        <ActionCard icon="∑" label="Charges" desc="Répartition & appels" color="#dc2626" href="/syndic/charges" />
+        <ActionCard icon="🔧" label="Travaux" desc="Suivi chantiers" color="#059669" href="/syndic/travaux" />
       </Section>
     </>
   );
@@ -263,7 +277,8 @@ export default function Dashboard() {
     dirigeant:      <DirigeantView />,
     agent:          <AgentView />,
     comptable:      <ComptableView />,
-    collaborateur:  <CollaborateurView />,
+    gestionnaire:   <GestionnaireView />,
+    syndic:         <SyndicView />,
   };
 
   return (
@@ -295,7 +310,7 @@ export default function Dashboard() {
         <div>
           <div style={{ fontSize: 17, fontWeight: 700 }}>{greet("Jérôme")} {currentRole.icon}</div>
           <div style={{ fontSize: 13, opacity: 0.8, marginTop: 4 }}>
-            {{ admin:"Accès complet à la plateforme.", dirigeant:"Vue d'ensemble de votre agence.", agent:"Vos dossiers, commissions et tâches.", comptable:"Gestion financière et TVA.", collaborateur:"Vos tâches prioritaires du jour." }[role]}
+            {{ admin:"Accès complet à la plateforme.", dirigeant:"Vue d'ensemble de votre agence.", agent:"Vos dossiers, commissions et tâches.", comptable:"Gestion financière et TVA.", gestionnaire:"Propriétaires, biens, baux et locataires.", syndic:"Copropriétés, assemblées et charges." }[role]}
           </div>
         </div>
         <div style={{ fontSize: 44, opacity: 0.25 }}>{currentRole.icon}</div>

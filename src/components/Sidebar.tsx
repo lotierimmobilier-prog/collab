@@ -19,14 +19,19 @@ const nav = [
   { id: "planning",   label: "Planning",            icon: "▦",  href: "/planning",        group: "Principal" },
   { id: "mail",       label: "Messagerie email",    icon: "@",  href: "/messagerie",      group: "Principal", badge: 3 },
   { id: "chat",       label: "Messages internes",   icon: "💬", href: "/messagerie-interne", group: "Principal" },
-  { id: "gestion-loc",    label: "Tableau de bord",     icon: "🏠", href: "/gestion-locative",    group: "Gestion locative" },
-  { id: "proprietaires", label: "Propriétaires",       icon: "👤", href: "/proprietaires",       group: "Gestion locative" },
-  { id: "biens",         label: "Biens",               icon: "🏡", href: "/biens",               group: "Gestion locative" },
-  { id: "locataires",    label: "Locataires",          icon: "◎",  href: "/locataires",          group: "Gestion locative" },
-  { id: "baux",          label: "Baux",                icon: "📄", href: "/baux",                group: "Gestion locative" },
-  { id: "edl",           label: "États des lieux",     icon: "⌂",  href: "/etats-des-lieux",    group: "Gestion locative" },
-  { id: "fournisseurs",  label: "Fournisseurs",        icon: "🔧", href: "/fournisseurs",        group: "Gestion locative" },
-  { id: "ods",           label: "Ordres de service",   icon: "📋", href: "/ordres-de-service",   group: "Gestion locative" },
+  { id: "gestion-loc",    label: "Tableau de bord",     icon: "🏠", href: "/gestion-locative",    group: "Gestion" },
+  { id: "proprietaires", label: "Propriétaires",       icon: "👤", href: "/proprietaires",       group: "Gestion" },
+  { id: "biens",         label: "Biens",               icon: "🏡", href: "/biens",               group: "Gestion" },
+  { id: "locataires",    label: "Locataires",          icon: "◎",  href: "/locataires",          group: "Gestion" },
+  { id: "baux",          label: "Baux",                icon: "📄", href: "/baux",                group: "Gestion" },
+  { id: "edl",           label: "États des lieux",     icon: "⌂",  href: "/etats-des-lieux",    group: "Gestion" },
+  { id: "fournisseurs",  label: "Fournisseurs",        icon: "🔧", href: "/fournisseurs",        group: "Gestion" },
+  { id: "ods",           label: "Ordres de service",   icon: "📋", href: "/ordres-de-service",   group: "Gestion" },
+  { id: "syndic",        label: "Tableau de bord",     icon: "🏢", href: "/syndic",              group: "Syndic" },
+  { id: "syndic-copro",  label: "Copropriétés",        icon: "◫",  href: "/syndic/coproprietees", group: "Syndic" },
+  { id: "syndic-ag",     label: "Assemblées générales",icon: "◉",  href: "/syndic/assemblees",   group: "Syndic" },
+  { id: "syndic-charges",label: "Charges",             icon: "∑",  href: "/syndic/charges",      group: "Syndic" },
+  { id: "syndic-travaux",label: "Travaux",             icon: "🔧", href: "/syndic/travaux",      group: "Syndic" },
   { id: "compta",     label: "Tableau de bord",     icon: "∑",  href: "/comptabilite",    group: "Comptabilité" },
   { id: "compta-enc", label: "Encaissements",       icon: "↗",  href: "/comptabilite/encaissements", group: "Comptabilité" },
   { id: "compta-dep", label: "Dépenses",            icon: "↙",  href: "/comptabilite/depenses",      group: "Comptabilité" },
@@ -41,7 +46,7 @@ const adminNav = [
   { id: "admin-settings", label: "Paramètres",    icon: "⚙", href: "/admin/parametres" },
 ];
 
-const groups = ["Principal", "Gestion locative", "Comptabilité", "Agence"];
+const groups = ["Principal", "Gestion", "Syndic", "Comptabilité", "Agence"];
 
 export default function Sidebar({ active }: { active: string }) {
   const { data: session } = useSession();
