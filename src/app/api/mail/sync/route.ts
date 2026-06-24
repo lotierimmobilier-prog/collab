@@ -24,7 +24,8 @@ export async function POST(req: NextRequest) {
     const messages = [];
 
     try {
-      const total = client.mailbox.exists;
+      const mailbox = client.mailbox;
+      const total = mailbox && typeof mailbox === "object" && "exists" in mailbox ? (mailbox as { exists: number }).exists : 50;
       const from = Math.max(1, total - limit + 1);
       const range = `${from}:*`;
 
