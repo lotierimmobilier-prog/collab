@@ -196,6 +196,23 @@ model Notification {
   @@map("notifications")
 }
 
+// ── Base de connaissance Auguste ──────────────────────────────
+
+model KnowledgeDoc {
+  id          String   @id @default(cuid())
+  title       String
+  category    String   @default("general")  // general, juridique, comptabilite, procedure, baux, autre
+  content     String   // texte extrait du PDF ou texte brut
+  fileName    String?
+  fileSize    Int?
+  active      Boolean  @default(true)
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("knowledge_docs")
+}
+
 // ── Paramètres admin ─────────────────────────────────────────
 
 model Setting {

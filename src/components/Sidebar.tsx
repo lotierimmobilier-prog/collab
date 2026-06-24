@@ -42,7 +42,8 @@ const nav: NavItem[] = [
 const adminNav = [
   { id: "admin-users",    label: "Utilisateurs",   icon: "○", href: "/admin/utilisateurs" },
   { id: "admin-roles",    label: "Rôles & droits", icon: "◫", href: "/admin/roles" },
-  { id: "admin-settings", label: "Paramètres",     icon: "⚙", href: "/admin/parametres" },
+  { id: "admin-settings",   label: "Paramètres",   icon: "⚙", href: "/admin/parametres" },
+  { id: "admin-knowledge", label: "Base Auguste",  icon: "✦", href: "/admin/knowledge" },
 ];
 
 const groups = ["Principal", "Gestion", "Agence"];

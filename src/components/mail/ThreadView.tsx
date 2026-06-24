@@ -697,7 +697,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
 
       {/* Messages — dédupliqués par messageId, on garde celui avec le plus de contenu */}
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-      <div style={{ position: "absolute", inset: 0, overflowY: "scroll", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "16px 20px 80px", display: "flex", flexDirection: "column", gap: 12 }}>
         {(() => {
           const seen = new Map<string, MailMessage>();
           for (const msg of thread.messages) {

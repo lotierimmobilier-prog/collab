@@ -28,6 +28,15 @@ function buildThreadContext(messages: MailMsg[]): string {
   ).join("\n\n---\n\n");
 }
 
+async function getKnowledge(category?: string): Promise<string> {
+  const where = category ? `WHERE active = true AND category = '${category}'` : `WHERE active = true`;
+  try {
+    const docs = await prisma.knowledgeDoc.findMany({ where: { active: true, ...(category ? { category } : {}) }, select: { title: true, category: true, content: true }, orderBy: { category: "asc" }, take: 8 });
+    if (!docs.length) return "";
+    return "\n\n--- BASE DE CONNAISSANCE INTERNE ---\n" + docs.map(d => `[${d.category.toUpperCase()}] ${d.title}:\n${d.content.slice(0, 1200)}`).join("\n\n---\n");
+  } catch { return ""; }
+}
+
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
@@ -47,9 +56,10 @@ export async function POST(req: NextRequest) {
   if (action === "draft_reply") {
     const toneLabel: Record<string, string> = { professionnel: "professionnel et bienveillant", cordial: "cordial et chaleureux", formel: "formel et sobre", concis: "concis, aller à l'essentiel" };
     const instrPart = instruction ? `\nInstruction supplémentaire : ${instruction}` : "";
+    const kb = await getKnowledge();
     const resp = await client.messages.create({
       model: "claude-sonnet-4-6", max_tokens: 1200, system: SYSTEM,
-      messages: [{ role: "user", content: `Rédige une réponse à cet email. Ton : ${toneLabel[tone] ?? "professionnel et bienveillant"}. Agence immobilière Lotier Immobilier.${instrPart}\n\n${ctx}\n\nRéponds UNIQUEMENT en JSON valide sans markdown :\n{"reply": "texte de la reponse", "subject": "Re: ${threadSubject}"}` }],
+      messages: [{ role: "user", content: `Rédige une réponse à cet email. Ton : ${toneLabel[tone] ?? "professionnel et bienveillant"}. Agence immobilière Lotier Immobilier.${instrPart}${kb}\n\n${ctx}\n\nRéponds UNIQUEMENT en JSON valide sans markdown :\n{"reply": "texte de la reponse", "subject": "Re: ${threadSubject}"}` }],
     });
     const raw = resp.content.find(b => b.type === "text")?.text ?? "";
     const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
@@ -144,7 +154,8 @@ export async function POST(req: NextRequest) {
 
   if (action === "legal_advice") {
     const q: string = question || "Analyse les aspects juridiques de cet échange.";
-    const prompt = `Tu es Auguste, expert juridique immobilier français (loi Alur, loi du 6 juillet 1989, loi Hoguet, Code civil, CCH).
+    const kb = await getKnowledge("juridique");
+    const prompt = `Tu es Auguste, expert juridique immobilier français (loi Alur, loi du 6 juillet 1989, loi Hoguet, Code civil, CCH).${kb}
 Contexte de l'échange email :
 ${ctx}
 
