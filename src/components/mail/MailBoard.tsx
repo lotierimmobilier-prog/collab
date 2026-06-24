@@ -258,34 +258,37 @@ export default function MailBoard() {
 
   function clearSearch() { setSearchInput(""); setSearch(""); setSearchResults(null); setSearchLoading(false); setListPage(1); }
 
-  /* ── Chargement du corps à la demande ──────────────────── */
+  /* ── Chargement du corps à la demande — TOUS les messages sans corps ── */
   async function loadMessageBody(thread: MailThread) {
-    const msg = thread.messages.find(m => !m.body || m.body === "");
-    if (!msg) return;
-    const account = accounts.find(a => a.id === msg.accountId);
-    if (!account) return;
-    const uid = (msg as MailMessage & { uid?: number }).uid;
-    if (!uid) return;
+    const msgsToLoad = thread.messages.filter(m => !m.body || m.body.trim() === "");
+    if (!msgsToLoad.length) return;
 
     setLoadingBody(true);
     try {
-      const resp = await fetch("/api/mail/body", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ host: account.host, port: account.port, ssl: account.ssl, username: account.username, password: account.password, uid }),
-      });
-      const data = await resp.json();
-      if (data.ok) {
-        const patch = { body: data.bodyHtml, bodyText: data.bodyText, attachments: data.attachments ?? [] };
-        setMessages(prev => {
-          const updated = prev.map(m => m.id === msg.id ? { ...m, ...patch } : m);
-          rebuildThreads(updated);
-          return updated;
+      for (const msg of msgsToLoad) {
+        const account = accounts.find(a => a.id === msg.accountId);
+        if (!account) continue;
+        const uid = (msg as MailMessage & { uid?: number | string }).uid;
+        if (!uid) continue;
+
+        const resp = await fetch("/api/mail/body", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ host: account.host, port: account.port, ssl: account.ssl, username: account.username, password: account.password, uid }),
         });
-        setSelectedThread(prev => prev ? {
-          ...prev,
-          messages: prev.messages.map(m => m.id === msg.id ? { ...m, ...patch } : m),
-        } : null);
+        const data = await resp.json();
+        if (data.ok) {
+          const patch = { body: data.bodyHtml || data.bodyText || "", bodyText: data.bodyText, attachments: data.attachments ?? [] };
+          setMessages(prev => {
+            const updated = prev.map(m => m.id === msg.id ? { ...m, ...patch } : m);
+            rebuildThreads(updated);
+            return updated;
+          });
+          setSelectedThread(prev => prev ? {
+            ...prev,
+            messages: prev.messages.map(m => m.id === msg.id ? { ...m, ...patch } : m),
+          } : null);
+        }
       }
     } catch { /* silencieux */ }
     finally { setLoadingBody(false); }

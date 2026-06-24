@@ -562,7 +562,7 @@ function MessageBubble({ msg, isLast, loadingBody }: { msg: MailMessage; isLast:
   const initials = (msg.from.name || msg.from.email).charAt(0).toUpperCase();
   const COLORS = ["#B8966A", "#059669", "#2563EB", "#7C3AED", "#DC2626", "#D97706"];
   const avatarColor = COLORS[msg.from.email.charCodeAt(0) % COLORS.length];
-  const hasBody = msg.body && msg.body.trim().length > 0;
+  const hasBody = (msg.body && msg.body.trim().length > 0) || (msg.bodyText && msg.bodyText.trim().length > 0);
   const attachments: MailAttachment[] = msg.attachments ?? [];
 
   return (
@@ -601,7 +601,13 @@ function MessageBubble({ msg, isLast, loadingBody }: { msg: MailMessage; isLast:
             <div style={{ padding: "20px 20px 20px 64px", color: "#9ca3af", fontSize: 13, fontStyle: "italic" }}>Corps non disponible</div>
           ) : (
             <div style={{ padding: "16px 20px 16px 64px" }}>
-              <div className="mail-body" dangerouslySetInnerHTML={{ __html: msg.body }} />
+              {msg.body && msg.body.trim() ? (
+                <div className="mail-body" dangerouslySetInnerHTML={{ __html: msg.body }} />
+              ) : (
+                <pre style={{ margin: 0, fontFamily: "inherit", fontSize: 13, color: "#374151", whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.6 }}>
+                  {msg.bodyText}
+                </pre>
+              )}
             </div>
           )}
 
