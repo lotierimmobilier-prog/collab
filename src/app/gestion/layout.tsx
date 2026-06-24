@@ -76,7 +76,6 @@ export default function GestionLayout({ children }: { children: React.ReactNode 
                     onMouseEnter={e => !active && (e.currentTarget.style.background = "#F7F0E680")}
                     onMouseLeave={e => !active && (e.currentTarget.style.background = "transparent")}
                   >
-                    <span style={{ fontSize: 13, width: 16, textAlign: "center" }}>{(item as { icon: string }).icon}</span>
                     <span>{(item as { label: string }).label}</span>
                   </div>
                 </Link>
