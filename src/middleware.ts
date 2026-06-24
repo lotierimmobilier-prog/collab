@@ -34,15 +34,7 @@ function checkRateLimit(ip: string): boolean {
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // 1. Redirection HTTP → HTTPS en production (Nginx transmet X-Forwarded-Proto)
-  const proto = req.headers.get("x-forwarded-proto");
-  if (proto === "http" && process.env.NODE_ENV === "production") {
-    const httpsUrl = req.nextUrl.clone();
-    httpsUrl.protocol = "https:";
-    return NextResponse.redirect(httpsUrl, { status: 301 });
-  }
-
-  // 2. Rate limiting sur l'authentification (10 req/min par IP)
+  // 1. Rate limiting sur l'authentification (10 req/min par IP)
   if (pathname.startsWith("/api/auth") || pathname === "/login") {
     const ip =
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
