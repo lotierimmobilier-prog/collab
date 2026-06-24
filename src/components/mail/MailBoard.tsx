@@ -14,6 +14,7 @@ import LabelManager from "./LabelManager";
 import ThreadList from "./ThreadList";
 import ThreadView from "./ThreadView";
 import GoogleMailConnect from "./GoogleMailConnect";
+import SignatureEditor from "./SignatureEditor";
 
 const ACCOUNTS_KEY  = "collab_mail_accounts";
 const LABELS_KEY    = "collab_mail_labels";
@@ -844,9 +845,13 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
     setError("");
 
     const storedSig = typeof window !== "undefined" ? (localStorage.getItem(SIG_KEY) ?? "") : "";
-    const fullBody  = body + (storedSig ? `\n\n--\n${storedSig}` : "");
+    // La signature est désormais du HTML — on détecte si c'est du HTML ou du texte brut
+    const sigIsHtml = storedSig.trim().startsWith("<");
+    const sigHtml   = sigIsHtml ? storedSig : storedSig.replace(/\n/g, "<br/>");
+    const sigText   = sigIsHtml ? storedSig.replace(/<[^>]+>/g, "") : storedSig;
+    const fullBody  = body + (sigText ? `\n\n--\n${sigText}` : "");
     const fullHtml  = `<div style="font-family:sans-serif;font-size:14px;line-height:1.6">${body.replace(/\n/g,"<br/>")}</div>` +
-                      (storedSig ? `<br/><hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0"/><div style="font-family:sans-serif;font-size:12px;color:#6b7280">${storedSig.replace(/\n/g,"<br/>")}</div>` : "");
+                      (sigHtml ? `<br/><hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0"/><div style="font-family:sans-serif;font-size:12px">${sigHtml}</div>` : "");
 
     try {
       const r = await fetch("/api/mail/send", {
@@ -908,19 +913,14 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
 
         {/* Gestion signature */}
         {showSig && (
-          <div style={{ padding: "12px 16px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", flexShrink: 0 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 6 }}>SIGNATURE — {acct?.email}</div>
-            <textarea
+          <div style={{ padding: "14px 16px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", flexShrink: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 10 }}>SIGNATURE — {acct?.email}</div>
+            <SignatureEditor
               value={editSig}
-              onChange={e => setEditSig(e.target.value)}
-              rows={4}
-              placeholder={"Cordialement,\nVotre Nom\nLotier Immobilier · 01 23 45 67 89"}
-              style={{ width: "100%", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 10px", fontSize: 12, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box", background: "#fff" }}
+              onChange={setEditSig}
+              onSave={saveSig}
+              onCancel={() => setShowSig(false)}
             />
-            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-              <button onClick={saveSig} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer" }}>Sauvegarder</button>
-              <button onClick={() => setShowSig(false)} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", color: "#6b7280" }}>Annuler</button>
-            </div>
           </div>
         )}
 
@@ -968,9 +968,20 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
           />
 
           {/* Aperçu signature */}
-          {(() => { const s = typeof window !== "undefined" ? (localStorage.getItem(SIG_KEY) ?? "") : ""; return s ? (
-            <div style={{ borderTop: "1px solid #f3f4f6", padding: "8px 0", fontSize: 12, color: "#9ca3af", whiteSpace: "pre-line" }}>— {s}</div>
-          ) : null; })()}
+          {(() => {
+            const s = typeof window !== "undefined" ? (localStorage.getItem(SIG_KEY) ?? "") : "";
+            if (!s) return null;
+            const isHtml = s.trim().startsWith("<");
+            return (
+              <div style={{ borderTop: "1px solid #f3f4f6", padding: "10px 0 4px" }}>
+                <div style={{ fontSize: 10, color: "#9ca3af", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>— Signature</div>
+                {isHtml
+                  ? <div dangerouslySetInnerHTML={{ __html: s }} style={{ fontSize: 12 }} />
+                  : <div style={{ fontSize: 12, color: "#6b7280", whiteSpace: "pre-line" }}>{s}</div>
+                }
+              </div>
+            );
+          })()}
         </div>
 
         {/* Footer */}
