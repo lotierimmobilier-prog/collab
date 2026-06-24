@@ -736,10 +736,10 @@ export default function MailBoard() {
 
       {/* Thread popup — par-dessus tout */}
       {selectedThread && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 60, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px" }}
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
           onClick={e => { if (e.target === e.currentTarget) setSelectedThread(null); }}
         >
-          <div style={{ width: "min(920px, 96vw)", height: "calc(100vh - 32px)", background: "#fff", borderRadius: 16, boxShadow: "0 24px 80px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
+          <div style={{ width: "min(960px, 100%)", height: "calc(100vh - 32px)", maxHeight: "100%", background: "#fff", borderRadius: 16, boxShadow: "0 24px 80px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
             {/* Croix fermeture */}
             <button onClick={() => setSelectedThread(null)}
               style={{ position: "absolute", top: 12, right: 14, zIndex: 10, width: 30, height: 30, borderRadius: "50%", background: "#f3f4f6", border: "1px solid #e5e7eb", cursor: "pointer", fontSize: 16, color: "#6b7280", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, lineHeight: 1 }}
