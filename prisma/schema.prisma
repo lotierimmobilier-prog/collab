@@ -426,6 +426,38 @@ model BailTenant {
   @@map("bail_tenants")
 }
 
+// ── Notes personnelles ────────────────────────────────────────
+
+model PersonalNote {
+  id        String   @id @default(cuid())
+  userId    String
+  content   String
+  color     String   @default("#FFFBEB")
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("personal_notes")
+}
+
+// ── Appels téléphoniques ─────────────────────────────────────
+
+model PhoneCall {
+  id          String   @id @default(cuid())
+  userId      String
+  contact     String
+  phone       String?
+  direction   String   @default("inbound")   // inbound, outbound
+  status      String   @default("to_call")   // to_call, called, missed, callback
+  subject     String?
+  notes       String?
+  calledAt    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("phone_calls")
+}
+
 // ── Comptabilité ──────────────────────────────────────────────
 
 model AppelLoyer {

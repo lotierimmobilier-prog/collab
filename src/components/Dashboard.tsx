@@ -1,323 +1,391 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { useSession } from "next-auth/react";
+import Link from "next/link";
 
-type Role = "admin" | "dirigeant" | "agent" | "comptable" | "gestionnaire" | "syndic";
+const GOLD = "#B8966A"; const GOLD_BG = "#F7F0E6"; const BORDER = "#E6E1D9";
 
-const ROLES: { id: Role; label: string; icon: string }[] = [
-  { id: "admin",        label: "Administrateur",  icon: "⚙️" },
-  { id: "dirigeant",   label: "Dirigeant",        icon: "🏢" },
-  { id: "agent",       label: "Agent commercial", icon: "🤝" },
-  { id: "comptable",   label: "Comptable",        icon: "📊" },
-  { id: "gestionnaire",label: "Gestionnaire",     icon: "🏠" },
-  { id: "syndic",      label: "Syndic",           icon: "◫" },
-];
-
-const DAYS   = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
+const DAYS   = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
 const MONTHS = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+const MONTHS_SHORT = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
 
-function today() {
-  const d = new Date();
-  return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-}
-function greet(name: string) {
-  const h = new Date().getHours();
-  if (h < 12) return `Bonjour ${name}`;
-  if (h < 18) return `Bon après-midi ${name}`;
-  return `Bonsoir ${name}`;
-}
+function todayStr() { const d = new Date(); return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`; }
+function greet(name: string) { const h = new Date().getHours(); return h < 12 ? `Bonjour ${name}` : h < 18 ? `Bon après-midi ${name}` : `Bonsoir ${name}`; }
+function initials(name: string) { const p = name.trim().split(/\s+/); return p.length >= 2 ? (p[0][0]+p[1][0]).toUpperCase() : name.slice(0,2).toUpperCase(); }
+function fmtTime(iso: string) { return new Date(iso).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}); }
+function fmtDate(iso: string) { const d = new Date(iso); return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`; }
+function isThisWeek(iso: string) { const d = new Date(iso); const now = new Date(); const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay() + 1); startOfWeek.setHours(0,0,0,0); const endOfWeek = new Date(startOfWeek); endOfWeek.setDate(startOfWeek.getDate() + 6); endOfWeek.setHours(23,59,59,999); return d >= startOfWeek && d <= endOfWeek; }
+function isToday(iso: string) { return new Date(iso).toDateString() === new Date().toDateString(); }
 
-/* ── Composants ─────────────────────────────────────────────── */
+// ─── Types ─────────────────────────────────────────────────────
+interface Task { id: string; title: string; status: string; priority: string; dueDate?: string; familyId?: string; family?: { name: string; color: string } }
+interface MailThread { id: string; subject: string; read: boolean; fromEmail: string; fromName: string | null; date: string; accountId: string }
+interface CalEvent { id: string; title: string; start: string; end: string; color?: string; location?: string }
+interface PhoneCall { id: string; contact: string; phone?: string; direction: string; status: string; subject?: string; notes?: string; createdAt: string }
+interface Note { id: string; content: string; color: string; pinned: boolean; updatedAt: string }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+const NOTE_COLORS = ["#FFFBEB","#F0FDF4","#EFF6FF","#FEF2F2","#F5F3FF","#fff"];
+const PRIORITY_COLOR: Record<string, string> = { urgent: "#DC2626", high: "#D97706", medium: "#2563EB", low: "#9ca3af" };
+const CALL_STATUS: Record<string, { label: string; color: string; bg: string }> = {
+  to_call:  { label: "À rappeler", color: "#D97706", bg: "#FFFBEB" },
+  called:   { label: "Traité",     color: "#059669", bg: "#F0FDF4" },
+  missed:   { label: "Manqué",     color: "#DC2626", bg: "#FEF2F2" },
+  callback: { label: "Rappel",     color: "#6366F1", bg: "#EEF2FF" },
+};
+
+// ─── Bloc Tâches ───────────────────────────────────────────────
+function TasksBlock() {
+  const [tasks, setTasks]   = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/tasks?status=todo,in_progress&limit=15").then(r => r.json()).then(d => setTasks(Array.isArray(d) ? d : d.tasks ?? [])).finally(() => setLoading(false));
+  }, []);
+
+  async function done(id: string) {
+    await fetch(`/api/tasks/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "done" }) });
+    setTasks(p => p.filter(t => t.id !== id));
+  }
+
+  const urgent  = tasks.filter(t => t.priority === "urgent" || t.priority === "high");
+  const normal  = tasks.filter(t => t.priority !== "urgent" && t.priority !== "high");
+
   return (
-    <div style={{ marginBottom: 28 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>{title}</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 14 }}>{children}</div>
-    </div>
-  );
-}
-
-function KpiCard({ label, value, sub, color = "#B8966A", icon, href }: {
-  label: string; value: string | number; sub?: string; color?: string; icon?: string; href?: string;
-}) {
-  const inner = (
-    <div style={{
-      background: "#fff", borderRadius: 14, padding: "20px 18px",
-      boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #f3f4f6",
-      display: "flex", flexDirection: "column", gap: 12, position: "relative", overflow: "hidden",
-      cursor: href ? "pointer" : "default", height: "100%", boxSizing: "border-box",
-    }}
-      onMouseEnter={e => href && (e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.1)")}
-      onMouseLeave={e => href && (e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,0.06)")}
-    >
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: color }} />
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 500 }}>{label}</div>
-        {icon && <div style={{ fontSize: 20 }}>{icon}</div>}
-      </div>
-      <div>
-        <div style={{ fontSize: 28, fontWeight: 700, color: "#111827", lineHeight: 1 }}>{value}</div>
-        {sub && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 5 }}>{sub}</div>}
-      </div>
-    </div>
-  );
-  return href ? <a href={href} style={{ textDecoration: "none" }}>{inner}</a> : inner;
-}
-
-function RingCard({ label, value, max, color = "#B8966A", sub }: {
-  label: string; value: number; max: number; color?: string; sub?: string;
-}) {
-  const pct = Math.min(100, max > 0 ? (value / max) * 100 : 0);
-  const r = 36; const circ = 2 * Math.PI * r;
-  return (
-    <div style={{ background: "#fff", borderRadius: 14, padding: "20px 18px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #f3f4f6", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-      <svg width={90} height={90} viewBox="0 0 90 90">
-        <circle cx={45} cy={45} r={r} fill="none" stroke="#f3f4f6" strokeWidth={7} />
-        <circle cx={45} cy={45} r={r} fill="none" stroke={color} strokeWidth={7}
-          strokeDasharray={circ} strokeDashoffset={circ * (1 - pct / 100)}
-          strokeLinecap="round" transform="rotate(-90 45 45)" />
-        <text x={45} y={45} textAnchor="middle" dominantBaseline="central" fontSize={15} fontWeight={700} fill="#111827">{value}</text>
-      </svg>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{label}</div>
-        {sub && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{sub}</div>}
-      </div>
-    </div>
-  );
-}
-
-function ActionCard({ icon, label, desc, color, href }: { icon: string; label: string; desc: string; color: string; href: string }) {
-  return (
-    <a href={href} style={{ textDecoration: "none" }}>
-      <div style={{ background: "#fff", borderRadius: 14, padding: "14px 18px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #f3f4f6", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
-        onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.1)")}
-        onMouseLeave={e => (e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,0.06)")}
-      >
-        <div style={{ width: 42, height: 42, borderRadius: 12, background: color + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{icon}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{label}</div>
-          <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{desc}</div>
+    <Block title="Mes tâches" count={tasks.length} href="/taches" loading={loading} empty={tasks.length === 0} emptyMsg="Aucune tâche en cours">
+      {[...urgent, ...normal].slice(0, 8).map(t => (
+        <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid #f3f4f6` }}>
+          <button onClick={() => done(t.id)} title="Marquer terminée"
+            style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${PRIORITY_COLOR[t.priority] ?? "#d1d5db"}`, background: "none", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
+            {t.dueDate && <div style={{ fontSize: 10, color: isToday(t.dueDate) ? "#DC2626" : "#9ca3af", marginTop: 1 }}>
+              {isToday(t.dueDate) ? "Aujourd'hui" : fmtDate(t.dueDate)}
+            </div>}
+          </div>
+          {t.family && <span style={{ fontSize: 10, background: (t.family.color ?? GOLD) + "20", color: t.family.color ?? GOLD, borderRadius: 4, padding: "1px 6px", fontWeight: 600, flexShrink: 0 }}>{t.family.name}</span>}
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: PRIORITY_COLOR[t.priority] ?? "#d1d5db", flexShrink: 0 }} />
         </div>
-        <div style={{ color: "#d1d5db", fontSize: 18, flexShrink: 0 }}>›</div>
-      </div>
-    </a>
+      ))}
+    </Block>
   );
 }
 
-function Alert({ type, text }: { type: "warning" | "info" | "success" | "error"; text: string }) {
-  const s = { warning:{bg:"#fffbeb",border:"#fde68a",icon:"⚠️",c:"#92400e"}, info:{bg:"#eff6ff",border:"#bfdbfe",icon:"ℹ️",c:"#1e40af"}, success:{bg:"#f0fdf4",border:"#bbf7d0",icon:"✓",c:"#166534"}, error:{bg:"#fef2f2",border:"#fecaca",icon:"✕",c:"#991b1b"} }[type];
-  return (
-    <div style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-      <span style={{ fontSize: 14 }}>{s.icon}</span>
-      <span style={{ fontSize: 12, color: s.c }}>{text}</span>
-    </div>
-  );
-}
+// ─── Bloc Appels ────────────────────────────────────────────────
+function CallsBlock() {
+  const [calls, setCalls]   = useState<PhoneCall[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ contact: "", phone: "", direction: "inbound", subject: "" });
 
-/* ── Vues par rôle ─────────────────────────────────────────── */
+  useEffect(() => { fetch("/api/phone-calls").then(r => r.json()).then(setCalls).finally(() => setLoading(false)); }, []);
 
-function AdminView() {
-  return (
-    <>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
-        <Alert type="info" text="3 utilisateurs en attente d'activation" />
-        <Alert type="warning" text="Webhook GitHub — vérifier le statut de déploiement" />
-      </div>
-      <Section title="Activité plateforme">
-        <KpiCard label="Utilisateurs actifs" value={8} sub="sur 12 inscrits" icon="👥" color="#B8966A" href="/admin/utilisateurs" />
-        <KpiCard label="Connexions aujourd'hui" value={23} sub="+4 vs hier" icon="📡" color="#2563eb" />
-        <KpiCard label="Modules actifs" value={7} sub="sur 10 disponibles" icon="🧩" color="#059669" />
-        <KpiCard label="Espace serveur" value="2.4 Go" sub="sur 96 Go disponibles" icon="💾" color="#d97706" />
-      </Section>
-      <Section title="Vue d'ensemble modules">
-        <RingCard label="Dossiers locataires" value={12} max={50} color="#B8966A" sub="en cours" />
-        <RingCard label="Tâches ouvertes" value={34} max={100} color="#2563eb" sub="toutes équipes" />
-        <RingCard label="Messages non lus" value={7} max={50} color="#dc2626" sub="toutes boîtes" />
-        <RingCard label="Encaissements" value={3} max={20} color="#059669" sub="à valider" />
-      </Section>
-      <Section title="Actions rapides">
-        <ActionCard icon="👤" label="Gérer les utilisateurs" desc="Créer, modifier, désactiver" color="#B8966A" href="/admin/utilisateurs" />
-        <ActionCard icon="🔐" label="Rôles & permissions" desc="Droits par module" color="#2563eb" href="/admin/roles" />
-        <ActionCard icon="👥" label="Équipes" desc="Gestion, Transaction, Syndic…" color="#7C3AED" href="/admin/equipes" />
-        <ActionCard icon="📊" label="Comptabilité" desc="Encaissements & factures" color="#059669" href="/comptabilite" />
-        <ActionCard icon="✉️" label="Messagerie" desc="Comptes mail configurés" color="#d97706" href="/messagerie" />
-        <ActionCard icon="📅" label="Planning" desc="Agendas équipe" color="#0891b2" href="/planning" />
-        <ActionCard icon="📁" label="Dossiers locataires" desc="Toutes candidatures" color="#dc2626" href="/locataires" />
-      </Section>
-    </>
-  );
-}
+  async function add() {
+    if (!form.contact) return;
+    const res = await fetch("/api/phone-calls", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+    const saved = await res.json();
+    setCalls(p => [saved, ...p]);
+    setShowForm(false); setForm({ contact: "", phone: "", direction: "inbound", subject: "" });
+  }
 
-function DirigeantView() {
-  return (
-    <>
-      <Section title="Performance agence">
-        <KpiCard label="CA du mois" value="42 800 €" sub="+12% vs mois dernier" icon="💰" color="#059669" href="/comptabilite" />
-        <KpiCard label="Commissions agents" value="6 420 €" sub="4 agents actifs" icon="🤝" color="#B8966A" href="/comptabilite" />
-        <KpiCard label="Dossiers en cours" value={12} sub="3 en attente GLI" icon="📁" color="#2563eb" href="/locataires" />
-        <KpiCard label="Locations signées" value={5} sub="ce mois" icon="🔑" color="#d97706" />
-      </Section>
-      <Section title="Suivi équipe">
-        <RingCard label="Tâches équipe" value={34} max={60} color="#B8966A" sub="34 ouvertes" />
-        <RingCard label="Dossiers complets" value={8} max={12} color="#059669" sub="prêts à signer" />
-        <RingCard label="Rdv cette semaine" value={11} max={20} color="#2563eb" sub="planifiés" />
-        <RingCard label="Msgs non lus" value={4} max={30} color="#dc2626" sub="toutes boîtes" />
-      </Section>
-      <Section title="Accès rapides">
-        <ActionCard icon="📁" label="Dossiers locataires" desc="Suivi candidatures & GLI" color="#B8966A" href="/locataires" />
-        <ActionCard icon="📊" label="Comptabilité" desc="CA, commissions, TVA" color="#059669" href="/comptabilite" />
-        <ActionCard icon="📅" label="Planning" desc="Agenda équipe" color="#2563eb" href="/planning" />
-        <ActionCard icon="✔️" label="Tâches équipe" desc="Kanban global" color="#d97706" href="/taches" />
-        <ActionCard icon="✉️" label="Messagerie" desc="Communications" color="#dc2626" href="/messagerie" />
-      </Section>
-    </>
-  );
-}
+  async function markStatus(id: string, status: string) {
+    await fetch("/api/phone-calls", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status, calledAt: status === "called" ? new Date().toISOString() : null }) });
+    setCalls(p => p.map(c => c.id === id ? { ...c, status } : c));
+  }
 
-function AgentView() {
-  return (
-    <>
-      <Section title="Mes indicateurs">
-        <KpiCard label="Mes dossiers" value={4} sub="2 en attente validation" icon="📁" color="#B8966A" href="/locataires" />
-        <KpiCard label="Mes commissions" value="1 840 €" sub="ce mois" icon="💰" color="#059669" href="/comptabilite" />
-        <KpiCard label="Mes tâches" value={7} sub="3 urgentes" icon="✔️" color="#dc2626" href="/taches" />
-        <KpiCard label="Messages non lus" value={2} sub="boîte principale" icon="✉️" color="#d97706" href="/messagerie" />
-      </Section>
-      <Section title="Mes dossiers">
-        <RingCard label="Dossiers actifs" value={4} max={10} color="#B8966A" sub="sur objectif 10" />
-        <RingCard label="Docs reçus" value={28} max={40} color="#059669" sub="pièces complètes" />
-        <RingCard label="GLI validés" value={2} max={4} color="#2563eb" sub="éligibles" />
-        <RingCard label="Tâches faites" value={14} max={21} color="#d97706" sub="cette semaine" />
-      </Section>
-      <Section title="Accès rapides">
-        <ActionCard icon="📁" label="Mes dossiers" desc="Candidatures locataires" color="#B8966A" href="/locataires" />
-        <ActionCard icon="📊" label="Mes commissions" desc="Auto-facturation" color="#059669" href="/comptabilite" />
-        <ActionCard icon="📅" label="Mon planning" desc="Mes rendez-vous" color="#2563eb" href="/planning" />
-        <ActionCard icon="✔️" label="Mes tâches" desc="Kanban personnel" color="#d97706" href="/taches" />
-        <ActionCard icon="✉️" label="Messagerie" desc="Mes boîtes mail" color="#dc2626" href="/messagerie" />
-        <ActionCard icon="🔗" label="Lien candidature" desc="À partager aux locataires" color="#0891b2" href="/candidature" />
-      </Section>
-    </>
-  );
-}
+  async function remove(id: string) {
+    await fetch("/api/phone-calls", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    setCalls(p => p.filter(c => c.id !== id));
+  }
 
-function ComptableView() {
-  return (
-    <>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
-        <Alert type="warning" text="3 encaissements en attente de validation" />
-        <Alert type="info" text="Déclaration TVA T2 — échéance dans 8 jours" />
-      </div>
-      <Section title="Tableau financier">
-        <KpiCard label="Encaissements du mois" value="42 800 €" sub="dont 3 à valider" icon="💳" color="#059669" href="/comptabilite" />
-        <KpiCard label="Commissions dues" value="6 420 €" sub="4 mandataires" icon="🤝" color="#B8966A" href="/comptabilite" />
-        <KpiCard label="TVA collectée" value="4 280 €" sub="T2 2026" icon="📋" color="#2563eb" href="/comptabilite" />
-        <KpiCard label="Dépenses du mois" value="8 340 €" sub="-3% vs mois dernier" icon="📤" color="#dc2626" href="/comptabilite" />
-      </Section>
-      <Section title="À traiter">
-        <RingCard label="Factures à émettre" value={4} max={10} color="#B8966A" sub="mandataires" />
-        <RingCard label="Encaissements" value={3} max={10} color="#059669" sub="à confirmer" />
-        <RingCard label="Dépenses" value={6} max={20} color="#dc2626" sub="à catégoriser" />
-        <RingCard label="TVA T2 saisie" value={78} max={100} color="#2563eb" sub="avancement %" />
-      </Section>
-      <Section title="Accès rapides">
-        <ActionCard icon="💳" label="Encaissements" desc="Saisir & valider" color="#059669" href="/comptabilite" />
-        <ActionCard icon="🧾" label="Factures mandataires" desc="Générer & envoyer" color="#B8966A" href="/comptabilite" />
-        <ActionCard icon="📋" label="Déclaration TVA" desc="T2 2026 en cours" color="#2563eb" href="/comptabilite" />
-        <ActionCard icon="📤" label="Dépenses" desc="Saisir les dépenses" color="#dc2626" href="/comptabilite" />
-      </Section>
-    </>
-  );
-}
-
-function GestionnaireView() {
-  return (
-    <>
-      <Section title="Gestion locative">
-        <KpiCard label="Biens gérés" value={24} sub="18 occupés" icon="🏡" color="#059669" href="/biens" />
-        <KpiCard label="Baux actifs" value={18} sub="2 à renouveler" icon="📄" color="#2563eb" href="/baux" />
-        <KpiCard label="Loyers en attente" value={3} sub="ce mois" icon="€" color="#dc2626" href="/baux" />
-        <KpiCard label="Propriétaires" value={11} sub="portefeuille" icon="👤" color="#B8966A" href="/proprietaires" />
-      </Section>
-      <Section title="Accès rapides">
-        <ActionCard icon="🏡" label="Biens" desc="Gérer les lots" color="#059669" href="/biens" />
-        <ActionCard icon="📄" label="Baux" desc="Contrats & locataires" color="#2563eb" href="/baux" />
-        <ActionCard icon="📋" label="ODS" desc="Ordres de service" color="#B8966A" href="/ordres-de-service" />
-        <ActionCard icon="⌂"  label="États des lieux" desc="Entrée / sortie" color="#d97706" href="/etats-des-lieux" />
-      </Section>
-    </>
-  );
-}
-
-function SyndicView() {
-  return (
-    <>
-      <Section title="Syndic de copropriété">
-        <KpiCard label="Copropriétés" value={5} sub="gérées" icon="🏢" color="#2563eb" href="/syndic/coproprietés" />
-        <KpiCard label="Assemblées" value={2} sub="à planifier" icon="◉" color="#d97706" href="/syndic/assemblees" />
-        <KpiCard label="Charges à valider" value={7} sub="ce trimestre" icon="∑" color="#dc2626" href="/syndic/charges" />
-        <KpiCard label="Travaux en cours" value={3} sub="chantiers" icon="🔧" color="#059669" href="/syndic/travaux" />
-      </Section>
-      <Section title="Accès rapides">
-        <ActionCard icon="🏢" label="Copropriétés" desc="Gérer les immeubles" color="#2563eb" href="/syndic/coproprietés" />
-        <ActionCard icon="◉" label="Assemblées" desc="AG & convocations" color="#d97706" href="/syndic/assemblees" />
-        <ActionCard icon="∑" label="Charges" desc="Répartition & appels" color="#dc2626" href="/syndic/charges" />
-        <ActionCard icon="🔧" label="Travaux" desc="Suivi chantiers" color="#059669" href="/syndic/travaux" />
-      </Section>
-    </>
-  );
-}
-
-/* ── Composant principal ───────────────────────────────────── */
-export default function Dashboard() {
-  const [role, setRole] = useState<Role>("dirigeant");
-  const currentRole = ROLES.find(r => r.id === role)!;
-
-  const views: Record<Role, React.ReactNode> = {
-    admin:          <AdminView />,
-    dirigeant:      <DirigeantView />,
-    agent:          <AgentView />,
-    comptable:      <ComptableView />,
-    gestionnaire:   <GestionnaireView />,
-    syndic:         <SyndicView />,
-  };
+  const pending = calls.filter(c => c.status === "to_call" || c.status === "missed" || c.status === "callback");
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", background: "#f9fafb" }}>
-      {/* Header */}
-      <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "18px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#111827", margin: 0 }}>Tableau de bord</h1>
-          <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>Vue d'ensemble · {today()}</div>
-        </div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {ROLES.map(r => (
-            <button key={r.id} onClick={() => setRole(r.id)} style={{
-              display: "flex", alignItems: "center", gap: 5,
-              background: role === r.id ? "#B8966A" : "#f9fafb",
-              color: role === r.id ? "#fff" : "#6b7280",
-              border: `1px solid ${role === r.id ? "#B8966A" : "#e5e7eb"}`,
-              borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer",
-              fontWeight: role === r.id ? 600 : 400,
-            }}>
-              <span>{r.icon}</span> {r.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Bannière */}
-      <div style={{ margin: "20px 28px 4px", background: "linear-gradient(135deg, #B8966A 0%, #8A6A42 100%)", borderRadius: 14, padding: "18px 24px", color: "#fff", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <div style={{ fontSize: 17, fontWeight: 700 }}>{greet("Jérôme")} {currentRole.icon}</div>
-          <div style={{ fontSize: 13, opacity: 0.8, marginTop: 4 }}>
-            {{ admin:"Accès complet à la plateforme.", dirigeant:"Vue d'ensemble de votre agence.", agent:"Vos dossiers, commissions et tâches.", comptable:"Gestion financière et TVA.", gestionnaire:"Propriétaires, biens, baux et locataires.", syndic:"Copropriétés, assemblées et charges." }[role]}
+    <Block title="Appels téléphoniques" count={pending.length} href="/appels" loading={loading} empty={calls.length === 0} emptyMsg="Aucun appel enregistré"
+      action={<button onClick={() => setShowForm(s => !s)} style={{ fontSize: 11, background: GOLD, color: "#fff", border: "none", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>+ Ajouter</button>}>
+      {showForm && (
+        <div style={{ background: "#FAFAF8", borderRadius: 8, padding: 10, marginBottom: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+          <input placeholder="Contact *" value={form.contact} onChange={e => setForm(p => ({ ...p, contact: e.target.value }))} style={inp} />
+          <input placeholder="Téléphone" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} style={inp} />
+          <input placeholder="Sujet" value={form.subject} onChange={e => setForm(p => ({ ...p, subject: e.target.value }))} style={inp} />
+          <div style={{ display: "flex", gap: 6 }}>
+            <select value={form.direction} onChange={e => setForm(p => ({ ...p, direction: e.target.value }))} style={{ ...inp, flex: 1 }}>
+              <option value="inbound">Entrant</option>
+              <option value="outbound">Sortant</option>
+            </select>
+            <button onClick={add} disabled={!form.contact} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 6, padding: "0 12px", fontSize: 12, cursor: "pointer" }}>OK</button>
+            <button onClick={() => setShowForm(false)} style={{ background: "none", border: `1px solid ${BORDER}`, borderRadius: 6, padding: "0 10px", fontSize: 12, cursor: "pointer" }}>✕</button>
           </div>
         </div>
-        <div style={{ fontSize: 44, opacity: 0.25 }}>{currentRole.icon}</div>
+      )}
+      {pending.slice(0, 6).map(c => {
+        const st = CALL_STATUS[c.status] ?? CALL_STATUS.to_call;
+        return (
+          <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid #f3f4f6" }}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: c.direction === "inbound" ? "#EFF6FF" : "#F0FDF4", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, flexShrink: 0, color: c.direction === "inbound" ? "#2563EB" : "#059669" }}>
+              {c.direction === "inbound" ? "↙" : "↗"}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.contact}</div>
+              {c.subject && <div style={{ fontSize: 10, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.subject}</div>}
+              {c.phone && <div style={{ fontSize: 10, color: "#9ca3af" }}>{c.phone}</div>}
+            </div>
+            <span style={{ background: st.bg, color: st.color, borderRadius: 4, padding: "2px 6px", fontSize: 10, fontWeight: 600, flexShrink: 0 }}>{st.label}</span>
+            <button onClick={() => markStatus(c.id, "called")} title="Marquer traité" style={{ background: "#F0FDF4", border: "none", borderRadius: 4, width: 24, height: 24, cursor: "pointer", color: "#059669", fontSize: 12, flexShrink: 0 }}>✓</button>
+            <button onClick={() => remove(c.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#d1d5db", fontSize: 14, flexShrink: 0 }}>×</button>
+          </div>
+        );
+      })}
+      {calls.filter(c => c.status === "called").slice(0, 2).map(c => (
+        <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", opacity: 0.5, borderBottom: "1px solid #f3f4f6" }}>
+          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#9ca3af", flexShrink: 0 }}>✓</div>
+          <div style={{ fontSize: 12, color: "#9ca3af", textDecoration: "line-through" }}>{c.contact}</div>
+        </div>
+      ))}
+    </Block>
+  );
+}
+
+// ─── Bloc Mails ─────────────────────────────────────────────────
+function MailsBlock() {
+  const [threads, setThreads] = useState<MailThread[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/mail/messages?limit=10").then(r => r.json()).then(d => setThreads(Array.isArray(d) ? d : d.messages ?? [])).catch(() => setThreads([])).finally(() => setLoading(false));
+  }, []);
+
+  const COLORS = ["#B8966A","#2563EB","#059669","#7C3AED","#DC2626"];
+  function avatarColor(s: string) { let h = 0; for (const c of s) h = (h*31+c.charCodeAt(0))%COLORS.length; return COLORS[h]; }
+
+  return (
+    <Block title="Derniers mails" count={threads.filter(t => !t.read).length || undefined} href="/messagerie" loading={loading} empty={threads.length === 0} emptyMsg="Aucun mail récent">
+      {threads.slice(0, 10).map(t => {
+        const name = t.fromName || t.fromEmail || "—";
+        const unread = !t.read;
+        return (
+          <Link key={t.id} href="/messagerie" style={{ textDecoration: "none" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 0", borderBottom: "1px solid #f3f4f6", cursor: "pointer" }}
+              onMouseEnter={e => (e.currentTarget.style.background = "#fafaf8")}
+              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+              <div style={{ width: 28, height: 28, borderRadius: "50%", background: avatarColor(name), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+                {initials(name)}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: unread ? 700 : 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
+                <div style={{ fontSize: 11, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.subject}</div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
+                <span style={{ fontSize: 10, color: "#9ca3af" }}>{fmtDate(t.date)}</span>
+                {unread && <span style={{ width: 7, height: 7, borderRadius: "50%", background: GOLD, display: "block" }} />}
+              </div>
+            </div>
+          </Link>
+        );
+      })}
+    </Block>
+  );
+}
+
+// ─── Bloc Agenda ────────────────────────────────────────────────
+function AgendaBlock() {
+  const [events, setEvents] = useState<CalEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const now = new Date();
+    const start = new Date(now); start.setDate(now.getDate() - now.getDay() + 1); start.setHours(0,0,0,0);
+    const end   = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999);
+    fetch(`/api/calendar?from=${start.toISOString()}&to=${end.toISOString()}`).then(r => r.json()).then(d => setEvents(Array.isArray(d) ? d : [])).catch(() => setEvents([])).finally(() => setLoading(false));
+  }, []);
+
+  const today = new Date().toDateString();
+  const todayEvents = events.filter(e => new Date(e.start).toDateString() === today);
+  const otherEvents = events.filter(e => new Date(e.start).toDateString() !== today);
+
+  // Jours de la semaine avec leurs événements
+  const weekDays = Array.from({ length: 5 }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() - d.getDay() + 1 + i);
+    return { date: d, label: DAYS[d.getDay()].slice(0, 3), num: d.getDate(), isToday: d.toDateString() === today, events: events.filter(e => new Date(e.start).toDateString() === d.toDateString()) };
+  });
+
+  return (
+    <Block title="Agenda de la semaine" count={events.length || undefined} href="/planning" loading={loading} empty={false} emptyMsg="">
+      {/* Mini-calendrier semaine */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
+        {weekDays.map(d => (
+          <div key={d.num} style={{ flex: 1, textAlign: "center", padding: "6px 2px", borderRadius: 8, background: d.isToday ? GOLD : "#f9fafb", border: `1px solid ${d.isToday ? GOLD : BORDER}` }}>
+            <div style={{ fontSize: 9, fontWeight: 600, color: d.isToday ? "#fff" : "#9ca3af", textTransform: "uppercase" }}>{d.label}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: d.isToday ? "#fff" : "#374151" }}>{d.num}</div>
+            {d.events.length > 0 && <div style={{ width: 5, height: 5, borderRadius: "50%", background: d.isToday ? "rgba(255,255,255,0.7)" : GOLD, margin: "2px auto 0" }} />}
+          </div>
+        ))}
       </div>
 
-      <div style={{ padding: "20px 28px" }}>{views[role]}</div>
+      {events.length === 0 && <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 12, padding: "16px 0" }}>Aucun événement cette semaine</div>}
+
+      {todayEvents.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Aujourd'hui</div>
+          {todayEvents.map(e => <EventRow key={e.id} event={e} highlight />)}
+        </div>
+      )}
+      {otherEvents.slice(0, 4).map(e => <EventRow key={e.id} event={e} />)}
+
+      <Link href="/planning" style={{ display: "block", textAlign: "center", marginTop: 8, fontSize: 11, color: GOLD, textDecoration: "none", fontWeight: 600 }}>Voir tout le planning →</Link>
+    </Block>
+  );
+}
+
+function EventRow({ event, highlight }: { event: CalEvent; highlight?: boolean }) {
+  return (
+    <div style={{ display: "flex", gap: 8, padding: "7px 0", borderBottom: "1px solid #f3f4f6", alignItems: "flex-start" }}>
+      <div style={{ width: 3, borderRadius: 2, alignSelf: "stretch", background: event.color ?? GOLD, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: highlight ? 700 : 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{event.title}</div>
+        <div style={{ fontSize: 10, color: "#6b7280", marginTop: 1 }}>
+          {!isToday(event.start) && <span style={{ marginRight: 6 }}>{DAYS[new Date(event.start).getDay()].slice(0,3)} {fmtDate(event.start)}</span>}
+          {fmtTime(event.start)} – {fmtTime(event.end)}
+          {event.location && <span style={{ marginLeft: 6 }}>· {event.location}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Bloc Notes ─────────────────────────────────────────────────
+function NotesBlock() {
+  const [notes, setNotes]   = useState<Note[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [active, setActive] = useState<string | null>(null);
+  const [draft, setDraft]   = useState("");
+  const [addColor, setAddColor] = useState(NOTE_COLORS[0]);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => { fetch("/api/notes").then(r => r.json()).then(setNotes).finally(() => setLoading(false)); }, []);
+
+  async function addNote() {
+    if (!draft.trim()) return;
+    const res = await fetch("/api/notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: draft, color: addColor }) });
+    const saved = await res.json();
+    setNotes(p => [saved, ...p]);
+    setDraft(""); setActive(null);
+  }
+
+  async function updateNote(id: string, content: string) {
+    await fetch("/api/notes", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, content }) });
+    setNotes(p => p.map(n => n.id === id ? { ...n, content } : n));
+  }
+
+  async function deleteNote(id: string) {
+    await fetch("/api/notes", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    setNotes(p => p.filter(n => n.id !== id));
+    setActive(null);
+  }
+
+  async function togglePin(id: string, pinned: boolean) {
+    await fetch("/api/notes", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, pinned: !pinned }) });
+    setNotes(p => p.map(n => n.id === id ? { ...n, pinned: !pinned } : n).sort((a, b) => +b.pinned - +a.pinned));
+  }
+
+  return (
+    <Block title="Notes personnelles" count={notes.length || undefined} href="#" loading={loading} empty={false} emptyMsg="">
+      {/* Zone de création */}
+      {active === "new" ? (
+        <div style={{ background: addColor, borderRadius: 10, padding: 10, marginBottom: 10, border: `1px solid ${BORDER}` }}>
+          <textarea ref={textRef} autoFocus value={draft} onChange={e => setDraft(e.target.value)} placeholder="Écrire une note…"
+            style={{ width: "100%", border: "none", background: "transparent", resize: "none", fontSize: 12, outline: "none", minHeight: 64, fontFamily: "inherit", boxSizing: "border-box" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+            {NOTE_COLORS.map(c => <button key={c} onClick={() => setAddColor(c)} style={{ width: 16, height: 16, borderRadius: "50%", background: c, border: addColor === c ? `2px solid ${GOLD}` : `1px solid ${BORDER}`, cursor: "pointer", padding: 0 }} />)}
+            <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+              <button onClick={() => { setActive(null); setDraft(""); }} style={{ background: "none", border: `1px solid ${BORDER}`, borderRadius: 5, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}>Annuler</button>
+              <button onClick={addNote} disabled={!draft.trim()} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 5, padding: "3px 10px", fontSize: 11, cursor: "pointer" }}>Sauvegarder</button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setActive("new")} style={{ width: "100%", background: "#FAFAF8", border: `1px dashed ${BORDER}`, borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#9ca3af", cursor: "pointer", textAlign: "left", marginBottom: 10 }}>
+          + Nouvelle note…
+        </button>
+      )}
+
+      {notes.length === 0 && active !== "new" && <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 12, padding: "16px 0" }}>Aucune note</div>}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {notes.map(n => (
+          <div key={n.id} style={{ background: n.color, borderRadius: 10, padding: "10px 12px", border: `1px solid ${BORDER}`, position: "relative" }}>
+            {active === n.id ? (
+              <textarea defaultValue={n.content} autoFocus onBlur={e => { updateNote(n.id, e.target.value); setActive(null); }}
+                style={{ width: "100%", border: "none", background: "transparent", resize: "none", fontSize: 12, outline: "none", minHeight: 48, fontFamily: "inherit", boxSizing: "border-box" }} />
+            ) : (
+              <div onClick={() => setActive(n.id)} style={{ fontSize: 12, color: "#374151", whiteSpace: "pre-wrap", wordBreak: "break-word", cursor: "text", minHeight: 20, lineHeight: 1.5 }}>{n.content}</div>
+            )}
+            <div style={{ display: "flex", gap: 4, marginTop: 6, justifyContent: "flex-end" }}>
+              <button onClick={() => togglePin(n.id, n.pinned)} title={n.pinned ? "Désépingler" : "Épingler"} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, opacity: n.pinned ? 1 : 0.4, padding: "1px 3px" }}>📌</button>
+              <button onClick={() => deleteNote(n.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "#9ca3af", padding: "1px 3px" }}>×</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Block>
+  );
+}
+
+// ─── Conteneur générique ────────────────────────────────────────
+function Block({ title, count, href, loading, empty, emptyMsg, children, action }: {
+  title: string; count?: number; href: string; loading: boolean; empty: boolean; emptyMsg: string; children: React.ReactNode; action?: React.ReactNode;
+}) {
+  return (
+    <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", boxShadow: "0 1px 4px rgba(0,0,0,0.05)", overflow: "hidden" }}>
+      <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid #f3f4f6`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{title}</span>
+          {count !== undefined && count > 0 && <span style={{ background: GOLD, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>{count}</span>}
+        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {action}
+          {href !== "#" && <Link href={href} style={{ fontSize: 11, color: GOLD, textDecoration: "none", fontWeight: 600 }}>Voir tout →</Link>}
+        </div>
+      </div>
+      <div style={{ padding: "4px 16px 12px", flex: 1, overflowY: "auto", maxHeight: 340 }}>
+        {loading && <div style={{ padding: "20px 0", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>Chargement…</div>}
+        {!loading && empty && <div style={{ padding: "20px 0", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>{emptyMsg}</div>}
+        {!loading && children}
+      </div>
+    </div>
+  );
+}
+
+const inp: React.CSSProperties = { height: 32, border: `1px solid ${BORDER}`, borderRadius: 6, padding: "0 8px", fontSize: 12, outline: "none", background: "#fff", width: "100%", boxSizing: "border-box" };
+
+// ─── Dashboard principal ────────────────────────────────────────
+export default function Dashboard() {
+  const { data: session } = useSession();
+  const firstName = (session?.user as { prenom?: string })?.prenom ?? session?.user?.name?.split(" ")[0] ?? "vous";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+      {/* Bannière */}
+      <div style={{ background: `linear-gradient(135deg, ${GOLD} 0%, #8A6A42 100%)`, borderRadius: 14, padding: "20px 26px", color: "#fff", marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ fontSize: 19, fontWeight: 700 }}>{greet(firstName)}</div>
+          <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>{todayStr()}</div>
+        </div>
+        <div style={{ fontSize: 42, opacity: 0.15 }}>◈</div>
+      </div>
+
+      {/* Grille 2×2 */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <TasksBlock />
+        <CallsBlock />
+        <MailsBlock />
+        <AgendaBlock />
+      </div>
+
+      {/* Notes — pleine largeur en bas */}
+      <div style={{ marginTop: 16 }}>
+        <NotesBlock />
+      </div>
     </div>
   );
 }
