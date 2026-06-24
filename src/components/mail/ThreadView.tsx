@@ -31,6 +31,7 @@ interface AiRdv        { found: boolean; title: string; start?: string; end?: st
 interface SenderInfo   { senderType: string; name?: string; role?: string }
 interface FullAnalysis { name: string; totalEmails: number; totalInDb: number; firstContact: string; lastContact: string; summary: string; topics: string[]; actions: string[]; sentiment: string; priority: string; notes: string }
 interface LegalAdvice  { question: string; answer: string; articles: string[]; warnings: string[]; suggestion: string }
+interface Research     { summary: string; webSources: string[]; mailInsights: string[]; keyPoints: string[]; suggestion: string }
 
 const SENDER_BADGE: Record<string, { label: string; color: string; bg: string }> = {
   user:    { label: "Collègue",      color: "#2563EB", bg: "#EFF6FF" },
@@ -71,6 +72,13 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
   const [legalResult, setLegalResult]       = useState<LegalAdvice | null>(null);
   const [legalLoading, setLegalLoading]     = useState(false);
   const [legalError, setLegalError]         = useState("");
+
+  // Recherche web + historique
+  const [showResearch, setShowResearch]     = useState(false);
+  const [researchQuery, setResearchQuery]   = useState("");
+  const [researchResult, setResearchResult] = useState<Research | null>(null);
+  const [researchLoading, setResearchLoading] = useState(false);
+  const [researchError, setResearchError]   = useState("");
 
   const lastMsg   = thread.messages[thread.messages.length - 1];
   const firstMsg  = thread.messages[0];
@@ -242,6 +250,28 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
     setReplyBody(prev => prev + block);
     setShowReply(true);
     setShowLegal(false);
+  }
+
+  async function askResearch() {
+    setResearchLoading(true); setResearchError(""); setResearchResult(null);
+    try {
+      const resp = await fetch("/api/mail/ai", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "research", messages: thread.messages, threadSubject: thread.subject, question: researchQuery }),
+      });
+      const data = await resp.json();
+      if (data.error) { setResearchError(data.error); return; }
+      setResearchResult(data);
+    } catch { setResearchError("Erreur de connexion à Auguste"); }
+    finally { setResearchLoading(false); }
+  }
+
+  function injectResearchInReply() {
+    if (!researchResult) return;
+    const block = `\n\n---\n${researchResult.suggestion || researchResult.summary}`;
+    setReplyBody(prev => prev + block);
+    setShowReply(true);
+    setShowResearch(false);
   }
 
   // ── Génération réponse IA via Auguste ───────────────────────
@@ -520,6 +550,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
         <AiBtn loading={aiLoading === "rdv"}       onClick={detectRdv}       icon="📅" label="Valider un RDV" />
         <AiBtn loading={aiLoading === "full"}      onClick={runFullAnalysis} icon="🔍" label="Analyse complète" />
         <AiBtn loading={false} onClick={() => { setShowLegal(s => !s); setLegalResult(null); setLegalError(""); }} icon="⚖" label="Juridique" active={showLegal} />
+        <AiBtn loading={researchLoading} onClick={() => { setShowResearch(s => !s); setResearchResult(null); setResearchError(""); }} icon="🌐" label="Recherche" active={showResearch} />
 
         {actionResult && (
           <span style={{ fontSize: 12, color: actionResult.ok ? "#059669" : "#dc2626", fontWeight: 500, marginLeft: 8 }}>
@@ -655,6 +686,79 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
                   <button onClick={injectLegalInReply}
                     style={{ background: "#15803D", color: "#fff", border: "none", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                     ↳ Intégrer dans la réponse
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Panneau recherche ── */}
+      {showResearch && (
+        <div style={{ background: "#EFF6FF", borderBottom: "1px solid #BFDBFE", padding: "14px 20px", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#1D4ED8" }}>🌐 Recherche — Auguste</span>
+            <button onClick={() => setShowResearch(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 16 }}>×</button>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginBottom: researchResult ? 14 : 0 }}>
+            <input
+              value={researchQuery}
+              onChange={e => setResearchQuery(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && askResearch()}
+              placeholder={`Ex : délai préavis zone tendue, jurisprudence bail commercial… (laissez vide pour analyser l'email)`}
+              style={{ flex: 1, height: 34, border: "1px solid #BFDBFE", borderRadius: 8, padding: "0 12px", fontSize: 12, outline: "none", background: "#fff" }}
+            />
+            <button onClick={askResearch} disabled={researchLoading}
+              style={{ background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, padding: "0 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: researchLoading ? 0.6 : 1, whiteSpace: "nowrap" }}>
+              {researchLoading ? "…" : "🔍 Rechercher"}
+            </button>
+          </div>
+          {researchLoading && <div style={{ fontSize: 12, color: "#1D4ED8", fontStyle: "italic" }}>Auguste recherche sur le web et dans l'historique des mails…</div>}
+          {researchError && <div style={{ fontSize: 12, color: "#DC2626", marginTop: 8 }}>{researchError}</div>}
+
+          {researchResult && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ background: "#fff", border: "1px solid #BFDBFE", borderRadius: 10, padding: "12px 16px" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#1D4ED8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Synthèse</div>
+                <p style={{ fontSize: 13, color: "#1C1A17", margin: 0, lineHeight: 1.65 }}>{researchResult.summary}</p>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: researchResult.mailInsights?.length ? "1fr 1fr" : "1fr", gap: 10 }}>
+                {researchResult.keyPoints?.length > 0 && (
+                  <div style={{ background: "#F0F9FF", border: "1px solid #BAE6FD", borderRadius: 10, padding: "10px 16px" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0369A1", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Points clés</div>
+                    <ul style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 3 }}>
+                      {researchResult.keyPoints.map((p, i) => <li key={i} style={{ fontSize: 12, color: "#0c4a6e" }}>{p}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {researchResult.mailInsights?.length > 0 && (
+                  <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 10, padding: "10px 16px" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Historique mails</div>
+                    <ul style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 3 }}>
+                      {researchResult.mailInsights.map((p, i) => <li key={i} style={{ fontSize: 12, color: "#166534" }}>{p}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {researchResult.webSources?.length > 0 && (
+                <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "10px 16px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#92400E", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Sources web</div>
+                  <ul style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 2 }}>
+                    {researchResult.webSources.map((s, i) => <li key={i} style={{ fontSize: 11, color: "#92400E" }}>{s}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              {researchResult.suggestion && (
+                <div style={{ background: "#EFF6FF", border: "1px solid #93C5FD", borderRadius: 10, padding: "10px 16px", display: "flex", alignItems: "flex-start", gap: 12 }}>
+                  <p style={{ fontSize: 12, color: "#1e40af", margin: 0, flex: 1, lineHeight: 1.6, fontStyle: "italic" }}>{researchResult.suggestion}</p>
+                  <button onClick={injectResearchInReply}
+                    style={{ background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                    ↳ Intégrer
                   </button>
                 </div>
               )}
