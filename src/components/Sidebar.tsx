@@ -31,29 +31,8 @@ const nav: NavItem[] = [
   { id: "chat",      label: "Messages internes",  icon: "💬", href: "/messagerie-interne", group: "Principal" },
   { id: "appels",    label: "Appels téléphoniques", icon: "📞", href: "/appels",           group: "Principal" },
 
-  /* ── Gestion · Tableau de bord (pas de sous-groupe) ─────────── */
-  { id: "gestion-loc", label: "Vue d'ensemble",   icon: "🏠", href: "/gestion-locative", group: "Gestion" },
-
-  /* ── Gestion · Patrimoine ────────────────────────────────────── */
-  { id: "proprietaires", label: "Propriétaires",  icon: "👤", href: "/proprietaires",    group: "Gestion", subGroup: "Patrimoine", indent: true },
-  { id: "biens",         label: "Biens & lots",   icon: "🏡", href: "/biens",            group: "Gestion", subGroup: "Patrimoine", indent: true },
-
-  /* ── Gestion · Locataires & Baux ─────────────────────────────── */
-  { id: "locataires",  label: "Locataires",       icon: "◎",  href: "/locataires",       group: "Gestion", subGroup: "Locataires & Baux", indent: true },
-  { id: "baux",        label: "Baux",             icon: "📄", href: "/baux",             group: "Gestion", subGroup: "Locataires & Baux", indent: true },
-  { id: "edl",         label: "États des lieux",  icon: "⌂",  href: "/etats-des-lieux",  group: "Gestion", subGroup: "Locataires & Baux", indent: true },
-  { id: "candidature", label: "Candidatures",     icon: "📥", href: "/candidature",      group: "Gestion", subGroup: "Locataires & Baux", indent: true },
-
-  /* ── Gestion · Suivi ─────────────────────────────────────────── */
-  { id: "loyers",      label: "Loyers & quittances", icon: "💶", href: "/loyers",        group: "Gestion", subGroup: "Suivi", indent: true },
-  { id: "ods",         label: "Ordres de service", icon: "📋", href: "/ordres-de-service", group: "Gestion", subGroup: "Suivi", indent: true },
-  { id: "fournisseurs",label: "Fournisseurs",      icon: "🔧", href: "/fournisseurs",    group: "Gestion", subGroup: "Suivi", indent: true },
-
-  /* ── Comptabilité ────────────────────────────────────────────── */
-  { id: "compta",     label: "Tableau de bord",   icon: "∑",  href: "/comptabilite",                  group: "Comptabilité" },
-  { id: "compta-enc", label: "Encaissements",     icon: "↗",  href: "/comptabilite/encaissements",    group: "Comptabilité", subGroup: "Compta·Détail", indent: true },
-  { id: "compta-dep", label: "Dépenses",          icon: "↙",  href: "/comptabilite/depenses",         group: "Comptabilité", subGroup: "Compta·Détail", indent: true },
-  { id: "compta-tva", label: "TVA",               icon: "%",  href: "/comptabilite/tva",              group: "Comptabilité", subGroup: "Compta·Détail", indent: true },
+  /* ── Gestion (lien unique vers le module plein écran) ─────────── */
+  { id: "gestion", label: "Gestion locative", icon: "🏠", href: "/gestion", group: "Gestion" },
 
   /* ── Agence ──────────────────────────────────────────────────── */
   { id: "formation", label: "Formation",          icon: "◈",  href: "/formation",        group: "Agence" },
@@ -66,7 +45,7 @@ const adminNav = [
   { id: "admin-settings", label: "Paramètres",     icon: "⚙", href: "/admin/parametres" },
 ];
 
-const groups = ["Principal", "Gestion", "Comptabilité", "Agence"];
+const groups = ["Principal", "Gestion", "Agence"];
 
 /* Sous-groupes ouverts par défaut */
 const DEFAULT_OPEN: Record<string, boolean> = {
