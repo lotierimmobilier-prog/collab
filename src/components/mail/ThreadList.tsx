@@ -1,7 +1,7 @@
 "use client";
 import { MailThread, MailMessage, MailLabel, MailAccount } from "@/lib/mail";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 15;
 
 interface Props {
   threads: MailThread[];
@@ -26,23 +26,26 @@ export default function ThreadList({ threads, messages, labels, accounts, select
   const safePage   = Math.min(page, totalPages);
   const paged      = threads.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  function isUnread(t: MailThread) {
-    return messages.some(m => m.threadId === t.id && m.status === "unread");
-  }
-  function isStarred(t: MailThread) {
-    return messages.some(m => m.threadId === t.id && m.labels.includes("starred"));
-  }
+  function isUnread(t: MailThread) { return messages.some(m => m.threadId === t.id && m.status === "unread"); }
+  function isStarred(t: MailThread) { return messages.some(m => m.threadId === t.id && m.labels.includes("starred")); }
   function lastMsg(t: MailThread) {
-    const msgs = messages.filter(m => m.threadId === t.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    return msgs[0];
+    return messages.filter(m => m.threadId === t.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
   }
-  function threadLabels(t: MailThread) {
+  function threadCustomLabels(t: MailThread) {
     const ids = new Set(messages.filter(m => m.threadId === t.id).flatMap(m => m.labels));
-    return labels.filter(l => !l.system && ids.has(l.id));
+    return customLabels.filter(l => ids.has(l.id));
   }
-  function accountOf(t: MailThread) {
-    return accounts.find(a => a.id === t.accountId);
+  function getAssignedLabel(t: MailThread): string | null {
+    const allLbls = messages.filter(m => m.threadId === t.id).flatMap(m => m.labels);
+    const tag = allLbls.find(l => l.startsWith("assigned:"));
+    return tag ? tag.slice("assigned:".length) : null;
   }
+  function getRepliedLabel(t: MailThread): string | null {
+    const allLbls = messages.filter(m => m.threadId === t.id).flatMap(m => m.labels);
+    const tag = allLbls.find(l => l.startsWith("replied:"));
+    return tag ? tag.slice("replied:".length) : null;
+  }
+  function accountOf(t: MailThread) { return accounts.find(a => a.id === t.accountId); }
   function formatDate(iso: string) {
     const d = new Date(iso);
     const now = new Date();
@@ -50,6 +53,13 @@ export default function ThreadList({ threads, messages, labels, accounts, select
     if (now.getTime() - d.getTime() < 7 * 86400000) return d.toLocaleDateString("fr-FR", { weekday: "short" });
     return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
   }
+  function initials(name: string) {
+    const parts = name.trim().split(/\s+/);
+    return parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
+  }
+
+  const COLORS = ["#B8966A","#2563EB","#059669","#7C3AED","#DC2626","#0891B2","#D97706"];
+  function avatarColor(str: string) { let h = 0; for (const c of str) h = (h * 31 + c.charCodeAt(0)) % COLORS.length; return COLORS[h]; }
 
   const showAccountFilter = accounts.length > 1;
 
@@ -57,28 +67,19 @@ export default function ThreadList({ threads, messages, labels, accounts, select
     <div style={{ width: "100%", flexShrink: 0, borderBottom: "1px solid #e5e7eb", background: "#fff", display: "flex", flexDirection: "column" }}>
       {/* Filtre par compte */}
       {showAccountFilter && (
-        <div style={{ padding: "6px 10px", borderBottom: "1px solid #f3f4f6", display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
-          <button
-            onClick={() => onAccountFilter("all")}
-            style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 20, border: activeAccount === "all" ? "1.5px solid #B8966A" : "1px solid #e5e7eb", background: activeAccount === "all" ? "#F7F0E6" : "#f9fafb", fontSize: 11, fontWeight: activeAccount === "all" ? 600 : 400, color: activeAccount === "all" ? "#B8966A" : "#6b7280", cursor: "pointer" }}
-          >
-            Tous
-          </button>
+        <div style={{ padding: "5px 10px", borderBottom: "1px solid #f3f4f6", display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+          <button onClick={() => onAccountFilter("all")} style={{ padding: "2px 8px", borderRadius: 20, border: activeAccount === "all" ? "1.5px solid #B8966A" : "1px solid #e5e7eb", background: activeAccount === "all" ? "#F7F0E6" : "#f9fafb", fontSize: 10, fontWeight: activeAccount === "all" ? 600 : 400, color: activeAccount === "all" ? "#B8966A" : "#6b7280", cursor: "pointer" }}>Tous</button>
           {accounts.map(a => (
-            <button
-              key={a.id}
-              onClick={() => onAccountFilter(a.id)}
-              title={a.label}
-              style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 8px", borderRadius: 20, border: activeAccount === a.id ? `1.5px solid ${a.color}` : "1px solid #e5e7eb", background: activeAccount === a.id ? a.color + "18" : "#f9fafb", fontSize: 11, fontWeight: activeAccount === a.id ? 600 : 400, color: activeAccount === a.id ? a.color : "#6b7280", cursor: "pointer", maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-            >
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: a.color, flexShrink: 0, display: "inline-block" }} />
+            <button key={a.id} onClick={() => onAccountFilter(a.id)} title={a.label} style={{ display: "flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 20, border: activeAccount === a.id ? `1.5px solid ${a.color}` : "1px solid #e5e7eb", background: activeAccount === a.id ? a.color + "18" : "#f9fafb", fontSize: 10, fontWeight: activeAccount === a.id ? 600 : 400, color: activeAccount === a.id ? a.color : "#6b7280", cursor: "pointer", maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: a.color, flexShrink: 0, display: "inline-block" }} />
               {a.label}
             </button>
           ))}
         </div>
       )}
+
       {/* Compteur */}
-      <div style={{ padding: "5px 14px", borderBottom: "1px solid #f3f4f6", fontSize: 11, color: "#9ca3af", display: "flex", justifyContent: "space-between" }}>
+      <div style={{ padding: "4px 12px", borderBottom: "1px solid #f3f4f6", fontSize: 10, color: "#9ca3af", display: "flex", justifyContent: "space-between" }}>
         <span>{threads.length} conversation{threads.length > 1 ? "s" : ""}</span>
         {totalPages > 1 && <span>Page {safePage}/{totalPages}</span>}
       </div>
@@ -86,62 +87,80 @@ export default function ThreadList({ threads, messages, labels, accounts, select
       {/* Liste */}
       <div style={{ flex: 1, overflowY: "auto" }}>
         {paged.length === 0 ? (
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: 13, flexDirection: "column", gap: 8, paddingTop: 40 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: 13, flexDirection: "column", gap: 8, paddingTop: 40 }}>
             <div style={{ fontSize: 32 }}>📭</div>
             <div>Aucun message</div>
           </div>
-        ) : paged.map((t) => {
-          const last    = lastMsg(t);
-          const unread  = isUnread(t);
-          const starred = isStarred(t);
-          const acct    = accountOf(t);
-          const tLabels = threadLabels(t);
-          const msgCount = messages.filter(m => m.threadId === t.id).length;
+        ) : paged.map(t => {
+          const last      = lastMsg(t);
+          const unread    = isUnread(t);
+          const starred   = isStarred(t);
+          const acct      = accountOf(t);
+          const tLabels   = threadCustomLabels(t);
+          const assigned  = getAssignedLabel(t);
+          const replied   = getRepliedLabel(t);
+          const msgCount  = messages.filter(m => m.threadId === t.id).length;
+          const fromName  = last?.from.name || last?.from.email || "—";
+          const color     = avatarColor(fromName);
 
           return (
-            <div
-              key={t.id}
-              onClick={() => onSelect(t)}
-              style={{
-                padding: "12px 14px", borderBottom: "1px solid #f3f4f6", cursor: "pointer",
-                background: selectedId === t.id ? "#F7F0E6" : unread ? "#fafafa" : "#fff",
-                borderLeft: selectedId === t.id ? "3px solid #B8966A" : "3px solid transparent",
-                position: "relative",
-              }}
+            <div key={t.id} onClick={() => onSelect(t)}
+              style={{ padding: "9px 12px", borderBottom: "1px solid #f3f4f6", cursor: "pointer", background: selectedId === t.id ? "#F7F0E6" : "#fff", borderLeft: `3px solid ${selectedId === t.id ? "#B8966A" : "transparent"}`, position: "relative", transition: "background 0.1s" }}
               onMouseEnter={e => selectedId !== t.id && (e.currentTarget.style.background = "#f9fafb")}
-              onMouseLeave={e => selectedId !== t.id && (e.currentTarget.style.background = unread ? "#fafafa" : "#fff")}
+              onMouseLeave={e => selectedId !== t.id && (e.currentTarget.style.background = "#fff")}
             >
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: unread ? "#B8966A" : "transparent", flexShrink: 0, marginTop: 5 }} />
+              <div style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
+
+                {/* Avatar */}
+                <div style={{ width: 34, height: 34, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", flexShrink: 0, marginTop: 1 }}>
+                  {initials(fromName)}
+                </div>
+
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: unread ? 700 : 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>
-                        {last?.from.name || last?.from.email || "—"}
+                  {/* Ligne 1 : Expéditeur + date */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                      {unread && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#B8966A", flexShrink: 0, display: "inline-block" }} />}
+                      <span style={{ fontSize: 12, fontWeight: unread ? 700 : 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {fromName}
                       </span>
-                      {msgCount > 1 && <span style={{ fontSize: 10, color: "#9ca3af" }}>({msgCount})</span>}
-                      {acct && <div style={{ width: 6, height: 6, borderRadius: "50%", background: acct.color, flexShrink: 0 }} />}
+                      {msgCount > 1 && <span style={{ fontSize: 10, color: "#9ca3af", flexShrink: 0 }}>({msgCount})</span>}
+                      {acct && <div style={{ width: 5, height: 5, borderRadius: "50%", background: acct.color, flexShrink: 0 }} />}
                     </div>
-                    <span style={{ fontSize: 11, color: "#9ca3af", flexShrink: 0 }}>{last ? formatDate(last.date) : ""}</span>
+                    <span style={{ fontSize: 10, color: "#9ca3af", flexShrink: 0, marginLeft: 6 }}>{last ? formatDate(last.date) : ""}</span>
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: unread ? 600 : 400, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 3 }}>
+
+                  {/* Ligne 2 : Sujet */}
+                  <div style={{ fontSize: 12, fontWeight: unread ? 600 : 400, color: unread ? "#111827" : "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 2 }}>
                     {t.subject}
                   </div>
+
+                  {/* Ligne 3 : Aperçu */}
                   <div style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {last?.bodyText.slice(0, 80)}
+                    {last?.bodyText?.slice(0, 90) || ""}
                   </div>
-                  {tLabels.length > 0 && (
-                    <div style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap" }}>
+
+                  {/* Ligne 4 : Labels + badges assignation/réponse */}
+                  {(tLabels.length > 0 || assigned || replied) && (
+                    <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
                       {tLabels.map(l => (
-                        <span key={l.id} style={{ background: l.color + "18", color: l.color, borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 600 }}>{l.name}</span>
+                        <span key={l.id} style={{ background: l.color + "18", color: l.color, borderRadius: 4, padding: "1px 5px", fontSize: 10, fontWeight: 600 }}>{l.name}</span>
                       ))}
+                      {assigned && (
+                        <span style={{ background: "#EFF6FF", color: "#2563EB", borderRadius: 4, padding: "1px 5px", fontSize: 10, fontWeight: 600 }}>→ répondre</span>
+                      )}
+                      {replied && (
+                        <span style={{ background: "#F0FDF4", color: "#059669", borderRadius: 4, padding: "1px 5px", fontSize: 10, fontWeight: 600 }}>✓ répondu</span>
+                      )}
                     </div>
                   )}
                 </div>
-              </div>
-              <div style={{ position: "absolute", top: 8, right: 8, display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
-                <button onClick={() => onStar(t.id)} title="Suivre" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, opacity: starred ? 1 : 0.3, color: "#f59e0b" }}>★</button>
-                <button onClick={() => onTrash(t.id)} title="Corbeille" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, opacity: 0.3, color: "#ef4444" }}>🗑</button>
+
+                {/* Actions hover */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                  <button onClick={() => onStar(t.id)} title="Suivre" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: starred ? "#f59e0b" : "#d1d5db", lineHeight: 1 }}>★</button>
+                  <button onClick={() => onTrash(t.id)} title="Corbeille" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "#e5e7eb", lineHeight: 1 }}>🗑</button>
+                </div>
               </div>
             </div>
           );
@@ -150,13 +169,12 @@ export default function ThreadList({ threads, messages, labels, accounts, select
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={{ borderTop: "1px solid #f3f4f6", padding: "8px 10px", display: "flex", alignItems: "center", justifyContent: "center", gap: 4, flexWrap: "wrap" }}>
+        <div style={{ borderTop: "1px solid #f3f4f6", padding: "6px 10px", display: "flex", alignItems: "center", justifyContent: "center", gap: 4, flexWrap: "wrap" }}>
           <PageBtn disabled={safePage <= 1} onClick={() => onPageChange(1)}>«</PageBtn>
           <PageBtn disabled={safePage <= 1} onClick={() => onPageChange(safePage - 1)}>‹</PageBtn>
           {pageNumbers(safePage, totalPages).map((p, i) =>
-            p === null
-              ? <span key={`dots-${i}`} style={{ padding: "0 4px", color: "#9ca3af", fontSize: 12 }}>…</span>
-              : <PageBtn key={p} active={p === safePage} onClick={() => onPageChange(p)}>{p}</PageBtn>
+            p === null ? <span key={`d${i}`} style={{ padding: "0 2px", color: "#9ca3af", fontSize: 11 }}>…</span>
+            : <PageBtn key={p} active={p === safePage} onClick={() => onPageChange(p)}>{p}</PageBtn>
           )}
           <PageBtn disabled={safePage >= totalPages} onClick={() => onPageChange(safePage + 1)}>›</PageBtn>
           <PageBtn disabled={safePage >= totalPages} onClick={() => onPageChange(totalPages)}>»</PageBtn>
@@ -168,17 +186,9 @@ export default function ThreadList({ threads, messages, labels, accounts, select
 
 function PageBtn({ children, onClick, disabled, active }: { children: React.ReactNode; onClick: () => void; disabled?: boolean; active?: boolean }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        minWidth: 28, height: 28, border: active ? "1px solid #B8966A" : "1px solid #e5e7eb",
-        borderRadius: 6, background: active ? "#B8966A" : "#fff",
-        color: active ? "#fff" : disabled ? "#d1d5db" : "#374151",
-        fontSize: 12, cursor: disabled ? "default" : "pointer", fontWeight: active ? 600 : 400,
-        padding: "0 6px",
-      }}
-    >{children}</button>
+    <button onClick={onClick} disabled={disabled} style={{ minWidth: 26, height: 26, border: active ? "1px solid #B8966A" : "1px solid #e5e7eb", borderRadius: 5, background: active ? "#B8966A" : "#fff", color: active ? "#fff" : disabled ? "#d1d5db" : "#374151", fontSize: 11, cursor: disabled ? "default" : "pointer", fontWeight: active ? 600 : 400, padding: "0 5px" }}>
+      {children}
+    </button>
   );
 }
 

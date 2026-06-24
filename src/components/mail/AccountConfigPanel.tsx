@@ -134,13 +134,26 @@ export default function AccountConfigPanel({ accounts, onSave, onClose, onSyncAc
           )}
 
           {(showForm || editing) && (
-            <AccountForm
-              account={editing}
-              colorIndex={list.length}
-              users={users}
-              onSave={saveAccount}
-              onCancel={() => { setShowForm(false); setEditing(null); }}
-            />
+            <>
+              {!editing && (
+                <AgentQuickConnect
+                  users={users}
+                  colorIndex={list.length}
+                  onSave={a => { saveAccount(a); }}
+                  onCancel={() => { setShowForm(false); setEditing(null); }}
+                />
+              )}
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", marginBottom: 10 }}>
+                {!editing ? "Ou configurer manuellement" : "Modifier le compte"}
+              </div>
+              <AccountForm
+                account={editing}
+                colorIndex={list.length}
+                users={users}
+                onSave={saveAccount}
+                onCancel={() => { setShowForm(false); setEditing(null); }}
+              />
+            </>
           )}
         </div>
 
@@ -175,6 +188,81 @@ function TestButton({ account }: { account: MailAccount }) {
           {result.ok && result.inbox && <div style={{ marginTop: 3 }}>INBOX — {result.inbox.messages} messages · {result.inbox.unseen} non lus</div>}
         </div>
       )}
+    </div>
+  );
+}
+
+const OVH_PRESET = { host: "ssl0.ovh.net", port: "993", ssl: true, smtpHost: "ssl0.ovh.net", smtpPort: "587", smtpSsl: false };
+
+function AgentQuickConnect({ users, colorIndex, onSave, onCancel }: { users: UserOpt[]; colorIndex: number; onSave: (a: MailAccount) => void; onCancel: () => void }) {
+  const [selectedUser, setSelectedUser] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
+
+  const user = users.find(u => u.id === selectedUser);
+  const email = user?.email ?? "";
+  const canTest = !!(email && password);
+
+  async function testAndSave() {
+    if (!canTest) return;
+    setTesting(true); setTestResult(null);
+    try {
+      const resp = await fetch("/api/mail/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ host: OVH_PRESET.host, port: OVH_PRESET.port, ssl: OVH_PRESET.ssl, username: email, password, protocol: "imap" }) });
+      const result: TestResult = await resp.json();
+      setTestResult(result);
+      if (result.ok) {
+        onSave({
+          id: Date.now().toString(),
+          label: user!.name,
+          email, name: user!.name,
+          protocol: "imap",
+          ...OVH_PRESET,
+          port: 993, smtpPort: 587,
+          username: email, password,
+          color: ACCOUNT_COLORS[colorIndex % ACCOUNT_COLORS.length],
+          active: true, isShared: false, sharedUserIds: [],
+        });
+      }
+    } catch { setTestResult({ ok: false, error: "Erreur réseau" }); }
+    finally { setTesting(false); }
+  }
+
+  return (
+    <div style={{ background: "#F7F0E6", border: "1px solid #E8D9C0", borderRadius: 12, padding: 16, marginBottom: 20 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#B8966A", marginBottom: 12 }}>⚡ Connexion rapide — Compte agent Lotier</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 4 }}>Agent</div>
+          <select value={selectedUser} onChange={e => setSelectedUser(e.target.value)} style={{ width: "100%", height: 34, border: "1px solid #E8D9C0", borderRadius: 7, padding: "0 10px", fontSize: 12, outline: "none", background: "#fff", fontFamily: "inherit" }}>
+            <option value="">— Choisir un agent —</option>
+            {users.filter(u => u.email.endsWith("@lotier-immobilier.com")).map(u => (
+              <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 4 }}>Mot de passe</div>
+          <div style={{ position: "relative" }}>
+            <input type={showPwd ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Mot de passe email" style={{ width: "100%", height: 34, border: "1px solid #E8D9C0", borderRadius: 7, padding: "0 36px 0 10px", fontSize: 12, outline: "none", background: "#fff", fontFamily: "inherit", boxSizing: "border-box" }} />
+            <button onClick={() => setShowPwd(s => !s)} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "#9ca3af" }}>👁</button>
+          </div>
+        </div>
+      </div>
+      {email && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 6 }}>Serveur : ssl0.ovh.net · IMAP 993 · SMTP 587</div>}
+      {testResult && (
+        <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 7, fontSize: 11, background: testResult.ok ? "#f0fdf4" : "#fef2f2", color: testResult.ok ? "#166534" : "#991b1b", border: `1px solid ${testResult.ok ? "#bbf7d0" : "#fecaca"}` }}>
+          {testResult.ok ? `✓ Connexion réussie — compte ajouté` : testResult.error}
+          {testResult.ok && testResult.inbox && ` · INBOX : ${testResult.inbox.messages} msgs, ${testResult.inbox.unseen} non lus`}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button onClick={onCancel} style={{ background: "none", border: "1px solid #E8D9C0", borderRadius: 7, padding: "7px 14px", fontSize: 12, cursor: "pointer", color: "#9ca3af" }}>Annuler</button>
+        <button onClick={testAndSave} disabled={!canTest || testing} style={{ flex: 1, background: canTest ? "#B8966A" : "#e5e7eb", color: canTest ? "#fff" : "#9ca3af", border: "none", borderRadius: 7, padding: "7px 0", fontSize: 12, fontWeight: 600, cursor: canTest ? "pointer" : "default" }}>
+          {testing ? "Test en cours…" : "Tester et ajouter"}
+        </button>
+      </div>
     </div>
   );
 }
