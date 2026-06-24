@@ -63,6 +63,13 @@ export function middleware(req: NextRequest) {
     req.cookies.get("next-auth.session-token")?.value;
 
   if (!sessionToken) {
+    // Routes API → JSON 401 (pas de redirect HTML)
+    if (pathname.startsWith("/api/")) {
+      return new NextResponse(JSON.stringify({ error: "Non authentifié" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     const loginUrl = new URL("/login", req.nextUrl);
     loginUrl.searchParams.set("callbackUrl", encodeURIComponent(pathname));
     return NextResponse.redirect(loginUrl);
