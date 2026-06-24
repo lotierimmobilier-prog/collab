@@ -652,7 +652,7 @@ export default function MailBoard() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 60, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px" }}
           onClick={e => { if (e.target === e.currentTarget) setSelectedThread(null); }}
         >
-          <div style={{ width: "min(900px, 96vw)", height: "calc(100vh - 48px)", maxHeight: 860, background: "#fff", borderRadius: 16, boxShadow: "0 24px 80px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ width: "min(920px, 96vw)", height: "calc(100vh - 32px)", background: "#fff", borderRadius: 16, boxShadow: "0 24px 80px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <ThreadView
               thread={selectedThread}
               labels={labels}

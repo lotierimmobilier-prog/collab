@@ -336,7 +336,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
       </div>
 
       {/* ── Barre assignation / réponse / classification ── */}
-      <div style={{ padding: "8px 20px", background: "#fff", borderBottom: "1px solid #f0f0f0", display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ padding: "6px 20px", background: "#fff", borderBottom: "1px solid #f0f0f0", display: "flex", gap: 12, alignItems: "center", flexWrap: "nowrap", overflowX: "auto", flexShrink: 0 }}>
 
         {/* Suggestion de classification IA */}
         {classifying && <span style={{ fontSize: 11, color: "#9ca3af" }}>✦ Classification en cours…</span>}

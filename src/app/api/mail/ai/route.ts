@@ -43,11 +43,17 @@ export async function POST(req: NextRequest) {
     const toneLabel: Record<string, string> = { professionnel: "professionnel et bienveillant", cordial: "cordial et chaleureux", formel: "formel et sobre", concis: "concis, aller à l'essentiel" };
     const instrPart = instruction ? `\nInstruction supplémentaire : ${instruction}` : "";
     const resp = await client.messages.create({
-      model: "claude-sonnet-4-6", max_tokens: 800, system: SYSTEM,
-      messages: [{ role: "user", content: `Rédige une réponse à cet email. Ton : ${toneLabel[tone] ?? "professionnel et bienveillant"}. Agence immobilière Lotier Immobilier.${instrPart}\n\n${ctx}\n\nRéponds en JSON: {"reply": "...", "subject": "Re: ${threadSubject}"}` }],
+      model: "claude-sonnet-4-6", max_tokens: 1200, system: SYSTEM,
+      messages: [{ role: "user", content: `Rédige une réponse à cet email. Ton : ${toneLabel[tone] ?? "professionnel et bienveillant"}. Agence immobilière Lotier Immobilier.${instrPart}\n\n${ctx}\n\nRéponds UNIQUEMENT en JSON valide sans markdown :\n{"reply": "texte de la reponse", "subject": "Re: ${threadSubject}"}` }],
     });
-    const text = resp.content.find(b => b.type === "text")?.text ?? "{}";
-    return NextResponse.json(JSON.parse(text));
+    const raw = resp.content.find(b => b.type === "text")?.text ?? "";
+    const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    try {
+      return NextResponse.json(JSON.parse(cleaned));
+    } catch {
+      // Si JSON invalide, retourner le texte brut comme réponse
+      return NextResponse.json({ reply: cleaned, subject: `Re: ${threadSubject}` });
+    }
   }
 
   if (action === "create_task") {
