@@ -81,6 +81,36 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(JSON.parse(text));
   }
 
+  if (action === "full_analysis") {
+    // Récupère tous les mails échangés avec cet expéditeur (envoyés et reçus) depuis la DB
+    if (!senderEmail) return NextResponse.json({ error: "senderEmail requis" }, { status: 400 });
+    const allMsgs = await prisma.emailMessage.findMany({
+      where: { OR: [
+        { fromEmail: { equals: senderEmail, mode: "insensitive" } },
+        { toEmail:   { contains: senderEmail, mode: "insensitive" } },
+      ]},
+      orderBy: { date: "asc" },
+      take: 80,
+      select: { fromEmail: true, fromName: true, toEmail: true, subject: true, bodyText: true, date: true },
+    });
+
+    const histCtx = allMsgs.map(m =>
+      `[${new Date(m.date).toLocaleDateString("fr-FR")}] De: ${m.fromName ?? m.fromEmail} → À: ${m.toEmail}\nObjet: ${m.subject}\n${(m.bodyText || "").slice(0, 600)}`
+    ).join("\n\n---\n\n");
+
+    const resp = await client.messages.create({
+      model: "claude-sonnet-4-6", max_tokens: 1600, system: SYSTEM,
+      messages: [{ role: "user", content: `Fais un bilan complet de tous les échanges avec ${senderEmail} (${allMsgs.length} emails). Contexte : agence immobilière Lotier Immobilier.\n\n${histCtx}\n\nRéponds UNIQUEMENT en JSON valide :\n{"name":"nom complet du contact","totalEmails":0,"firstContact":"date","lastContact":"date","summary":"résumé global en 2-3 phrases","topics":["sujet1","sujet2"],"actions":["action à faire 1","action à faire 2"],"sentiment":"positif|neutre|négatif","priority":"haute|normale|basse","notes":"observations importantes"}` }],
+    });
+    const raw = resp.content.find(b => b.type === "text")?.text ?? "{}";
+    const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    try {
+      return NextResponse.json({ ...JSON.parse(cleaned), totalInDb: allMsgs.length });
+    } catch {
+      return NextResponse.json({ error: "Analyse impossible", raw: cleaned }, { status: 500 });
+    }
+  }
+
   if (action === "identify_sender") {
     if (!senderEmail) return NextResponse.json({ senderType: "unknown" });
 

@@ -23,10 +23,11 @@ interface Props {
   onSetLabels?: (labels: string[]) => void;
 }
 
-interface AiSummary  { summary: string; points: string[] }
-interface AiTask     { title: string; description: string; priority: string; assigneeId?: string; assigneeName?: string; dueDate?: string; confidence: number }
-interface AiRdv      { found: boolean; title: string; start?: string; end?: string; location?: string; type?: string; attendeeId?: string; attendeeName?: string; confidence: number }
-interface SenderInfo { senderType: string; name?: string; role?: string }
+interface AiSummary    { summary: string; points: string[] }
+interface AiTask       { title: string; description: string; priority: string; assigneeId?: string; assigneeName?: string; dueDate?: string; confidence: number }
+interface AiRdv        { found: boolean; title: string; start?: string; end?: string; location?: string; type?: string; attendeeId?: string; attendeeName?: string; confidence: number }
+interface SenderInfo   { senderType: string; name?: string; role?: string }
+interface FullAnalysis { name: string; totalEmails: number; totalInDb: number; firstContact: string; lastContact: string; summary: string; topics: string[]; actions: string[]; sentiment: string; priority: string; notes: string }
 
 const SENDER_BADGE: Record<string, { label: string; color: string; bg: string }> = {
   user:    { label: "Collègue",      color: "#2563EB", bg: "#EFF6FF" },
@@ -51,6 +52,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
   // Panneau IA
   const [aiLoading, setAiLoading]           = useState<string | null>(null);
   const [aiSummary, setAiSummary]           = useState<AiSummary | null>(null);
+  const [fullAnalysis, setFullAnalysis]     = useState<FullAnalysis | null>(null);
   const [senderInfo, setSenderInfo]         = useState<SenderInfo | null>(null);
   const [taskModal, setTaskModal]           = useState<AiTask | null>(null);
   const [rdvModal, setRdvModal]             = useState<AiRdv | null>(null);
@@ -149,6 +151,22 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
   }
 
   // ── Proposer une réponse ────────────────────────────────────
+  async function runFullAnalysis() {
+    const email = firstMsg?.from?.email || lastMsg?.from?.email;
+    if (!email) return;
+    setAiLoading("full"); setFullAnalysis(null);
+    try {
+      const r = await fetch("/api/mail/ai", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "full_analysis", messages: [], senderEmail: email }),
+      });
+      const d = await r.json();
+      if (d.error) return;
+      setFullAnalysis(d);
+    } catch { /* silencieux */ }
+    finally { setAiLoading(null); }
+  }
+
   async function draftReply() {
     setAiLoading("draft"); setShowReply(true);
     try {
@@ -393,10 +411,11 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
       <div style={{ padding: "10px 20px", background: "#FDFAF6", borderBottom: "1px solid #EDE8DF", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: "0.04em", marginRight: 4 }}>✦ Auguste</span>
 
-        <AiBtn loading={aiLoading === "summarize"} onClick={summarize} icon="📝" label="Résumer" />
-        <AiBtn loading={aiLoading === "draft"}     onClick={draftReply} icon="✍" label="Répondre" />
-        <AiBtn loading={aiLoading === "task"}      onClick={suggestTask} icon="✅" label="Créer une tâche" />
-        <AiBtn loading={aiLoading === "rdv"}       onClick={detectRdv}  icon="📅" label="Valider un RDV" />
+        <AiBtn loading={aiLoading === "summarize"} onClick={summarize}       icon="📝" label="Résumer" />
+        <AiBtn loading={aiLoading === "draft"}     onClick={draftReply}      icon="✍" label="Répondre" />
+        <AiBtn loading={aiLoading === "task"}      onClick={suggestTask}     icon="✅" label="Créer une tâche" />
+        <AiBtn loading={aiLoading === "rdv"}       onClick={detectRdv}       icon="📅" label="Valider un RDV" />
+        <AiBtn loading={aiLoading === "full"}      onClick={runFullAnalysis} icon="🔍" label="Analyse complète" />
 
         {actionResult && (
           <span style={{ fontSize: 12, color: actionResult.ok ? "#059669" : "#dc2626", fontWeight: 500, marginLeft: 8 }}>
@@ -421,6 +440,50 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
               )}
             </div>
             <button onClick={() => setAiSummary(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 16, flexShrink: 0, marginLeft: 12 }}>×</button>
+          </div>
+        </div>
+      )}
+
+      {/* Panneau analyse complète */}
+      {fullAnalysis && (
+        <div style={{ background: "#F0F7FF", borderBottom: "1px solid #BFDBFE", padding: "14px 20px", flexShrink: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#1D4ED8" }}>🔍 Analyse complète — {fullAnalysis.name || firstMsg?.from?.name}</span>
+              <span style={{ fontSize: 11, background: "#DBEAFE", color: "#1D4ED8", borderRadius: 6, padding: "2px 8px", fontWeight: 600 }}>{fullAnalysis.totalInDb ?? fullAnalysis.totalEmails} emails en base</span>
+              <span style={{ fontSize: 11, background: fullAnalysis.sentiment === "positif" ? "#DCFCE7" : fullAnalysis.sentiment === "négatif" ? "#FEE2E2" : "#F3F4F6", color: fullAnalysis.sentiment === "positif" ? "#15803D" : fullAnalysis.sentiment === "négatif" ? "#DC2626" : "#6B7280", borderRadius: 6, padding: "2px 8px", fontWeight: 600 }}>
+                {fullAnalysis.sentiment === "positif" ? "😊" : fullAnalysis.sentiment === "négatif" ? "😟" : "😐"} {fullAnalysis.sentiment}
+              </span>
+              <span style={{ fontSize: 11, color: "#6B7280" }}>1er contact : {fullAnalysis.firstContact} · Dernier : {fullAnalysis.lastContact}</span>
+            </div>
+            <button onClick={() => setFullAnalysis(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9CA3AF", fontSize: 16 }}>×</button>
+          </div>
+
+          <p style={{ fontSize: 13, color: "#1E3A5F", margin: "0 0 10px", lineHeight: 1.6 }}>{fullAnalysis.summary}</p>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            {fullAnalysis.topics?.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#1D4ED8", marginBottom: 5 }}>📌 Sujets abordés</div>
+                <ul style={{ margin: 0, paddingLeft: 14, display: "flex", flexDirection: "column", gap: 2 }}>
+                  {fullAnalysis.topics.map((t, i) => <li key={i} style={{ fontSize: 12, color: "#374151" }}>{t}</li>)}
+                </ul>
+              </div>
+            )}
+            {fullAnalysis.actions?.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#DC2626", marginBottom: 5 }}>⚡ Actions à faire</div>
+                <ul style={{ margin: 0, paddingLeft: 14, display: "flex", flexDirection: "column", gap: 2 }}>
+                  {fullAnalysis.actions.map((a, i) => <li key={i} style={{ fontSize: 12, color: "#374151" }}>{a}</li>)}
+                </ul>
+              </div>
+            )}
+            {fullAnalysis.notes && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", marginBottom: 5 }}>💡 Observations</div>
+                <p style={{ fontSize: 12, color: "#374151", margin: 0, lineHeight: 1.5 }}>{fullAnalysis.notes}</p>
+              </div>
+            )}
           </div>
         </div>
       )}
