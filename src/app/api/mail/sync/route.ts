@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { ImapFlow } = require("imapflow");
 
@@ -8,6 +9,21 @@ function makeClient(host: string, port: string, ssl: boolean, username: string, 
     auth: { user: username, pass: password },
     logger: false, connectionTimeout: 20000, greetingTimeout: 8000, socketTimeout: 30000,
   });
+}
+
+async function identifySender(email: string): Promise<{ senderType: string; senderId?: string; senderName?: string }> {
+  if (!email) return { senderType: "unknown" };
+
+  const [user, owner, tenant] = await Promise.all([
+    prisma.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true, prenom: true, nom: true } }),
+    prisma.owner.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true, prenom: true, nom: true } }),
+    prisma.tenant.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true, prenom: true, nom: true } }),
+  ]);
+
+  if (user)   return { senderType: "user",    senderId: user.id,   senderName: `${user.prenom} ${user.nom}` };
+  if (owner)  return { senderType: "owner",   senderId: owner.id,  senderName: `${owner.prenom} ${owner.nom}` };
+  if (tenant) return { senderType: "tenant",  senderId: tenant.id, senderName: `${tenant.prenom} ${tenant.nom}` };
+  return { senderType: "unknown" };
 }
 
 export async function POST(req: NextRequest) {
@@ -40,31 +56,71 @@ export async function POST(req: NextRequest) {
           const flags   = msg.flags ?? new Set();
           const isUnread  = !flags.has("\\Seen");
           const isStarred = flags.has("\\Flagged");
+          const fromEmail = env.from?.[0]?.address ?? "";
 
           const threadId = env.messageId
             ? env.messageId.replace(/[<>]/g, "").replace(/[^a-zA-Z0-9@._-]/g, "_")
             : `${accountId}-${msg.uid}`;
 
-          messages.push({
-            id: `${accountId}-${msg.uid}`,
-            uid: msg.uid,
+          const labels = ["inbox", ...(isStarred ? ["starred"] : [])];
+
+          // Identifier l'expéditeur dans la base
+          const identity = await identifySender(fromEmail);
+
+          const msgObj = {
+            id:       `${accountId}-${msg.uid}`,
+            uid:      msg.uid,
             threadId,
             accountId,
             from: {
-              name: env.from?.[0]?.name ?? env.from?.[0]?.address ?? "Inconnu",
-              email: env.from?.[0]?.address ?? "",
+              name:  env.from?.[0]?.name ?? env.from?.[0]?.address ?? "Inconnu",
+              email: fromEmail,
             },
             to: (env.to ?? []).map((a: { name?: string; address?: string }) => ({
-              name: a.name ?? a.address ?? "",
+              name:  a.name ?? a.address ?? "",
               email: a.address ?? "",
             })),
-            subject:  env.subject ?? "(Sans objet)",
-            body:     "",
-            bodyText: "",
-            date:     env.date?.toISOString() ?? new Date().toISOString(),
-            status:   isUnread ? "unread" : "read",
-            labels:   ["inbox", ...(isStarred ? ["starred"] : [])],
-          });
+            subject:    env.subject ?? "(Sans objet)",
+            body:       "",
+            bodyText:   "",
+            date:       env.date?.toISOString() ?? new Date().toISOString(),
+            status:     isUnread ? "unread" : "read",
+            labels,
+            senderType: identity.senderType,
+            senderId:   identity.senderId,
+          };
+
+          messages.push(msgObj);
+
+          // Persister en BDD (upsert silencieux)
+          try {
+            await prisma.emailMessage.upsert({
+              where: { uid_accountId_folder: { uid: String(msg.uid), accountId, folder: "INBOX" } },
+              create: {
+                uid:        String(msg.uid),
+                messageId:  env.messageId?.replace(/[<>]/g, ""),
+                folder:     "INBOX",
+                accountId,
+                fromEmail,
+                fromName:   env.from?.[0]?.name,
+                toEmail:    (env.to ?? []).map((a: { address?: string }) => a.address).filter(Boolean).join(", "),
+                subject:    env.subject ?? "(Sans objet)",
+                date:       env.date ?? new Date(),
+                read:       !isUnread,
+                starred:    isStarred,
+                threadId,
+                labels,
+                senderType: identity.senderType,
+                senderId:   identity.senderId,
+              },
+              update: {
+                read:       !isUnread,
+                starred:    isStarred,
+                senderType: identity.senderType,
+                senderId:   identity.senderId,
+              },
+            });
+          } catch { /* ignore contrainte unique */ }
         }
       }
     } finally {

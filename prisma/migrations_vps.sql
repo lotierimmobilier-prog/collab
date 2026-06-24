@@ -130,6 +130,56 @@ CREATE TABLE IF NOT EXISTS announcements (
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ── Emails persistés ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS email_messages (
+  id          TEXT PRIMARY KEY,
+  uid         TEXT NOT NULL,
+  "messageId" TEXT,
+  folder      TEXT NOT NULL DEFAULT 'INBOX',
+  "accountId" TEXT NOT NULL,
+  "fromEmail" TEXT NOT NULL,
+  "fromName"  TEXT,
+  "toEmail"   TEXT NOT NULL DEFAULT '',
+  subject     TEXT NOT NULL,
+  "bodyText"  TEXT,
+  "bodyHtml"  TEXT,
+  date        TIMESTAMPTZ NOT NULL,
+  read        BOOLEAN NOT NULL DEFAULT false,
+  starred     BOOLEAN NOT NULL DEFAULT false,
+  attachments JSONB,
+  "threadId"  TEXT,
+  labels      TEXT[] NOT NULL DEFAULT '{}',
+  "senderType" TEXT,
+  "senderId"  TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(uid, "accountId", folder)
+);
+
+-- ── Gestion locative ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS owners (
+  id          TEXT PRIMARY KEY,
+  prenom      TEXT NOT NULL,
+  nom         TEXT NOT NULL,
+  email       TEXT,
+  phone       TEXT,
+  address     TEXT,
+  notes       TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS tenants (
+  id          TEXT PRIMARY KEY,
+  prenom      TEXT NOT NULL,
+  nom         TEXT NOT NULL,
+  email       TEXT,
+  phone       TEXT,
+  address     TEXT,
+  notes       TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- ── Trigger updatedAt ────────────────────────────────────────
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
@@ -139,7 +189,11 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS tasks_updated_at          ON tasks;
 DROP TRIGGER IF EXISTS calendar_events_updated_at ON calendar_events;
 DROP TRIGGER IF EXISTS settings_updated_at        ON settings;
+DROP TRIGGER IF EXISTS owners_updated_at          ON owners;
+DROP TRIGGER IF EXISTS tenants_updated_at         ON tenants;
 
 CREATE TRIGGER tasks_updated_at           BEFORE UPDATE ON tasks           FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER calendar_events_updated_at BEFORE UPDATE ON calendar_events FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER settings_updated_at        BEFORE UPDATE ON settings        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER owners_updated_at          BEFORE UPDATE ON owners          FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER tenants_updated_at         BEFORE UPDATE ON tenants         FOR EACH ROW EXECUTE FUNCTION update_updated_at();

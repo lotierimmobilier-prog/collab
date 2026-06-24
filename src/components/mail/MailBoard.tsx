@@ -65,6 +65,33 @@ export default function MailBoard() {
     const k = localStorage.getItem(AI_KEY_STORE);
     if (k) setAiKey(k);
     setGmailConfigs(loadGmailConfigs());
+
+    // Charger les emails persistés en BDD au démarrage
+    fetch("/api/mail/messages?limit=200")
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok && d.messages?.length) {
+          const msgs = d.messages.map((m: Record<string, unknown>) => ({
+            id:        `${m.accountId}-${m.uid}`,
+            uid:       m.uid,
+            threadId:  m.threadId || `${m.accountId}-${m.uid}`,
+            accountId: m.accountId,
+            from:      { name: m.fromName || m.fromEmail, email: m.fromEmail },
+            to:        String(m.toEmail || "").split(",").map((e: string) => ({ name: e.trim(), email: e.trim() })),
+            subject:   m.subject,
+            body:      m.bodyHtml || "",
+            bodyText:  m.bodyText || "",
+            date:      m.date,
+            status:    m.read ? "read" : "unread",
+            labels:    m.labels || ["inbox"],
+            senderType: m.senderType,
+            attachments: m.attachments || [],
+          }));
+          ingestMessages(msgs);
+        }
+      })
+      .catch(() => {/* silencieux */});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function saveAccounts(a: MailAccount[]) { setAccounts(a); localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(a)); }

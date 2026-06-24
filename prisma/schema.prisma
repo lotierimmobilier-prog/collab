@@ -179,3 +179,61 @@ model Announcement {
 
   @@map("announcements")
 }
+
+// ── Messagerie email persistée ────────────────────────────────
+
+model EmailMessage {
+  id          String   @id @default(cuid())
+  uid         String
+  messageId   String?
+  folder      String   @default("INBOX")
+  accountId   String
+  fromEmail   String
+  fromName    String?
+  toEmail     String
+  subject     String
+  bodyText    String?
+  bodyHtml    String?
+  date        DateTime
+  read        Boolean  @default(false)
+  starred     Boolean  @default(false)
+  attachments Json?
+  threadId    String?
+  labels      String[] @default([])
+  senderType  String?  // "user"|"owner"|"tenant"|"unknown"
+  senderId    String?
+  createdAt   DateTime @default(now())
+
+  @@unique([uid, accountId, folder])
+  @@map("email_messages")
+}
+
+// ── Gestion locative ─────────────────────────────────────────
+
+model Owner {
+  id        String   @id @default(cuid())
+  prenom    String
+  nom       String
+  email     String?
+  phone     String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("owners")
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  prenom    String
+  nom       String
+  email     String?
+  phone     String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("tenants")
+}

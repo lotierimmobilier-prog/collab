@@ -19,6 +19,7 @@ const nav = [
   { id: "planning",   label: "Planning",            icon: "▦",  href: "/planning",        group: "Principal" },
   { id: "mail",       label: "Messagerie email",    icon: "@",  href: "/messagerie",      group: "Principal", badge: 3 },
   { id: "chat",       label: "Messages internes",   icon: "💬", href: "/messagerie-interne", group: "Principal" },
+  { id: "gestion-loc", label: "Gestion locative",    icon: "🏠", href: "/gestion-locative", group: "Gestion locative" },
   { id: "edl",        label: "États des lieux",     icon: "⌂",  href: "/etats-des-lieux", group: "Gestion locative" },
   { id: "locataires", label: "Dossiers locataires", icon: "◎",  href: "/locataires",      group: "Gestion locative" },
   { id: "compta",     label: "Tableau de bord",     icon: "∑",  href: "/comptabilite",    group: "Comptabilité" },
