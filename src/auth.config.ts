@@ -1,22 +1,12 @@
 import type { NextAuthConfig } from "next-auth";
-import Google from "next-auth/providers/google";
 
-// Config Edge-compatible (pas de DB, pas de Node-only modules)
-// Utilisée dans le middleware
+// Config Edge-compatible pour le middleware (sans imports Node.js)
 export const authConfig: NextAuthConfig = {
-  providers: [
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID!,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET!,
-    }),
-  ],
-  pages: {
-    signIn: "/login",
-    error: "/login",
-  },
+  providers: [],
+  pages: { signIn: "/login" },
   callbacks: {
     authorized({ auth }) {
-      return !!auth?.user; // connecté = autorisé
+      return !!auth?.user;
     },
   },
 };
