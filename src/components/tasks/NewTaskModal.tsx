@@ -112,9 +112,27 @@ export default function NewTaskModal({ onClose, onAdd, families = [] }: {
               </div>
               <div>
                 <FL>Groupe</FL>
-                <select value={groupId} onChange={e => setGroupId(e.target.value)} style={inp} disabled={!availableGroups.length}>
+                <select
+                  value={groupId}
+                  onChange={e => {
+                    const gid = e.target.value;
+                    setGroupId(gid);
+                    // Auto-sélectionner la famille parente si pas encore choisie
+                    if (gid && !familyId) {
+                      const parent = families.find(f => f.groups.some(g => g.id === gid));
+                      if (parent) setFamilyId(parent.id);
+                    }
+                  }}
+                  style={inp}
+                >
                   <option value="">Aucun groupe</option>
-                  {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  {families.map(f =>
+                    f.groups.length > 0 ? (
+                      <optgroup key={f.id} label={`${f.icon ?? "📁"} ${f.name}`}>
+                        {f.groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                      </optgroup>
+                    ) : null
+                  )}
                 </select>
               </div>
             </div>
