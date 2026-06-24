@@ -19,7 +19,7 @@ interface SubProps {
   onSelectEvent: (e: LocalEvent) => void;
 }
 
-export default function CalendarView({ view, currentDate, events, onSelectDate, onSelectEvent }: SubProps) {
+export default function CalendarView({ view, currentDate, events, onSelectDate, onSelectEvent }: Props) {
   if (view === "month") return <MonthView currentDate={currentDate} events={events} onSelectDate={onSelectDate} onSelectEvent={onSelectEvent} />;
   if (view === "week")  return <WeekView  currentDate={currentDate} events={events} onSelectDate={onSelectDate} onSelectEvent={onSelectEvent} />;
   return <DayView currentDate={currentDate} events={events} onSelectDate={onSelectDate} onSelectEvent={onSelectEvent} />;
