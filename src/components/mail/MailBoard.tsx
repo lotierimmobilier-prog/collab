@@ -43,6 +43,7 @@ export default function MailBoard() {
   const [showImapConfig, setShowImapConfig]     = useState(false);
   const [showGmailConnect, setShowGmailConnect] = useState(false);
   const [showLabels, setShowLabels]             = useState(false);
+  const [labelsOpen, setLabelsOpen]             = useState(true);
   const [showCompose, setShowCompose]           = useState(false);
   const [aiKey, setAiKey]                       = useState("");
   const [syncing, setSyncing]                   = useState<string | null>(null);
@@ -510,10 +511,13 @@ export default function MailBoard() {
         ))}
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px 4px" }}>
-          <NavLabel inline>Libellés</NavLabel>
-          <button onClick={() => setShowLabels(true)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 16 }}>+</button>
+          <div onClick={() => setLabelsOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", flex: 1 }}>
+            <span style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: "#A09880", fontWeight: 600 }}>Libellés</span>
+            <span style={{ fontSize: 10, color: "#A09880", transition: "transform 0.15s", display: "inline-block", transform: labelsOpen ? "rotate(90deg)" : "rotate(0deg)" }}>›</span>
+          </div>
+          <button onClick={() => setShowLabels(true)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 16, lineHeight: 1 }}>+</button>
         </div>
-        {customLabels.map(l => (
+        {labelsOpen && customLabels.map(l => (
           <NavItem key={l.id} active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); clearSearch(); setListPage(1); }}>
             <span style={{ width: 10, height: 10, borderRadius: "50%", background: l.color, flexShrink: 0 }} />
             <span style={{ flex: 1, fontSize: 12 }}>{l.name}</span>
