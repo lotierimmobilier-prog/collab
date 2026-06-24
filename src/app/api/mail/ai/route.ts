@@ -38,6 +38,7 @@ async function getKnowledge(category?: string): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
+  try {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
@@ -189,4 +190,8 @@ Réponds en JSON valide uniquement :
   }
 
   return NextResponse.json({ error: "Action inconnue" }, { status: 400 });
+  } catch (err) {
+    console.error("[mail/ai] Erreur:", err);
+    return NextResponse.json({ error: "Erreur de connexion à Auguste" }, { status: 500 });
+  }
 }
