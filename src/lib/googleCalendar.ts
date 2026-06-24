@@ -32,25 +32,28 @@ export interface GEvent {
 
 const SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
 
-/* ─── Token storage ─────────────────────────────────────────── */
-const TOKEN_KEY = "collab_gtoken";
-
-export function saveToken(token: google.accounts.oauth2.TokenResponse) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(TOKEN_KEY, JSON.stringify({ ...token, _saved: Date.now() }));
+/* ─── Clés préfixées par userId pour isoler les données par utilisateur ─── */
+function key(base: string, userId?: string) {
+  return userId ? `${base}_${userId}` : base;
 }
 
-export function loadToken(): (google.accounts.oauth2.TokenResponse & { _saved?: number }) | null {
+/* ─── Token storage ─────────────────────────────────────────── */
+export function saveToken(token: google.accounts.oauth2.TokenResponse, userId?: string) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(key("collab_gtoken", userId), JSON.stringify({ ...token, _saved: Date.now() }));
+}
+
+export function loadToken(userId?: string): (google.accounts.oauth2.TokenResponse & { _saved?: number }) | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(TOKEN_KEY);
+    const raw = localStorage.getItem(key("collab_gtoken", userId));
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
 
-export function clearToken() {
+export function clearToken(userId?: string) {
   if (typeof window === "undefined") return;
-  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(key("collab_gtoken", userId));
 }
 
 export function isTokenValid(token: { expires_in: string; _saved?: number } | null): boolean {
@@ -61,33 +64,48 @@ export function isTokenValid(token: { expires_in: string; _saved?: number } | nu
 }
 
 /* ─── Config storage ─────────────────────────────────────────── */
-const CONFIG_KEY = "collab_gcal_config";
-export function saveConfig(config: GCalConfig) {
+export function saveConfig(config: GCalConfig, userId?: string) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  localStorage.setItem(key("collab_gcal_config", userId), JSON.stringify(config));
 }
-export function loadConfig(): GCalConfig | null {
-  // Client ID configuré côté serveur → pas besoin de saisie utilisateur
+export function loadConfig(userId?: string): GCalConfig | null {
   const envClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   if (envClientId) return { clientId: envClientId };
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(CONFIG_KEY);
+    const raw = localStorage.getItem(key("collab_gcal_config", userId));
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
 
-const SEL_KEY = "collab_gcal_selected";
-export function saveSelectedCalendars(ids: string[]) {
+/* ─── Agendas sélectionnés ───────────────────────────────────── */
+export function saveSelectedCalendars(ids: string[], userId?: string) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(SEL_KEY, JSON.stringify(ids));
+  localStorage.setItem(key("collab_gcal_selected", userId), JSON.stringify(ids));
 }
-export function loadSelectedCalendars(): string[] {
+export function loadSelectedCalendars(userId?: string): string[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(SEL_KEY);
+    const raw = localStorage.getItem(key("collab_gcal_selected", userId));
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
+}
+
+/* ─── Cache de la liste complète des agendas ─────────────────── */
+export function saveCalendarList(cals: GCalendar[], userId?: string) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(key("collab_gcal_list", userId), JSON.stringify(cals));
+}
+export function loadCalendarList(userId?: string): GCalendar[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(key("collab_gcal_list", userId));
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+export function clearCalendarList(userId?: string) {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(key("collab_gcal_list", userId));
 }
 
 /* ─── Google API helpers ─────────────────────────────────────── */

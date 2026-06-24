@@ -388,6 +388,50 @@ export default function MailBoard() {
     starred ? removeLabel(threadId, "starred") : applyLabel(threadId, "starred");
   }
   function trash(threadId: string) { applyLabel(threadId, "trash"); if (selectedThread?.id === threadId) setSelectedThread(null); }
+
+  /* ── Classification automatique par Auguste ─────────────────── */
+  const [classifying, setClassifying] = useState(false);
+
+  async function classifyAllWithAuguste() {
+    if (classifying) return;
+    // Threads sans assignation ni libellé de type
+    const toClassify = visibleThreads.filter(t => {
+      const lbls = messages.filter(m => m.threadId === t.id).flatMap(m => m.labels);
+      return !lbls.some(l => l.startsWith("assigned:") || l.startsWith("type:"));
+    }).slice(0, 20); // max 20 à la fois
+
+    if (toClassify.length === 0) return;
+    setClassifying(true);
+    try {
+      for (const thread of toClassify) {
+        const threadMsgs = messages.filter(m => m.threadId === thread.id);
+        const last = threadMsgs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+        try {
+          const resp = await fetch("/api/mail/ai", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "classify_thread",
+              messages: threadMsgs.slice(0, 3).map(m => ({ from: m.from.email, subject: m.subject, body: (m.bodyText || m.body || "").slice(0, 300) })),
+              threadSubject: thread.subject,
+              senderEmail: last?.from.email ?? "",
+            }),
+          });
+          if (!resp.ok) continue;
+          const data = await resp.json();
+          // Appliquer les labels suggérés
+          if (data.assigneeId) {
+            applyLabel(thread.id, `assigned:${data.assigneeId}`);
+          }
+          if (data.label) {
+            applyLabel(thread.id, `type:${data.label}`);
+          }
+        } catch { /* ignore thread en erreur */ }
+      }
+    } finally {
+      setClassifying(false);
+    }
+  }
   function markRead(threadId: string) {
     setMessages(prev => { const u = prev.map(m => m.threadId === threadId ? { ...m, status: "read" as const } : m); rebuildThreads(u); return u; });
   }
@@ -578,6 +622,7 @@ export default function MailBoard() {
               labels={labels}
               accounts={accounts}
               gmailConfigs={gmailConfigs}
+              users={users}
               selectedId={selectedThread?.id}
               activeLabel={activeLabel}
               activeAccount={activeAccount}
@@ -589,6 +634,8 @@ export default function MailBoard() {
               onTrash={trash}
               onApplyLabel={applyLabel}
               onAccountFilter={id => { setActiveAccount(id); setSelectedThread(null); setListPage(1); }}
+              onClassifyAll={classifyAllWithAuguste}
+              classifying={classifying}
             />
           </div>
 

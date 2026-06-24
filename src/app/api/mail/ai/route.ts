@@ -111,6 +111,32 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  if (action === "classify_thread") {
+    // Récupérer les agents actifs pour l'assignation
+    const activeUsers = await prisma.user.findMany({ where: { active: true }, select: { id: true, prenom: true, nom: true, roleId: true } });
+    const usersStr = activeUsers.map(u => `${u.id}: ${u.prenom} ${u.nom} (${u.roleId ?? "agent"})`).join(", ");
+    const ctx = (messages ?? []).map((m: { from: string; subject: string; body: string }) => `De: ${m.from}\nSujet: ${m.subject}\nCorps: ${m.body}`).join("\n---\n");
+
+    const resp = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 200,
+      system: SYSTEM,
+      messages: [{
+        role: "user",
+        content: `Classifie cet email et détermine qui doit y répondre.\n\nAgents disponibles: ${usersStr}\n\nEmail:\n${ctx}\n\nRéponds UNIQUEMENT en JSON valide: {"label":"locataire|propriétaire|commercial|comptabilité|juridique|technique|autre","assigneeId":"id de l'agent le plus approprié ou null","reason":"raison en 5 mots max"}`,
+      }],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw2 = (resp.content.find((b: any) => b.type === "text") as any)?.text ?? "";
+    const cleaned2 = raw2.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    try {
+      return NextResponse.json(JSON.parse(cleaned2));
+    } catch {
+      return NextResponse.json({ label: "autre", assigneeId: null });
+    }
+  }
+
   if (action === "identify_sender") {
     if (!senderEmail) return NextResponse.json({ senderType: "unknown" });
 

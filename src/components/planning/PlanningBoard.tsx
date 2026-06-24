@@ -1,9 +1,11 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import {
   GCalendar, GEvent, GCalConfig,
   loadToken, saveToken, clearToken, isTokenValid,
   loadConfig, saveConfig, saveSelectedCalendars,
+  loadCalendarList, saveCalendarList, clearCalendarList,
   loadGapiAndGis, requestToken, fetchCalendars, fetchEvents,
 } from "@/lib/googleCalendar";
 import CalendarView from "./CalendarView";
@@ -40,6 +42,9 @@ function gEventToLocal(e: GEvent, color: string): LocalEvent {
 }
 
 export default function PlanningBoard() {
+  const { data: session } = useSession();
+  const userId = (session?.user as { id?: string } | undefined)?.id;
+
   const [view, setView] = useState<"month" | "week" | "day">("week");
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [showSync, setShowSync] = useState(false);
@@ -80,14 +85,35 @@ export default function PlanningBoard() {
     } catch { /* silencieux */ }
   }, []);
 
-  // Load saved config + events BDD on mount
+  // Load saved config + events BDD on mount — déclenché quand userId est connu
   useEffect(() => {
-    const cfg = loadConfig();
+    if (userId === undefined) return; // session pas encore chargée
+    const cfg = loadConfig(userId);
     if (cfg) setConfig(cfg);
-    const token = loadToken();
-    if (token && isTokenValid(token)) setConnected(true);
+    const token = loadToken(userId);
+    const valid = token && isTokenValid(token);
+    if (valid) {
+      setConnected(true);
+      // Restaurer la liste des agendas depuis le cache localStorage
+      const cached = loadCalendarList(userId);
+      if (cached.length > 0) {
+        setCalendars(cached);
+        // Auto-sync avec les agendas en cache
+        syncGoogle(token.access_token, cached);
+      } else {
+        // Aucun cache → refetch
+        fetchCalendars(token.access_token)
+          .then(cals => {
+            setCalendars(cals);
+            saveCalendarList(cals, userId);
+            syncGoogle(token.access_token, cals);
+          })
+          .catch(() => setConnected(false));
+      }
+    }
     fetchDbEvents();
-  }, [fetchDbEvents]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, fetchDbEvents]);
 
   // Rafraîchir quand Auguste crée/modifie un événement
   useEffect(() => {
@@ -140,16 +166,17 @@ export default function PlanningBoard() {
   }, [getTimeRange]);
 
   async function handleConnect(cfg: GCalConfig) {
-    saveConfig(cfg);
+    saveConfig(cfg, userId);
     setConfig(cfg);
     setSyncError(null);
     try {
       await loadGapiAndGis();
       const token = await requestToken(cfg.clientId);
-      saveToken(token);
+      saveToken(token, userId);
       setConnected(true);
       const cals = await fetchCalendars(token.access_token);
       setCalendars(cals);
+      saveCalendarList(cals, userId);
       await syncGoogle(token.access_token, cals);
     } catch (err: unknown) {
       setSyncError(err instanceof Error ? err.message : "Connexion échouée");
@@ -157,15 +184,16 @@ export default function PlanningBoard() {
   }
 
   async function handleSync() {
-    const token = loadToken();
+    const token = loadToken(userId);
     if (!token || !isTokenValid(token)) {
       if (!config) { setShowSync(true); return; }
       try {
         await loadGapiAndGis();
         const newToken = await requestToken(config.clientId);
-        saveToken(newToken);
+        saveToken(newToken, userId);
         const cals = await fetchCalendars(newToken.access_token);
         setCalendars(cals);
+        saveCalendarList(cals, userId);
         await syncGoogle(newToken.access_token, cals);
       } catch (err: unknown) {
         setSyncError(err instanceof Error ? err.message : "Reconnexion nécessaire");
@@ -176,7 +204,8 @@ export default function PlanningBoard() {
   }
 
   function handleDisconnect() {
-    clearToken();
+    clearToken(userId);
+    clearCalendarList(userId);
     setConnected(false);
     setCalendars([]);
     setGEvents([]);
@@ -186,8 +215,9 @@ export default function PlanningBoard() {
   async function handleCalendarToggle(calId: string, selected: boolean) {
     const updated = calendars.map(c => c.id === calId ? { ...c, selected } : c);
     setCalendars(updated);
-    saveSelectedCalendars(updated.filter(c => c.selected).map(c => c.id));
-    const token = loadToken();
+    saveSelectedCalendars(updated.filter(c => c.selected).map(c => c.id), userId);
+    saveCalendarList(updated, userId);
+    const token = loadToken(userId);
     if (token && isTokenValid(token)) await syncGoogle(token.access_token, updated);
   }
 
