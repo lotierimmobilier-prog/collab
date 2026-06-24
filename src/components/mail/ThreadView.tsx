@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MailThread, MailMessage, MailLabel, MailAccount, MailAttachment, buildContext } from "@/lib/mail";
 
 const GOLD    = "#B8966A";
@@ -12,6 +12,7 @@ interface Props {
   accounts: MailAccount[];
   aiKey: string;
   loadingBody?: boolean;
+  users?: { id: string; prenom: string; nom: string }[];
   onClose: () => void;
   onReply: (m: MailMessage) => void;
   onApplyLabel: (id: string) => void;
@@ -19,6 +20,7 @@ interface Props {
   onStar: () => void;
   onTrash: () => void;
   customLabels: MailLabel[];
+  onSetLabels?: (labels: string[]) => void;
 }
 
 interface AiSummary  { summary: string; points: string[] }
@@ -33,7 +35,7 @@ const SENDER_BADGE: Record<string, { label: string; color: string; bg: string }>
   unknown: { label: "Inconnu",       color: "#6B7280", bg: "#F9FAFB" },
 };
 
-export default function ThreadView({ thread, labels, accounts, aiKey, loadingBody, onClose, onReply, onApplyLabel, onRemoveLabel, onStar, onTrash, customLabels }: Props) {
+export default function ThreadView({ thread, labels, accounts, aiKey, loadingBody, users = [], onClose, onReply, onApplyLabel, onRemoveLabel, onStar, onTrash, customLabels, onSetLabels }: Props) {
   const [showReply, setShowReply]         = useState(false);
   const [replyBody, setReplyBody]         = useState("");
   const [aiTone, setAiTone]               = useState("professionnel");
@@ -41,6 +43,10 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
   const [generating, setGenerating]       = useState(false);
   const [aiError, setAiError]             = useState("");
   const [showLabelMenu, setShowLabelMenu] = useState(false);
+
+  // Classification automatique
+  const [classifying, setClassifying]       = useState(false);
+  const [classifySuggestion, setClassifySuggestion] = useState<{ labels: string[]; assignedToId: string | null; priority: string; reason: string } | null>(null);
 
   // Panneau IA
   const [aiLoading, setAiLoading]           = useState<string | null>(null);
@@ -57,6 +63,58 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
   const account   = accounts.find(a => a.id === thread.accountId);
   const threadLabelIds = new Set(thread.messages.flatMap(m => m.labels));
   const appliedCustom  = customLabels.filter(l => threadLabelIds.has(l.id));
+
+  // Labels spéciaux : assignation et réponse
+  const allLabels    = Array.from(threadLabelIds);
+  const assignedTag  = allLabels.find(l => l.startsWith("assigned:"));
+  const repliedTag   = allLabels.find(l => l.startsWith("replied:"));
+  const assignedId   = assignedTag?.slice("assigned:".length) ?? null;
+  const repliedById  = repliedTag?.slice("replied:".length) ?? null;
+  const assignedUser = users.find(u => u.id === assignedId);
+  const repliedByUser = users.find(u => u.id === repliedById);
+  const isReplied    = !!repliedTag;
+
+  function setAssigned(userId: string | null) {
+    // Retire l'ancien tag assignation, ajoute le nouveau
+    const base = allLabels.filter(l => !l.startsWith("assigned:"));
+    const next = userId ? [...base, `assigned:${userId}`] : base;
+    onSetLabels?.(next);
+  }
+
+  function setReplied(userId: string | null) {
+    const base = allLabels.filter(l => !l.startsWith("replied:"));
+    const next = userId ? [...base, `replied:${userId}`] : base;
+    onSetLabels?.(next);
+  }
+
+  // Classification automatique à l'ouverture si pas encore de libellés custom
+  useEffect(() => {
+    const hasCustomLabels = customLabels.some(l => threadLabelIds.has(l.id));
+    if (hasCustomLabels || classifySuggestion || classifying) return;
+    const msg = firstMsg || lastMsg;
+    if (!msg) return;
+    setClassifying(true);
+    fetch("/api/mail/classify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subject: thread.subject,
+        bodyText: msg.bodyText || "",
+        fromEmail: msg.from.email,
+        fromName: msg.from.name,
+        senderType: (msg as MailMessage & { senderType?: string }).senderType,
+        availableLabels: customLabels,
+        users,
+      }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.labels?.length || data.assignedToId) setClassifySuggestion(data);
+      })
+      .catch(() => {})
+      .finally(() => setClassifying(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread.id]);
 
   // ── Identifier l'expéditeur ─────────────────────────────────
   async function identifySender() {
@@ -276,6 +334,64 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
             <button onClick={onStar} title="Suivre" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 14, color: threadLabelIds.has("starred") ? "#f59e0b" : "#9ca3af" }}>★</button>
             <button onClick={onTrash} title="Corbeille" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 14, color: "#ef4444" }}>🗑</button>
           </div>
+        </div>
+      </div>
+
+      {/* ── Barre assignation / réponse / classification ── */}
+      <div style={{ padding: "8px 20px", background: "#fff", borderBottom: "1px solid #f0f0f0", display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+
+        {/* Suggestion de classification IA */}
+        {classifying && <span style={{ fontSize: 11, color: "#9ca3af" }}>✦ Classification en cours…</span>}
+        {classifySuggestion && classifySuggestion.labels.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#FEF9C3", border: "1px solid #FDE68A", borderRadius: 8, padding: "4px 10px", fontSize: 11 }}>
+            <span style={{ color: "#92400E", fontWeight: 600 }}>✦ Suggéré :</span>
+            {classifySuggestion.labels.map(lid => {
+              const lbl = customLabels.find(l => l.id === lid);
+              return lbl ? <span key={lid} style={{ background: lbl.color + "25", color: lbl.color, borderRadius: 4, padding: "1px 7px", fontWeight: 600 }}>{lbl.name}</span> : null;
+            })}
+            <button onClick={() => {
+              classifySuggestion.labels.forEach(lid => onApplyLabel(lid));
+              if (classifySuggestion.assignedToId) setAssigned(classifySuggestion.assignedToId);
+              setClassifySuggestion(null);
+            }} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 5, padding: "2px 8px", fontSize: 10, fontWeight: 600, cursor: "pointer", marginLeft: 4 }}>Appliquer</button>
+            <button onClick={() => setClassifySuggestion(null)} style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: 12 }}>×</button>
+          </div>
+        )}
+
+        {/* Doit répondre */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 500 }}>Doit répondre :</span>
+          <select
+            value={assignedId ?? ""}
+            onChange={e => setAssigned(e.target.value || null)}
+            style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "3px 8px", fontSize: 12, background: assignedUser ? "#EFF6FF" : "#f9fafb", color: assignedUser ? "#2563EB" : "#374151", fontWeight: assignedUser ? 600 : 400, outline: "none", cursor: "pointer" }}
+          >
+            <option value="">— Non assigné —</option>
+            {users.map(u => <option key={u.id} value={u.id}>{u.prenom} {u.nom}</option>)}
+          </select>
+        </div>
+
+        {/* Répondu */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button
+            onClick={() => isReplied ? setReplied(null) : setReplied(users[0]?.id ?? null)}
+            style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${isReplied ? "#059669" : "#d1d5db"}`, background: isReplied ? "#059669" : "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", flexShrink: 0 }}
+          >
+            {isReplied ? "✓" : ""}
+          </button>
+          <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 500 }}>Répondu</span>
+          {isReplied && (
+            <select
+              value={repliedById ?? ""}
+              onChange={e => setReplied(e.target.value || null)}
+              style={{ border: "1px solid #bbf7d0", borderRadius: 6, padding: "3px 8px", fontSize: 12, background: "#f0fdf4", color: "#059669", fontWeight: 600, outline: "none", cursor: "pointer" }}
+            >
+              {users.map(u => <option key={u.id} value={u.id}>{u.prenom} {u.nom}</option>)}
+            </select>
+          )}
+          {isReplied && repliedByUser && (
+            <span style={{ fontSize: 11, color: "#059669" }}>par {repliedByUser.prenom} {repliedByUser.nom}</span>
+          )}
         </div>
       </div>
 

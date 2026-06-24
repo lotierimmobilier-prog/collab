@@ -46,6 +46,7 @@ export default function MailBoard() {
   const [syncing, setSyncing]                   = useState<string | null>(null);
   const [syncStatus, setSyncStatus]             = useState("");
   const [loadingBody, setLoadingBody]           = useState(false);
+  const [users, setUsers]                       = useState<{ id: string; prenom: string; nom: string }[]>([]);
   const [nextSyncIn, setNextSyncIn]             = useState(SYNC_INTERVAL / 1000);
 
   // Pagination
@@ -99,6 +100,7 @@ export default function MailBoard() {
     if (l) setLabels(JSON.parse(l));
     const k = localStorage.getItem(AI_KEY_STORE);
     if (k) setAiKey(k);
+    fetch("/api/users").then(r => r.json()).then((us: { id: string; prenom: string; nom: string; active: boolean }[]) => setUsers(us.filter(u => u.active))).catch(() => {});
     setGmailConfigs(loadGmailConfigs());
 
     // Charger les emails persistés en BDD au démarrage
@@ -370,9 +372,15 @@ export default function MailBoard() {
   /* ── Label / thread ops ─────────────────────────────────── */
   function applyLabel(threadId: string, labelId: string) {
     setMessages(prev => { const u = prev.map(m => m.threadId === threadId && !m.labels.includes(labelId) ? { ...m, labels: [...m.labels, labelId] } : m); rebuildThreads(u); return u; });
+    fetch("/api/mail/messages", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threadId, addLabels: [labelId] }) }).catch(() => {});
   }
   function removeLabel(threadId: string, labelId: string) {
     setMessages(prev => { const u = prev.map(m => m.threadId === threadId ? { ...m, labels: m.labels.filter(l => l !== labelId) } : m); rebuildThreads(u); return u; });
+    fetch("/api/mail/messages", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threadId, removeLabels: [labelId] }) }).catch(() => {});
+  }
+  function setThreadLabels(threadId: string, newLabels: string[]) {
+    setMessages(prev => { const u = prev.map(m => m.threadId === threadId ? { ...m, labels: newLabels } : m); rebuildThreads(u); return u; });
+    fetch("/api/mail/messages", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threadId, setLabels: newLabels }) }).catch(() => {});
   }
   function toggleStar(threadId: string) {
     const starred = messages.some(m => m.threadId === threadId && m.labels.includes("starred"));
@@ -650,6 +658,7 @@ export default function MailBoard() {
               accounts={accounts}
               aiKey={aiKey}
               loadingBody={loadingBody}
+              users={users}
               onClose={() => setSelectedThread(null)}
               onReply={msg => { addMessage(msg); setSelectedThread(prev => prev ? { ...prev, messages: [...prev.messages, msg] } : null); }}
               onApplyLabel={id => applyLabel(selectedThread.id, id)}
@@ -657,6 +666,7 @@ export default function MailBoard() {
               onStar={() => toggleStar(selectedThread.id)}
               onTrash={() => trash(selectedThread.id)}
               customLabels={customLabels}
+              onSetLabels={(lbls) => setThreadLabels(selectedThread.id, lbls)}
             />
           </div>
         </div>
