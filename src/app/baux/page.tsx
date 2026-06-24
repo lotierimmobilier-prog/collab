@@ -171,7 +171,7 @@ function BailForm({ lots, tenants, onSave, onClose }: { lots: Lot[]; tenants: Te
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 40 }} />
-      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 560, background: "#fff", zIndex: 50, display: "flex", flexDirection: "column", boxShadow: "-4px 0 24px rgba(0,0,0,0.1)" }}>
+      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 580, maxWidth: "95vw", maxHeight: "90vh", background: "#fff", zIndex: 50, display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", borderRadius: 16 }}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontWeight: 700, fontSize: 15 }}>Nouveau bail</span>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer" }}>×</button>

@@ -48,13 +48,6 @@ const nav: NavItem[] = [
   { id: "ods",         label: "Ordres de service", icon: "📋", href: "/ordres-de-service", group: "Gestion", subGroup: "Suivi", indent: true },
   { id: "fournisseurs",label: "Fournisseurs",      icon: "🔧", href: "/fournisseurs",    group: "Gestion", subGroup: "Suivi", indent: true },
 
-  /* ── Syndic ──────────────────────────────────────────────────── */
-  { id: "syndic",         label: "Vue d'ensemble",       icon: "🏢", href: "/syndic",                group: "Syndic" },
-  { id: "syndic-copro",   label: "Copropriétés",         icon: "◫",  href: "/syndic/coproprietees",  group: "Syndic", subGroup: "Syndic·Parc", indent: true },
-  { id: "syndic-ag",      label: "Assemblées générales", icon: "◉",  href: "/syndic/assemblees",     group: "Syndic", subGroup: "Syndic·Parc", indent: true },
-  { id: "syndic-charges", label: "Charges",              icon: "∑",  href: "/syndic/charges",        group: "Syndic", subGroup: "Syndic·Parc", indent: true },
-  { id: "syndic-travaux", label: "Travaux",              icon: "🔧", href: "/syndic/travaux",        group: "Syndic", subGroup: "Syndic·Parc", indent: true },
-
   /* ── Comptabilité ────────────────────────────────────────────── */
   { id: "compta",     label: "Tableau de bord",   icon: "∑",  href: "/comptabilite",                  group: "Comptabilité" },
   { id: "compta-enc", label: "Encaissements",     icon: "↗",  href: "/comptabilite/encaissements",    group: "Comptabilité", subGroup: "Compta·Détail", indent: true },
@@ -72,7 +65,7 @@ const adminNav = [
   { id: "admin-settings", label: "Paramètres",     icon: "⚙", href: "/admin/parametres" },
 ];
 
-const groups = ["Principal", "Gestion", "Syndic", "Comptabilité", "Agence"];
+const groups = ["Principal", "Gestion", "Comptabilité", "Agence"];
 
 /* Sous-groupes ouverts par défaut */
 const DEFAULT_OPEN: Record<string, boolean> = {
