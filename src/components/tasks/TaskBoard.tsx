@@ -281,7 +281,8 @@ export default function TaskBoard() {
 
       {selectedTask && (
         <TaskDetail task={selectedTask} onClose={() => setSelectedTask(null)}
-          onStatusChange={status => { updateTaskStatus(selectedTask.id, status); setSelectedTask(p => p ? { ...p, status } : null); }} />
+          onStatusChange={status => { updateTaskStatus(selectedTask.id, status); setSelectedTask(p => p ? { ...p, status } : null); }}
+          onUpdate={updated => { setTasks(prev => prev.map(t => t.id === updated.id ? updated : t)); setSelectedTask(updated); }} />
       )}
 
       {showNew && <NewTaskModal onClose={() => setShowNew(false)} onAdd={addTask} families={families} />}

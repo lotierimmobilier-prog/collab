@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { useSession } from "next-auth/react";
 
 const GOLD    = "#B8966A";
 const GOLD_BG = "#F7F0E6";
@@ -31,6 +32,7 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 export default function Auguste() {
+  const { data: session } = useSession();
   const [open, setOpen]         = useState(false);
   const [msgs, setMsgs]         = useState<Msg[]>([]);
   const [input, setInput]       = useState("");
@@ -104,6 +106,8 @@ export default function Auguste() {
       );
     });
   }
+
+  if (!session?.user) return null;
 
   return (
     <>

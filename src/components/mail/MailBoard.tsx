@@ -154,10 +154,10 @@ export default function MailBoard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ── IMAP sync (page optionnelle) ──────────────────────── */
-  const syncImap = useCallback(async (a: MailAccount, page = 1) => {
+  /* ── IMAP sync (page optionnelle) — retourne totalPages ─── */
+  const syncImap = useCallback(async (a: MailAccount, page = 1): Promise<number> => {
     setSyncing(a.id);
-    setSyncStatus(page > 1 ? `Chargement archives ${a.label} (page ${page})...` : `Synchronisation IMAP ${a.label}...`);
+    setSyncStatus(page > 1 ? `Chargement page ${page}…` : `Synchronisation ${a.label}…`);
     try {
       const resp = await fetch("/api/mail/sync", {
         method: "POST",
@@ -167,17 +167,33 @@ export default function MailBoard() {
       const data = await resp.json();
       if (data.ok) {
         ingestMessages(data.messages ?? []);
-        setSyncStatus(`${data.count} message(s) depuis ${a.label} — page ${page}/${data.totalPages}`);
+        setSyncStatus(`${data.count} message(s) — page ${page}/${data.totalPages}`);
         saveAccounts(accountsRef.current.map(x => x.id === a.id ? { ...x, lastSync: new Date().toLocaleString("fr-FR") } : x));
-        setTimeout(() => setSyncStatus(""), 4000);
+        if (page >= (data.totalPages ?? 1)) setTimeout(() => setSyncStatus(""), 4000);
+        return data.totalPages ?? 1;
       } else {
         setSyncStatus(`Erreur : ${data.error}`);
         setTimeout(() => setSyncStatus(""), 6000);
+        return 1;
       }
-    } catch { setSyncStatus("Erreur réseau"); setTimeout(() => setSyncStatus(""), 4000); }
-    finally { setSyncing(null); }
+    } catch {
+      setSyncStatus("Erreur réseau");
+      setTimeout(() => setSyncStatus(""), 4000);
+      return 1;
+    } finally { setSyncing(null); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* ── Télécharger TOUS les mails (toutes pages) ──────────── */
+  const downloadAllImap = useCallback(async (a: MailAccount) => {
+    const totalPages = await syncImap(a, 1);
+    for (let p = 2; p <= totalPages; p++) {
+      setSyncStatus(`Téléchargement complet ${a.label} — page ${p}/${totalPages}…`);
+      await syncImap(a, p);
+    }
+    setSyncStatus(`✓ Téléchargement complet : ${totalPages} page(s) chargée(s)`);
+    setTimeout(() => setSyncStatus(""), 5000);
+  }, [syncImap]);
 
   /* ── Sync toutes les 5 minutes ──────────────────────────── */
   useEffect(() => {
@@ -415,7 +431,8 @@ export default function MailBoard() {
                   <div style={{ fontSize: 12, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.label}</div>
                   <div style={{ fontSize: 10, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.email}</div>
                 </div>
-                <button onClick={e => { e.stopPropagation(); syncImap(a, 1); }} disabled={syncing === a.id} title="Synchroniser" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#9ca3af" }}>🔄</button>
+                <button onClick={e => { e.stopPropagation(); syncImap(a, 1); }} disabled={syncing === a.id} title="Sync récents" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#9ca3af" }}>🔄</button>
+                <button onClick={e => { e.stopPropagation(); downloadAllImap(a); }} disabled={syncing === a.id} title="Tout télécharger" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "#9ca3af" }}>⬇</button>
               </NavItem>
             ))}
           </>
@@ -431,7 +448,12 @@ export default function MailBoard() {
           </button>
           {hasAnyAccount && (
             <button onClick={syncAll} disabled={!!syncing} style={{ width: "100%", background: "none", border: "1px solid #E8D9C0", borderRadius: 8, padding: "7px 0", fontSize: 12, cursor: "pointer", color: "#B8966A" }}>
-              🔄 Tout synchroniser
+              🔄 Synchroniser (récents)
+            </button>
+          )}
+          {accounts.length > 0 && (
+            <button onClick={() => { for (const a of accounts.filter(x => x.active)) downloadAllImap(a); }} disabled={!!syncing} style={{ width: "100%", background: "none", border: "1px dashed #B8966A", borderRadius: 8, padding: "7px 0", fontSize: 12, cursor: "pointer", color: "#B8966A" }}>
+              ⬇ Tout télécharger (tous les mails)
             </button>
           )}
           {hasAnyAccount && !syncing && (

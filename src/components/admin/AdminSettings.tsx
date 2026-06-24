@@ -12,6 +12,19 @@ interface Settings {
 }
 
 export default function AdminSettings() {
+  const [resetting, setResetting] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
+
+  async function resetData() {
+    if (!confirm("⚠️ ATTENTION : Cette action supprimera TOUTES les données (tâches, calendrier, messages, baux, biens, etc.) sauf les utilisateurs.\n\nÊtes-vous absolument certain ?")) return;
+    if (!confirm("Dernière confirmation : supprimer toutes les données ?")) return;
+    setResetting(true);
+    try {
+      const r = await fetch("/api/admin/reset", { method: "POST" });
+      if (r.ok) { setResetDone(true); setTimeout(() => setResetDone(false), 5000); }
+    } finally { setResetting(false); }
+  }
+
   const [settings, setSettings] = useState<Settings>({
     smtp_host: "smtp.gmail.com", smtp_port: "587",
     smtp_user: "collab@lotier-immobilier.com", smtp_pass: "",
@@ -116,6 +129,19 @@ export default function AdminSettings() {
         {saved && <span style={{ color: "#059669", fontSize: 13, fontWeight: 500 }}>✓ Paramètres sauvegardés</span>}
         {testResult && <span style={{ fontSize: 13 }}>{testResult}</span>}
       </div>
+
+      <Section title="⚠️ Zone de danger">
+        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 14, lineHeight: 1.6 }}>
+          Cette action supprime <strong>toutes les données</strong> de l'application (tâches, calendrier, mails, baux, biens, messages, etc.) tout en conservant les comptes utilisateurs.
+          <br />Cette opération est <strong>irréversible</strong>.
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={resetData} disabled={resetting} style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 14, fontWeight: 600, cursor: resetting ? "not-allowed" : "pointer", opacity: resetting ? 0.7 : 1 }}>
+            {resetting ? "Réinitialisation…" : "🗑 Réinitialiser toutes les données"}
+          </button>
+          {resetDone && <span style={{ color: "#059669", fontSize: 13, fontWeight: 500 }}>✓ Données supprimées — seuls les utilisateurs sont conservés</span>}
+        </div>
+      </Section>
     </div>
   );
 }
