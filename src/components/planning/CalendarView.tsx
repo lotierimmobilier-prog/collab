@@ -2,7 +2,9 @@
 import { LocalEvent } from "./PlanningBoard";
 
 const DAYS_FR   = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-const HOURS     = Array.from({ length: 24 }, (_, i) => i);
+const START_H   = 8;    // première heure affichée
+const END_H     = 20;   // dernière heure affichée (exclusive)
+const HOURS     = Array.from({ length: END_H - START_H }, (_, i) => i + START_H);
 const HOUR_H    = 64;   // pixels par heure
 const MIN_H     = 22;   // hauteur minimale d'un événement (px)
 const TIME_COL  = 56;   // largeur colonne heures
@@ -36,21 +38,23 @@ function sameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-function minutesFromMidnight(d: Date) {
-  return d.getHours() * 60 + d.getMinutes();
+const GRID_H = (END_H - START_H) * HOUR_H; // hauteur totale de la grille
+
+function minutesFromStart(d: Date) {
+  return (d.getHours() - START_H) * 60 + d.getMinutes();
 }
 
-function topPx(d: Date)    { return minutesFromMidnight(d) / 60 * HOUR_H; }
+function topPx(d: Date) { return minutesFromStart(d) / 60 * HOUR_H; }
 function heightPx(s: Date, e: Date) { return Math.max((e.getTime() - s.getTime()) / 3600000 * HOUR_H, MIN_H); }
 
 /* ── TimeGrid shared ────────────────────────────────────────── */
 
 function TimeGutter() {
   return (
-    <div style={{ width: TIME_COL, flexShrink: 0, position: "relative", height: 24 * HOUR_H }}>
-      {HOURS.map(h => (
-        <div key={h} style={{ position: "absolute", top: h * HOUR_H - 8, right: 6, fontSize: 10, color: "#9ca3af", fontWeight: 500, userSelect: "none" }}>
-          {h === 0 ? "" : `${String(h).padStart(2, "0")}:00`}
+    <div style={{ width: TIME_COL, flexShrink: 0, position: "relative", height: GRID_H }}>
+      {HOURS.map((h, i) => (
+        <div key={h} style={{ position: "absolute", top: i * HOUR_H - 8, right: 6, fontSize: 10, color: "#9ca3af", fontWeight: 500, userSelect: "none" }}>
+          {`${String(h).padStart(2, "0")}:00`}
         </div>
       ))}
     </div>
@@ -60,12 +64,12 @@ function TimeGutter() {
 function HourLines() {
   return (
     <>
-      {HOURS.map(h => (
-        <div key={h} style={{ position: "absolute", top: h * HOUR_H, left: 0, right: 0, borderTop: `1px solid ${h === 0 ? "#d1d5db" : "#f3f4f6"}`, zIndex: 0 }} />
+      {HOURS.map((h, i) => (
+        <div key={h} style={{ position: "absolute", top: i * HOUR_H, left: 0, right: 0, borderTop: `1px solid ${i === 0 ? "#d1d5db" : "#f3f4f6"}`, zIndex: 0 }} />
       ))}
       {/* Demi-heures */}
-      {HOURS.map(h => (
-        <div key={`h${h}30`} style={{ position: "absolute", top: h * HOUR_H + HOUR_H / 2, left: 0, right: 0, borderTop: "1px dashed #f9fafb", zIndex: 0 }} />
+      {HOURS.map((_, i) => (
+        <div key={`h${i}30`} style={{ position: "absolute", top: i * HOUR_H + HOUR_H / 2, left: 0, right: 0, borderTop: "1px dashed #f9fafb", zIndex: 0 }} />
       ))}
     </>
   );
@@ -239,11 +243,11 @@ function WeekView({ currentDate, events, onSelectDate, onSelectEvent }: Omit<Pro
         {days.map((d, di) => {
           const dayEvts = eventsForDay(d);
           return (
-            <div key={di} style={{ borderLeft: "1px solid #f3f4f6", position: "relative", height: 24 * HOUR_H }}
+            <div key={di} style={{ borderLeft: "1px solid #f3f4f6", position: "relative", height: GRID_H }}
               onClick={e => {
                 const rect = e.currentTarget.getBoundingClientRect();
                 const y    = e.clientY - rect.top;
-                const hour = Math.floor(y / HOUR_H);
+                const hour = START_H + Math.floor(y / HOUR_H);
                 const min  = Math.round((y % HOUR_H) / HOUR_H * 60 / 15) * 15;
                 const nd   = new Date(d); nd.setHours(hour, min, 0); onSelectDate(nd);
               }}
@@ -303,7 +307,7 @@ function DayView({ currentDate, events, onSelectDate, onSelectEvent }: Omit<Prop
       {/* Grille */}
       <div style={{ display: "flex", flex: 1, background: "#fff", overflow: "auto" }}>
         <TimeGutter />
-        <div style={{ flex: 1, position: "relative", height: 24 * HOUR_H, borderLeft: "1px solid #e5e7eb" }}
+        <div style={{ flex: 1, position: "relative", height: GRID_H, borderLeft: "1px solid #e5e7eb" }}
           onClick={e => {
             const rect = e.currentTarget.getBoundingClientRect();
             const y    = e.clientY - rect.top;
@@ -338,6 +342,8 @@ function DayView({ currentDate, events, onSelectDate, onSelectEvent }: Omit<Prop
 
 function NowLine() {
   const now = new Date();
+  const h = now.getHours();
+  if (h < START_H || h >= END_H) return null; // hors plage 8h-20h
   const top = topPx(now);
   return (
     <div style={{ position: "absolute", top, left: 0, right: 0, zIndex: 10, display: "flex", alignItems: "center", pointerEvents: "none" }}>
