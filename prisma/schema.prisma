@@ -180,6 +180,33 @@ model Announcement {
   @@map("announcements")
 }
 
+// ── Comptes email d'agence (partagés) ────────────────────────
+
+model MailAccountConfig {
+  id            String   @id @default(cuid())
+  label         String
+  email         String
+  name          String
+  protocol      String   @default("imap")
+  host          String
+  port          Int      @default(993)
+  ssl           Boolean  @default(true)
+  username      String
+  password      String
+  smtpHost      String   @default("")
+  smtpPort      Int      @default(587)
+  smtpSsl       Boolean  @default(true)
+  color         String   @default("#B8966A")
+  active        Boolean  @default(true)
+  isShared      Boolean  @default(false)
+  sharedUserIds String[] @default([])
+  createdBy     String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("mail_account_configs")
+}
+
 // ── Messagerie email persistée ────────────────────────────────
 
 model EmailMessage {

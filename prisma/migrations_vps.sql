@@ -130,6 +130,30 @@ CREATE TABLE IF NOT EXISTS announcements (
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ── Comptes email d'agence ───────────────────────────────────
+CREATE TABLE IF NOT EXISTS mail_account_configs (
+  id              TEXT PRIMARY KEY,
+  label           TEXT NOT NULL,
+  email           TEXT NOT NULL,
+  name            TEXT NOT NULL,
+  protocol        TEXT NOT NULL DEFAULT 'imap',
+  host            TEXT NOT NULL,
+  port            INT  NOT NULL DEFAULT 993,
+  ssl             BOOLEAN NOT NULL DEFAULT true,
+  username        TEXT NOT NULL,
+  password        TEXT NOT NULL,
+  "smtpHost"      TEXT NOT NULL DEFAULT '',
+  "smtpPort"      INT  NOT NULL DEFAULT 587,
+  "smtpSsl"       BOOLEAN NOT NULL DEFAULT true,
+  color           TEXT NOT NULL DEFAULT '#B8966A',
+  active          BOOLEAN NOT NULL DEFAULT true,
+  "isShared"      BOOLEAN NOT NULL DEFAULT false,
+  "sharedUserIds" TEXT[] NOT NULL DEFAULT '{}',
+  "createdBy"     TEXT NOT NULL,
+  "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt"     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- ── Emails persistés ─────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS email_messages (
   id          TEXT PRIMARY KEY,

@@ -272,6 +272,18 @@ async function executeTool(
         endDate = new Date(startDate.getTime() + duration);
       }
 
+      // ── Vérification des conflits ────────────────────────────
+      const conflicts = await prisma.calendarEvent.findMany({
+        where: {
+          OR: [
+            { start: { gte: startDate, lt: endDate } },
+            { end:   { gt: startDate, lte: endDate } },
+            { start: { lte: startDate }, end: { gte: endDate } },
+          ],
+        },
+        select: { id: true, title: true, start: true, end: true, location: true, type: true },
+      });
+
       const event = await prisma.calendarEvent.create({
         data: {
           title:       input.title as string,
@@ -311,6 +323,14 @@ async function executeTool(
         ok: true, id: event.id, title: event.title,
         start: event.start.toISOString(), end: event.end.toISOString(),
         location: event.location, type: event.type,
+        conflicts: conflicts.length > 0 ? conflicts.map(c => ({
+          id: c.id, title: c.title,
+          start: c.start.toISOString(), end: c.end.toISOString(),
+          location: c.location, type: c.type,
+        })) : [],
+        conflictWarning: conflicts.length > 0
+          ? `⚠️ ATTENTION : ${conflicts.length} événement(s) déjà prévu(s) sur ce créneau : ${conflicts.map(c => `"${c.title}" (${c.start.toLocaleString("fr-FR", {dateStyle:"short",timeStyle:"short"})})`).join(", ")}. L'événement a été créé mais signale ce conflit à l'utilisateur.`
+          : null,
       };
     }
 
@@ -459,6 +479,11 @@ AVANT de créer un rendez-vous/événement, vérifie que tu as :
 NE JAMAIS créer avec des données inventées ou incorrectes.
 Si une info est ambiguë, DEMANDE avant d'agir.
 Si plusieurs infos manquent, pose-les toutes en une seule question.
+
+══ CONFLITS D'AGENDA ══
+Quand tu crées un événement, le système retourne un champ "conflictWarning" et "conflicts".
+Si conflictWarning n'est pas null, tu DOIS le signaler clairement dans ta réponse après la confirmation de création.
+Format : "⚠️ **Conflit détecté** : [liste des événements qui se chevauchent]. L'événement a quand même été créé."
 
 ══ APRÈS CRÉATION ══
 Confirme toujours clairement ce qui a été fait, par exemple :

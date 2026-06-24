@@ -3,22 +3,35 @@ export type MailStatus = "unread" | "read" | "replied" | "forwarded" | "starred"
 
 export interface MailAccount {
   id: string;
-  label: string;          // ex. "Agence principale"
+  label: string;
   email: string;
-  name: string;           // nom affiché à l'envoi
+  name: string;
   protocol: Protocol;
   host: string;
   port: number;
   ssl: boolean;
   username: string;
-  password: string;       // stocké localement, jamais envoyé à l'IA
-  // SMTP pour envoi
+  password: string;
   smtpHost: string;
   smtpPort: number;
   smtpSsl: boolean;
-  color: string;          // couleur de l'avatar
+  color: string;
   active: boolean;
   lastSync?: string;
+  // Accès multi-utilisateurs
+  sharedUserIds?: string[];   // IDs des utilisateurs autorisés (vide = créateur seulement)
+  isShared?: boolean;         // true si compte d'agence partagé
+  dbId?: string;              // ID en base si persisté
+}
+
+export interface MailSentEntry {
+  messageId: string;
+  sentByUserId: string;
+  sentByName: string;
+  to: string;
+  subject: string;
+  date: string;
+  accountId: string;
 }
 
 export interface MailLabel {
