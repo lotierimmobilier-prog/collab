@@ -307,7 +307,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#f9fafb", minWidth: 0, minHeight: 0 }}>
       {/* Header */}
-      <div style={{ padding: "14px 20px", borderBottom: "1px solid #e5e7eb", background: "#fff" }}>
+      <div style={{ padding: "14px 20px", borderBottom: "1px solid #e5e7eb", background: "#fff", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -448,7 +448,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
       </div>
 
       {/* ── Barre d'actions IA ── */}
-      <div style={{ padding: "10px 20px", background: "#FDFAF6", borderBottom: "1px solid #EDE8DF", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ padding: "10px 20px", background: "#FDFAF6", borderBottom: "1px solid #EDE8DF", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flexShrink: 0 }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: "0.04em", marginRight: 4 }}>✦ Auguste</span>
 
         <AiBtn loading={aiLoading === "summarize"} onClick={summarize}       icon="📝" label="Résumer" />
@@ -466,7 +466,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
 
       {/* Panneau résumé */}
       {aiSummary && (
-        <div style={{ background: GOLD_BG, borderBottom: `1px solid ${BORDER}`, padding: "12px 20px" }}>
+        <div style={{ background: GOLD_BG, borderBottom: `1px solid ${BORDER}`, padding: "12px 20px", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: GOLD, marginBottom: 6 }}>📝 Résumé de la conversation</div>
