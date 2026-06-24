@@ -128,7 +128,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
       {/* Messages */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
         {thread.messages.map((msg, i) => (
-          <MessageBubble key={msg.id} msg={msg} isLast={i === thread.messages.length - 1} />
+          <MessageBubble key={msg.id} msg={msg} isLast={i === thread.messages.length - 1} loadingBody={loadingBody} />
         ))}
       </div>
 
@@ -182,7 +182,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
   );
 }
 
-function MessageBubble({ msg, isLast }: { msg: MailMessage; isLast: boolean }) {
+function MessageBubble({ msg, isLast, loadingBody }: { msg: MailMessage; isLast: boolean; loadingBody?: boolean }) {
   const [expanded, setExpanded] = useState(isLast);
   const date = new Date(msg.date);
 
