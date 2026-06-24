@@ -19,6 +19,8 @@ interface Props {
   onRemoveLabel: (id: string) => void;
   onStar: () => void;
   onTrash: () => void;
+  onRestore?: () => void;
+  onDeletePermanent?: () => void;
   customLabels: MailLabel[];
   onSetLabels?: (labels: string[]) => void;
 }
@@ -37,7 +39,7 @@ const SENDER_BADGE: Record<string, { label: string; color: string; bg: string }>
   unknown: { label: "Inconnu",       color: "#6B7280", bg: "#F9FAFB" },
 };
 
-export default function ThreadView({ thread, labels, accounts, aiKey, loadingBody, users = [], onClose, onReply, onApplyLabel, onRemoveLabel, onStar, onTrash, customLabels, onSetLabels }: Props) {
+export default function ThreadView({ thread, labels, accounts, aiKey, loadingBody, users = [], onClose, onReply, onApplyLabel, onRemoveLabel, onStar, onTrash, onRestore, onDeletePermanent, customLabels, onSetLabels }: Props) {
   const [showReply, setShowReply]         = useState(false);
   const [replyBody, setReplyBody]         = useState("");
   const [aiTone, setAiTone]               = useState("professionnel");
@@ -340,7 +342,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#f9fafb", minWidth: 0, minHeight: 0 }}>
       {/* Header */}
       <div style={{ padding: "14px 20px", borderBottom: "1px solid #e5e7eb", background: "#fff", flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, paddingRight: 40 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: "#111827", lineHeight: 1.3, margin: 0 }}>{thread.subject}</h2>
@@ -380,7 +382,33 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
               </div>
             </div>
           </div>
+          {/* Boutons header — à gauche de la croix absolue */}
+          <div style={{ display: "flex", gap: 5, flexShrink: 0, alignSelf: "flex-start", marginTop: 2 }}>
+            <button onClick={onStar} title="Suivre"
+              style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${threadLabelIds.has("starred") ? "#FDE68A" : "#e5e7eb"}`, background: threadLabelIds.has("starred") ? "#FEF9C3" : "#f9fafb", cursor: "pointer", fontSize: 13, color: threadLabelIds.has("starred") ? "#f59e0b" : "#9ca3af", display: "flex", alignItems: "center", justifyContent: "center" }}>★</button>
+            <button onClick={onTrash} title="Corbeille"
+              style={{ width: 28, height: 28, borderRadius: 6, border: "1px solid #fecaca", background: "#fff5f5", cursor: "pointer", fontSize: 13, color: "#ef4444", display: "flex", alignItems: "center", justifyContent: "center" }}>🗑</button>
+          </div>
         </div>
+
+        {/* Bannière corbeille */}
+        {threadLabelIds.has("trash") && (
+          <div style={{ marginTop: 10, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "8px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 12, color: "#991B1B", flex: 1 }}>🗑 Ce message est dans la corbeille.</span>
+            {onRestore && (
+              <button onClick={onRestore}
+                style={{ background: "#059669", color: "#fff", border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                ↩ Restaurer
+              </button>
+            )}
+            {onDeletePermanent && (
+              <button onClick={() => { if (confirm("Supprimer définitivement ce message ? Cette action est irréversible.")) onDeletePermanent?.(); }}
+                style={{ background: "#DC2626", color: "#fff", border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                ✕ Supprimer définitivement
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Barre assignation / réponse / classification ── */}
@@ -492,10 +520,6 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
           </span>
         )}
 
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6, flexShrink: 0 }}>
-          <button onClick={onStar} title="Suivre" style={{ background: threadLabelIds.has("starred") ? "#FEF9C3" : "none", border: `1px solid ${threadLabelIds.has("starred") ? "#FDE68A" : "#e5e7eb"}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 14, color: threadLabelIds.has("starred") ? "#f59e0b" : "#9ca3af" }}>★</button>
-          <button onClick={onTrash} title="Corbeille" style={{ background: "none", border: "1px solid #fecaca", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 14, color: "#ef4444" }}>🗑</button>
-        </div>
       </div>
 
       {/* Panneau résumé */}

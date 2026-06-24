@@ -393,6 +393,16 @@ export default function MailBoard() {
     starred ? removeLabel(threadId, "starred") : applyLabel(threadId, "starred");
   }
   function trash(threadId: string) { applyLabel(threadId, "trash"); if (selectedThread?.id === threadId) setSelectedThread(null); }
+  function restore(threadId: string) { removeLabel(threadId, "trash"); }
+  async function deletePermanent(threadId: string) {
+    // Suppression définitive en base
+    const ids = messages.filter(m => m.threadId === threadId).map(m => m.id);
+    setMessages(prev => { const u = prev.filter(m => m.threadId !== threadId); rebuildThreads(u); return u; });
+    if (selectedThread?.id === threadId) setSelectedThread(null);
+    for (const id of ids) {
+      await fetch(`/api/mail/messages?id=${id}`, { method: "DELETE" }).catch(() => {});
+    }
+  }
 
   /* ── Actions groupées ───────────────────────────────────────── */
   function bulkTrash(ids: string[]) {
@@ -760,6 +770,8 @@ export default function MailBoard() {
               onRemoveLabel={id => removeLabel(selectedThread.id, id)}
               onStar={() => toggleStar(selectedThread.id)}
               onTrash={() => trash(selectedThread.id)}
+              onRestore={() => restore(selectedThread.id)}
+              onDeletePermanent={() => deletePermanent(selectedThread.id)}
               customLabels={customLabels}
               onSetLabels={(lbls) => setThreadLabels(selectedThread.id, lbls)}
             />

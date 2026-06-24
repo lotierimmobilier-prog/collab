@@ -110,3 +110,13 @@ export async function PATCH(req: NextRequest) {
   await prisma.emailMessage.updateMany({ where: { id: { in: ids } }, data });
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id requis" }, { status: 400 });
+  await prisma.emailMessage.delete({ where: { id } }).catch(() => {});
+  return NextResponse.json({ ok: true });
+}
