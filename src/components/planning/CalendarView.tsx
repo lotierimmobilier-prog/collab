@@ -12,14 +12,21 @@ interface Props {
   onSelectEvent: (e: LocalEvent) => void;
 }
 
-export default function CalendarView({ view, currentDate, events, onSelectDate, onSelectEvent }: Props) {
+interface SubProps {
+  currentDate: Date;
+  events: LocalEvent[];
+  onSelectDate: (d: Date) => void;
+  onSelectEvent: (e: LocalEvent) => void;
+}
+
+export default function CalendarView({ view, currentDate, events, onSelectDate, onSelectEvent }: SubProps) {
   if (view === "month") return <MonthView currentDate={currentDate} events={events} onSelectDate={onSelectDate} onSelectEvent={onSelectEvent} />;
   if (view === "week")  return <WeekView  currentDate={currentDate} events={events} onSelectDate={onSelectDate} onSelectEvent={onSelectEvent} />;
   return <DayView currentDate={currentDate} events={events} onSelectDate={onSelectDate} onSelectEvent={onSelectEvent} />;
 }
 
 /* ── Month view ─────────────────────────────────────────────── */
-function MonthView({ currentDate, events, onSelectDate, onSelectEvent }: Props) {
+function MonthView({ currentDate, events, onSelectDate, onSelectEvent }: SubProps) {
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
@@ -94,7 +101,7 @@ function MonthView({ currentDate, events, onSelectDate, onSelectEvent }: Props) 
 }
 
 /* ── Week view ──────────────────────────────────────────────── */
-function WeekView({ currentDate, events, onSelectDate, onSelectEvent }: Props) {
+function WeekView({ currentDate, events, onSelectDate, onSelectEvent }: SubProps) {
   const monday = new Date(currentDate);
   monday.setDate(currentDate.getDate() - (currentDate.getDay() === 0 ? 6 : currentDate.getDay() - 1));
   const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
@@ -163,7 +170,7 @@ function WeekView({ currentDate, events, onSelectDate, onSelectEvent }: Props) {
 }
 
 /* ── Day view ───────────────────────────────────────────────── */
-function DayView({ currentDate, events, onSelectDate, onSelectEvent }: Props) {
+function DayView({ currentDate, events, onSelectDate, onSelectEvent }: SubProps) {
   const dayEvts = events.filter(e => {
     const s = new Date(e.start);
     return s.getFullYear() === currentDate.getFullYear() && s.getMonth() === currentDate.getMonth() && s.getDate() === currentDate.getDate();
