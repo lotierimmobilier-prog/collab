@@ -17,6 +17,11 @@ interface MailMsg {
   date: string;
 }
 
+function safeJson(raw: string): Record<string, unknown> {
+  const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  try { return JSON.parse(cleaned); } catch { return {}; }
+}
+
 function buildThreadContext(messages: MailMsg[]): string {
   return messages.map(m =>
     `[${new Date(m.date).toLocaleDateString("fr-FR")}] De: ${m.from.name} <${m.from.email}>\nObjet: ${m.subject}\n${(m.bodyText || "").slice(0, 800)}`
@@ -36,7 +41,7 @@ export async function POST(req: NextRequest) {
       messages: [{ role: "user", content: `Résume cet échange email en 3-5 points clés. Contexte immobilier.\n\n${ctx}\n\nRéponds en JSON: {"summary": "...", "points": ["...", "..."]}` }],
     });
     const text = resp.content.find(b => b.type === "text")?.text ?? "{}";
-    return NextResponse.json(JSON.parse(text));
+    return NextResponse.json(safeJson(text));
   }
 
   if (action === "draft_reply") {
@@ -66,7 +71,7 @@ export async function POST(req: NextRequest) {
       messages: [{ role: "user", content: `À partir de cet email, extrais la tâche à faire. Utilisateurs disponibles: ${usersStr}.\n\n${ctx}\n\nRéponds en JSON: {"title": "...", "description": "...", "priority": "urgente|haute|moyenne|basse", "assigneeId": "...", "assigneeName": "...", "dueDate": "YYYY-MM-DD ou null", "confidence": 0.0-1.0}` }],
     });
     const text = resp.content.find(b => b.type === "text")?.text ?? "{}";
-    return NextResponse.json(JSON.parse(text));
+    return NextResponse.json(safeJson(text));
   }
 
   if (action === "detect_rdv") {
@@ -78,7 +83,7 @@ export async function POST(req: NextRequest) {
       messages: [{ role: "user", content: `Détecte tout rendez-vous ou réunion mentionné dans cet email. Utilisateurs de l'agence: ${usersStr}.\n\n${ctx}\n\nRéponds en JSON: {"found": true/false, "title": "...", "start": "ISO datetime ou null", "end": "ISO datetime ou null", "location": "...", "type": "rdv|visite|edl|signature|formation|autre", "attendeeId": "ID utilisateur si reconnu ou null", "attendeeName": "...", "confidence": 0.0-1.0}` }],
     });
     const text = resp.content.find(b => b.type === "text")?.text ?? "{}";
-    return NextResponse.json(JSON.parse(text));
+    return NextResponse.json(safeJson(text));
   }
 
   if (action === "full_analysis") {

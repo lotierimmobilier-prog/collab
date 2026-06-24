@@ -348,10 +348,6 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
               </div>
             </div>
           </div>
-          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-            <button onClick={onStar} title="Suivre" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 14, color: threadLabelIds.has("starred") ? "#f59e0b" : "#9ca3af" }}>★</button>
-            <button onClick={onTrash} title="Corbeille" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 14, color: "#ef4444" }}>🗑</button>
-          </div>
         </div>
       </div>
 
@@ -462,6 +458,11 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
             {actionResult.msg}
           </span>
         )}
+
+        <div style={{ marginLeft: "auto", display: "flex", gap: 6, flexShrink: 0 }}>
+          <button onClick={onStar} title="Suivre" style={{ background: threadLabelIds.has("starred") ? "#FEF9C3" : "none", border: `1px solid ${threadLabelIds.has("starred") ? "#FDE68A" : "#e5e7eb"}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 14, color: threadLabelIds.has("starred") ? "#f59e0b" : "#9ca3af" }}>★</button>
+          <button onClick={onTrash} title="Corbeille" style={{ background: "none", border: "1px solid #fecaca", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 14, color: "#ef4444" }}>🗑</button>
+        </div>
       </div>
 
       {/* Panneau résumé */}
