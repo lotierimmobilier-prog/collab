@@ -55,6 +55,27 @@ export async function POST(req: NextRequest) {
 
   try {
     const info = await transport.sendMail(mailOptions);
+
+    // Sauvegarder le mail envoyé en base pour l'historique Auguste
+    const toStr = Array.isArray(to) ? to.join(", ") : String(to);
+    await prisma.emailMessage.create({
+      data: {
+        uid:        `sent-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        accountId:  accountId ?? "local",
+        folder:     "SENT",
+        threadId:   inReplyTo ?? `thread-sent-${Date.now()}`,
+        fromEmail:  fromEmail ?? username,
+        fromName:   fromName  ?? username,
+        toEmail:    toStr,
+        subject:    subject,
+        bodyText:   body ?? "",
+        bodyHtml:   html ?? undefined,
+        date:       new Date(),
+        labels:     ["sent"],
+        read:       true,
+      },
+    }).catch(() => {}); // silencieux si erreur (ex: table manquante)
+
     return NextResponse.json({ ok: true, messageId: info.messageId });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
