@@ -49,7 +49,7 @@ export default function EventModal({ defaultDate, event, onClose, onSave }: {
     color:       event?.color       ?? GOLD,
     type:        "rdv",
   });
-  const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [attendees, setAttendees] = useState<Attendee[]>((event?.attendees as Attendee[] | undefined) ?? []);
   const [users, setUsers]         = useState<User[]>([]);
   const [search, setSearch]       = useState("");
   const [showPicker, setShowPicker] = useState(false);

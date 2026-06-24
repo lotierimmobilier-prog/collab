@@ -259,3 +259,74 @@ CREATE TRIGGER calendar_events_updated_at BEFORE UPDATE ON calendar_events FOR E
 CREATE TRIGGER settings_updated_at        BEFORE UPDATE ON settings        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER owners_updated_at          BEFORE UPDATE ON owners          FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER tenants_updated_at         BEFORE UPDATE ON tenants         FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ═══════════════════════════════════════════════════════════════
+-- Migration v1.5 — Gestion locative : extension Owner/Tenant + Lots + Baux
+-- ═══════════════════════════════════════════════════════════════
+
+-- ── Extension owners ─────────────────────────────────────────
+ALTER TABLE owners ADD COLUMN IF NOT EXISTS "ownerType"   TEXT NOT NULL DEFAULT 'individual';
+ALTER TABLE owners ADD COLUMN IF NOT EXISTS mobile        TEXT;
+ALTER TABLE owners ADD COLUMN IF NOT EXISTS "companyName" TEXT;
+ALTER TABLE owners ADD COLUMN IF NOT EXISTS siret         TEXT;
+ALTER TABLE owners ADD COLUMN IF NOT EXISTS iban          TEXT;
+ALTER TABLE owners ADD COLUMN IF NOT EXISTS bic           TEXT;
+ALTER TABLE owners ADD COLUMN IF NOT EXISTS "bankName"    TEXT;
+
+-- ── Extension tenants ────────────────────────────────────────
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS mobile           TEXT;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "birthDate"      TEXT;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS profession       TEXT;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "emergencyName"  TEXT;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "emergencyPhone" TEXT;
+
+-- ── Biens immobiliers (lots) ─────────────────────────────────
+CREATE TABLE IF NOT EXISTS lots (
+  id          TEXT PRIMARY KEY,
+  reference   TEXT NOT NULL UNIQUE,
+  label       TEXT,
+  address     TEXT NOT NULL,
+  "lotType"   TEXT NOT NULL DEFAULT 'apartment',
+  surface     FLOAT,
+  rooms       INT,
+  floor       INT,
+  status      TEXT NOT NULL DEFAULT 'vacant',
+  "ownerId"   TEXT REFERENCES owners(id) ON DELETE SET NULL,
+  notes       TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ── Baux (contrats de location) ──────────────────────────────
+CREATE TABLE IF NOT EXISTS baux (
+  id            TEXT PRIMARY KEY,
+  reference     TEXT NOT NULL UNIQUE,
+  "lotId"       TEXT NOT NULL REFERENCES lots(id) ON DELETE CASCADE,
+  "leaseType"   TEXT NOT NULL DEFAULT 'residential',
+  "startDate"   TIMESTAMPTZ NOT NULL,
+  "endDate"     TIMESTAMPTZ,
+  "monthlyRent" FLOAT NOT NULL,
+  charges       FLOAT NOT NULL DEFAULT 0,
+  deposit       FLOAT,
+  "renewalType" TEXT NOT NULL DEFAULT 'tacit',
+  status        TEXT NOT NULL DEFAULT 'active',
+  "signedDate"  TIMESTAMPTZ,
+  notes         TEXT,
+  "createdBy"   TEXT NOT NULL,
+  "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt"   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ── Liaison bail ↔ locataire ─────────────────────────────────
+CREATE TABLE IF NOT EXISTS bail_tenants (
+  id         TEXT PRIMARY KEY,
+  "bailId"   TEXT NOT NULL REFERENCES baux(id) ON DELETE CASCADE,
+  "tenantId" TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  UNIQUE("bailId", "tenantId")
+);
+
+-- ── Triggers updatedAt ───────────────────────────────────────
+DROP TRIGGER IF EXISTS lots_updated_at ON lots;
+DROP TRIGGER IF EXISTS baux_updated_at ON baux;
+CREATE TRIGGER lots_updated_at BEFORE UPDATE ON lots FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER baux_updated_at BEFORE UPDATE ON baux FOR EACH ROW EXECUTE FUNCTION update_updated_at();

@@ -282,29 +282,105 @@ model ServiceOrder {
 // ── Gestion locative ─────────────────────────────────────────
 
 model Owner {
-  id        String   @id @default(cuid())
-  prenom    String
-  nom       String
-  email     String?
-  phone     String?
-  address   String?
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  prenom      String
+  nom         String
+  ownerType   String   @default("individual")   // individual, sci, company
+  email       String?
+  phone       String?
+  mobile      String?
+  companyName String?
+  siret       String?
+  address     String?
+  iban        String?
+  bic         String?
+  bankName    String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lots        Lot[]
 
   @@map("owners")
 }
 
 model Tenant {
-  id        String   @id @default(cuid())
-  prenom    String
-  nom       String
-  email     String?
-  phone     String?
-  address   String?
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String   @id @default(cuid())
+  prenom           String
+  nom              String
+  email            String?
+  phone            String?
+  mobile           String?
+  address          String?
+  birthDate        String?
+  profession       String?
+  emergencyName    String?
+  emergencyPhone   String?
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  baux             BailTenant[]
 
   @@map("tenants")
+}
+
+// ── Biens immobiliers ────────────────────────────────────────
+
+model Lot {
+  id          String   @id @default(cuid())
+  reference   String   @unique
+  label       String?
+  address     String
+  lotType     String   @default("apartment")  // apartment, house, commercial, parking, storage
+  surface     Float?
+  rooms       Int?
+  floor       Int?
+  status      String   @default("vacant")     // vacant, occupied, under_work
+  ownerId     String?
+  owner       Owner?   @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  baux        Bail[]
+
+  @@map("lots")
+}
+
+// ── Baux (contrats de location) ──────────────────────────────
+
+model Bail {
+  id          String    @id @default(cuid())
+  reference   String    @unique
+  lotId       String
+  lot         Lot       @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  leaseType   String    @default("residential")  // residential, commercial, mixed
+  startDate   DateTime
+  endDate     DateTime?
+  monthlyRent Float
+  charges     Float     @default(0)
+  deposit     Float?
+  renewalType String    @default("tacit")        // tacit, fixed
+  status      String    @default("active")       // active, terminated, suspended, pending
+  signedDate  DateTime?
+  notes       String?
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenants     BailTenant[]
+
+  @@map("baux")
+}
+
+model BailTenant {
+  id       String @id @default(cuid())
+  bailId   String
+  tenantId String
+  bail     Bail   @relation(fields: [bailId], references: [id], onDelete: Cascade)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([bailId, tenantId])
+  @@map("bail_tenants")
 }

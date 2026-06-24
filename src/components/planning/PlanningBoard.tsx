@@ -21,6 +21,7 @@ export interface LocalEvent {
   type: "local" | "google";
   calendarId?: string;
   htmlLink?: string;
+  attendees?: { type: "user" | "contact"; id?: string; name: string; email: string }[];
 }
 
 function gEventToLocal(e: GEvent, color: string): LocalEvent {
@@ -44,6 +45,7 @@ export default function PlanningBoard() {
   const [showSync, setShowSync] = useState(false);
   const [showNewEvent, setShowNewEvent] = useState<Date | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<LocalEvent | null>(null);
+  const [editingEvent, setEditingEvent] = useState<LocalEvent | null>(null);
 
   // Local events
   const [localEvents, setLocalEvents] = useState<LocalEvent[]>([]);
@@ -72,6 +74,7 @@ export default function PlanningBoard() {
         description: e.description as string | undefined,
         location:    e.location as string | undefined,
         type:        "local" as const,
+        attendees:   (e.attendees as LocalEvent["attendees"]) ?? [],
       }));
       setLocalEvents(events);
     } catch { /* silencieux */ }
@@ -189,8 +192,14 @@ export default function PlanningBoard() {
   }
 
   function addLocalEvent(_evt: LocalEvent) {
-    fetchDbEvents(); // Recharge depuis BDD pour avoir l'ID réel
+    fetchDbEvents();
     setShowNewEvent(null);
+  }
+
+  function handleEditSave(_evt: LocalEvent) {
+    fetchDbEvents();
+    setEditingEvent(null);
+    setSelectedEvent(null);
   }
 
   const allEvents = [...localEvents, ...gEvents];
@@ -308,14 +317,27 @@ export default function PlanningBoard() {
         />
       )}
 
-      {selectedEvent && (
+      {selectedEvent && !editingEvent && (
         <EventDetail
           event={selectedEvent}
           onClose={() => setSelectedEvent(null)}
-          onDelete={() => {
-            if (selectedEvent.type === "local") setLocalEvents(p => p.filter(e => e.id !== selectedEvent.id));
+          onEdit={() => setEditingEvent(selectedEvent)}
+          onDelete={async () => {
+            if (selectedEvent.type === "local") {
+              await fetch(`/api/calendar/${selectedEvent.id}`, { method: "DELETE" });
+              setLocalEvents(p => p.filter(e => e.id !== selectedEvent.id));
+            }
             setSelectedEvent(null);
           }}
+        />
+      )}
+
+      {editingEvent && (
+        <EventModal
+          defaultDate={new Date(editingEvent.start)}
+          event={editingEvent}
+          onClose={() => setEditingEvent(null)}
+          onSave={handleEditSave}
         />
       )}
     </div>
@@ -330,7 +352,7 @@ export default function PlanningBoard() {
   }
 }
 
-function EventDetail({ event, onClose, onDelete }: { event: LocalEvent; onClose: () => void; onDelete: () => void }) {
+function EventDetail({ event, onClose, onEdit, onDelete }: { event: LocalEvent; onClose: () => void; onEdit: () => void; onDelete: () => void }) {
   const start = event.start ? new Date(event.start) : null;
   const end = event.end ? new Date(event.end) : null;
   return (
@@ -358,6 +380,9 @@ function EventDetail({ event, onClose, onDelete }: { event: LocalEvent; onClose:
           <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
             {event.htmlLink && (
               <a href={event.htmlLink} target="_blank" rel="noreferrer" style={{ ...btnSecondary, textDecoration: "none", fontSize: 12 }}>Ouvrir dans Google Calendar ↗</a>
+            )}
+            {event.type === "local" && (
+              <button onClick={onEdit} style={{ background: "#F7F0E6", color: "#B8966A", border: "1px solid #E6D5C0", borderRadius: 8, padding: "6px 14px", fontSize: 12, cursor: "pointer", fontWeight: 500 }}>✏ Modifier</button>
             )}
             {event.type === "local" && (
               <button onClick={onDelete} style={{ background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 8, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>Supprimer</button>
