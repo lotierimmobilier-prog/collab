@@ -1,0 +1,428 @@
+"use client";
+import { useState, useEffect } from "react";
+import {
+  MailAccount, MailMessage, MailThread, MailLabel,
+  DEFAULT_LABELS, threadFromMessages,
+} from "@/lib/mail";
+import {
+  loadGmailConfigs, loadGmailToken, isGmailTokenValid,
+  fetchGmailMessages, saveGmailToken,
+  requestGmailToken, GmailConfig,
+} from "@/lib/googleGmail";
+import AccountConfigPanel from "./AccountConfigPanel";
+import LabelManager from "./LabelManager";
+import ThreadList from "./ThreadList";
+import ThreadView from "./ThreadView";
+import GoogleMailConnect from "./GoogleMailConnect";
+
+const ACCOUNTS_KEY = "collab_mail_accounts";
+const LABELS_KEY   = "collab_mail_labels";
+const AI_KEY_STORE = "collab_ai_key";
+
+export default function MailBoard() {
+  const [accounts, setAccounts] = useState<MailAccount[]>([]);
+  const [gmailConfigs, setGmailConfigs] = useState<GmailConfig[]>([]);
+  const [labels, setLabels]     = useState<MailLabel[]>(DEFAULT_LABELS);
+  const [messages, setMessages] = useState<MailMessage[]>([]);
+  const [threads, setThreads]   = useState<MailThread[]>([]);
+  const [activeLabel, setActiveLabel] = useState("inbox");
+  const [activeAccount, setActiveAccount] = useState<string>("all");
+  const [selectedThread, setSelectedThread] = useState<MailThread | null>(null);
+  const [search, setSearch] = useState("");
+  const [showImapConfig, setShowImapConfig] = useState(false);
+  const [showGmailConnect, setShowGmailConnect] = useState(false);
+  const [showLabels, setShowLabels] = useState(false);
+  const [showCompose, setShowCompose] = useState(false);
+  const [aiKey, setAiKey] = useState("");
+  const [syncing, setSyncing] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState("");
+
+  useEffect(() => {
+    const a = localStorage.getItem(ACCOUNTS_KEY);
+    if (a) setAccounts(JSON.parse(a));
+    const l = localStorage.getItem(LABELS_KEY);
+    if (l) setLabels(JSON.parse(l));
+    const k = localStorage.getItem(AI_KEY_STORE);
+    if (k) setAiKey(k);
+    setGmailConfigs(loadGmailConfigs());
+  }, []);
+
+  function saveAccounts(a: MailAccount[]) { setAccounts(a); localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(a)); }
+  function saveLabels(l: MailLabel[]) { setLabels(l); localStorage.setItem(LABELS_KEY, JSON.stringify(l)); }
+  function saveAiKey(k: string) { setAiKey(k); localStorage.setItem(AI_KEY_STORE, k); }
+
+  function ingestMessages(newMsgs: MailMessage[]) {
+    setMessages(prev => {
+      const existing = new Set(prev.map(m => m.id));
+      const fresh = newMsgs.filter(m => !existing.has(m.id));
+      const updated = [...fresh, ...prev];
+      rebuildThreads(updated);
+      return updated;
+    });
+  }
+
+  function addMessage(msg: MailMessage) {
+    setMessages(prev => { const u = [msg, ...prev]; rebuildThreads(u); return u; });
+  }
+
+  function rebuildThreads(msgs: MailMessage[]) {
+    const map = new Map<string, MailMessage[]>();
+    for (const m of msgs) {
+      if (!map.has(m.threadId)) map.set(m.threadId, []);
+      map.get(m.threadId)!.push(m);
+    }
+    setThreads([...map.values()].map(threadFromMessages)
+      .sort((a, b) => new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime()));
+  }
+
+  /* ── Gmail sync ─────────────────────────────────────────── */
+  async function syncGmail(accountId: string, accessToken?: string) {
+    setSyncing(accountId);
+    const cfg = loadGmailConfigs().find(c => c.accountId === accountId);
+    setSyncStatus(`Synchronisation Gmail ${cfg?.email ?? ""}...`);
+    try {
+      let token = accessToken;
+      if (!token) {
+        const stored = loadGmailToken(accountId);
+        if (stored && isGmailTokenValid(stored)) {
+          token = stored.access_token;
+        } else if (cfg) {
+          const newTok = await requestGmailToken(cfg.clientId);
+          saveGmailToken(accountId, newTok);
+          token = newTok.access_token;
+        }
+      }
+      if (!token) throw new Error("Token introuvable — reconnectez le compte");
+      const msgs = await fetchGmailMessages(token, accountId, 50);
+      ingestMessages(msgs as MailMessage[]);
+      setSyncStatus(`${msgs.length} message(s) synchronisé(s) depuis Gmail`);
+      setTimeout(() => setSyncStatus(""), 4000);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erreur";
+      setSyncStatus(`Erreur Gmail : ${msg}`);
+      setTimeout(() => setSyncStatus(""), 6000);
+    } finally {
+      setSyncing(null);
+    }
+  }
+
+  /* ── IMAP sync ──────────────────────────────────────────── */
+  async function syncImap(a: MailAccount) {
+    setSyncing(a.id);
+    setSyncStatus(`Synchronisation IMAP ${a.label}...`);
+    try {
+      const resp = await fetch("/api/mail/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ host: a.host, port: a.port, ssl: a.ssl, username: a.username, password: a.password, accountId: a.id, limit: 50 }),
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        ingestMessages(data.messages ?? []);
+        setSyncStatus(`${data.count} message(s) depuis ${a.label}`);
+        saveAccounts(accounts.map(x => x.id === a.id ? { ...x, lastSync: new Date().toLocaleString("fr-FR") } : x));
+        setTimeout(() => setSyncStatus(""), 4000);
+      } else {
+        setSyncStatus(`Erreur : ${data.error}`);
+        setTimeout(() => setSyncStatus(""), 6000);
+      }
+    } catch { setSyncStatus("Erreur réseau"); setTimeout(() => setSyncStatus(""), 4000); }
+    finally { setSyncing(null); }
+  }
+
+  async function syncAll() {
+    for (const cfg of gmailConfigs) await syncGmail(cfg.accountId);
+    for (const a of accounts.filter(x => x.active)) await syncImap(a);
+  }
+
+  /* ── Label / thread ops ─────────────────────────────────── */
+  function applyLabel(threadId: string, labelId: string) {
+    setMessages(prev => { const u = prev.map(m => m.threadId === threadId && !m.labels.includes(labelId) ? { ...m, labels: [...m.labels, labelId] } : m); rebuildThreads(u); return u; });
+  }
+  function removeLabel(threadId: string, labelId: string) {
+    setMessages(prev => { const u = prev.map(m => m.threadId === threadId ? { ...m, labels: m.labels.filter(l => l !== labelId) } : m); rebuildThreads(u); return u; });
+  }
+  function toggleStar(threadId: string) {
+    const starred = messages.some(m => m.threadId === threadId && m.labels.includes("starred"));
+    starred ? removeLabel(threadId, "starred") : applyLabel(threadId, "starred");
+  }
+  function trash(threadId: string) { applyLabel(threadId, "trash"); if (selectedThread?.id === threadId) setSelectedThread(null); }
+  function markRead(threadId: string) {
+    setMessages(prev => { const u = prev.map(m => m.threadId === threadId ? { ...m, status: "read" as const } : m); rebuildThreads(u); return u; });
+  }
+
+  const visibleThreads = threads.filter(t => {
+    const allMsgs = messages.filter(m => m.threadId === t.id);
+    const isGmailAcct = gmailConfigs.some(c => c.accountId === activeAccount);
+    if (activeAccount !== "all") {
+      if (isGmailAcct && t.accountId !== activeAccount) return false;
+      if (!isGmailAcct && t.accountId !== activeAccount) return false;
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      if (!allMsgs.some(m => m.subject.toLowerCase().includes(q) || m.bodyText.toLowerCase().includes(q) || m.from.email.toLowerCase().includes(q))) return false;
+    }
+    if (activeLabel === "inbox") return allMsgs.some(m => m.labels.includes("inbox") && !m.labels.includes("trash"));
+    if (activeLabel === "trash") return allMsgs.some(m => m.labels.includes("trash"));
+    return allMsgs.some(m => m.labels.includes(activeLabel));
+  });
+
+  const unread = (labelId: string) => threads.filter(t => messages.some(m => m.threadId === t.id && m.labels.includes(labelId) && m.status === "unread")).length;
+  const customLabels = labels.filter(l => !l.system);
+  const systemLabels = labels.filter(l => l.system);
+  const totalUnread = messages.filter(m => m.status === "unread" && m.labels.includes("inbox") && !m.labels.includes("trash")).length;
+  const hasAnyAccount = accounts.length > 0 || gmailConfigs.length > 0;
+
+  return (
+    <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
+      {/* SIDEBAR */}
+      <div style={{ width: 224, flexShrink: 0, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+        <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+          <button onClick={() => setShowCompose(true)} style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            ✏ Nouveau message
+          </button>
+        </div>
+
+        <div style={{ padding: "0 12px 10px", position: "relative" }}>
+          <span style={{ position: "absolute", left: 22, top: "50%", transform: "translateY(-50%)", color: "#9ca3af", fontSize: 13 }}>🔍</span>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher..." style={{ width: "100%", paddingLeft: 30, height: 32, border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, outline: "none", background: "#f9fafb", boxSizing: "border-box" }} />
+        </div>
+
+        <NavLabel>Boîte</NavLabel>
+        {systemLabels.map(l => (
+          <NavItem key={l.id} active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); }}>
+            <span style={{ fontSize: 14 }}>{labelIcon(l.id)}</span>
+            <span style={{ flex: 1 }}>{l.name}</span>
+            {unread(l.id) > 0 && <Badge>{unread(l.id)}</Badge>}
+          </NavItem>
+        ))}
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px 4px" }}>
+          <NavLabel inline>Libellés</NavLabel>
+          <button onClick={() => setShowLabels(true)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 16 }}>+</button>
+        </div>
+        {customLabels.map(l => (
+          <NavItem key={l.id} active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); }}>
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: l.color, flexShrink: 0 }} />
+            <span style={{ flex: 1, fontSize: 12 }}>{l.name}</span>
+          </NavItem>
+        ))}
+
+        {/* Gmail accounts */}
+        {gmailConfigs.length > 0 && (
+          <>
+            <NavLabel>Gmail</NavLabel>
+            <NavItem active={activeAccount === "all"} onClick={() => setActiveAccount("all")}>
+              <span style={{ fontSize: 14 }}>📧</span>
+              <span style={{ flex: 1, fontSize: 12 }}>Tous les comptes</span>
+              {totalUnread > 0 && <Badge>{totalUnread}</Badge>}
+            </NavItem>
+            {gmailConfigs.map(cfg => {
+              const tok = loadGmailToken(cfg.accountId);
+              const valid = isGmailTokenValid(tok);
+              return (
+                <NavItem key={cfg.accountId} active={activeAccount === cfg.accountId} onClick={() => setActiveAccount(cfg.accountId)}>
+                  <GIcon />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cfg.email.split("@")[0]}</div>
+                    <div style={{ fontSize: 10, color: valid ? "#059669" : "#f59e0b" }}>{valid ? "Connecté" : "Token expiré"}</div>
+                  </div>
+                  <button onClick={e => { e.stopPropagation(); syncGmail(cfg.accountId); }} disabled={syncing === cfg.accountId} title="Synchroniser" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#9ca3af" }}>🔄</button>
+                </NavItem>
+              );
+            })}
+          </>
+        )}
+
+        {/* IMAP accounts */}
+        {accounts.length > 0 && (
+          <>
+            <NavLabel>IMAP / POP3</NavLabel>
+            {accounts.filter(a => a.active).map(a => (
+              <NavItem key={a.id} active={activeAccount === a.id} onClick={() => setActiveAccount(a.id)}>
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: a.color, flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.label}</div>
+                  <div style={{ fontSize: 10, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.email}</div>
+                </div>
+                <button onClick={e => { e.stopPropagation(); syncImap(a); }} disabled={syncing === a.id} title="Synchroniser" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#9ca3af" }}>🔄</button>
+              </NavItem>
+            ))}
+          </>
+        )}
+
+        {/* Add account buttons */}
+        <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+          <button onClick={() => setShowGmailConnect(true)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "7px 0", fontSize: 12, cursor: "pointer", color: "#374151", fontWeight: 500, boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
+            <GIcon /> Ajouter Gmail
+          </button>
+          <button onClick={() => setShowImapConfig(true)} style={{ width: "100%", background: "none", border: "1px dashed #e5e7eb", borderRadius: 8, padding: "7px 0", fontSize: 12, cursor: "pointer", color: "#9ca3af" }}>
+            + IMAP / POP3
+          </button>
+          {hasAnyAccount && (
+            <button onClick={syncAll} disabled={!!syncing} style={{ width: "100%", background: "none", border: "1px solid #ddd6fe", borderRadius: 8, padding: "7px 0", fontSize: 12, cursor: "pointer", color: "#7c3aed" }}>
+              🔄 Tout synchroniser
+            </button>
+          )}
+        </div>
+
+        {/* AI key */}
+        <div style={{ padding: "10px 14px", borderTop: "1px solid #f3f4f6", marginTop: "auto" }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", marginBottom: 4 }}>Assistant IA (Claude)</div>
+          <input type="password" value={aiKey} onChange={e => saveAiKey(e.target.value)} placeholder="sk-ant-..." style={{ width: "100%", height: 30, border: "1px solid #e5e7eb", borderRadius: 6, padding: "0 8px", fontSize: 11, outline: "none", background: "#f9fafb", boxSizing: "border-box" }} />
+          {aiKey && <div style={{ fontSize: 10, color: "#059669", marginTop: 3 }}>IA activée</div>}
+        </div>
+      </div>
+
+      {/* MAIN */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        {syncStatus && (
+          <div style={{ background: syncing ? "#eff6ff" : syncStatus.startsWith("Erreur") ? "#fef2f2" : "#f0fdf4", borderBottom: "1px solid #e5e7eb", padding: "7px 16px", fontSize: 12, color: syncing ? "#1e40af" : syncStatus.startsWith("Erreur") ? "#991b1b" : "#166534", display: "flex", alignItems: "center", gap: 8 }}>
+            {syncing && "🔄 "}{syncStatus}
+          </div>
+        )}
+        <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+          <ThreadList
+            threads={visibleThreads}
+            messages={messages}
+            labels={labels}
+            accounts={accounts}
+            selectedId={selectedThread?.id}
+            onSelect={t => { setSelectedThread(t); markRead(t.id); }}
+            onStar={toggleStar}
+            onTrash={trash}
+            onApplyLabel={applyLabel}
+            customLabels={customLabels}
+            activeLabel={activeLabel}
+          />
+
+          {selectedThread ? (
+            <ThreadView
+              thread={selectedThread}
+              labels={labels}
+              accounts={accounts}
+              aiKey={aiKey}
+              onClose={() => setSelectedThread(null)}
+              onReply={msg => { addMessage(msg); setSelectedThread(prev => prev ? { ...prev, messages: [...prev.messages, msg] } : null); }}
+              onApplyLabel={id => applyLabel(selectedThread.id, id)}
+              onRemoveLabel={id => removeLabel(selectedThread.id, id)}
+              onStar={() => toggleStar(selectedThread.id)}
+              onTrash={() => trash(selectedThread.id)}
+              customLabels={customLabels}
+            />
+          ) : (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#f9fafb", gap: 12 }}>
+              <div style={{ fontSize: 48 }}>✉</div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: "#374151" }}>
+                {!hasAnyAccount ? "Commencez par ajouter un compte" : "Sélectionnez un message"}
+              </div>
+              {!hasAnyAccount && (
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={() => setShowGmailConnect(true)} style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                    <GIcon /> Connecter Gmail
+                  </button>
+                  <button onClick={() => setShowImapConfig(true)} style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>
+                    Configurer IMAP
+                  </button>
+                </div>
+              )}
+              {hasAnyAccount && <div style={{ fontSize: 12, color: "#9ca3af" }}>{visibleThreads.length} conversation(s)</div>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showCompose && <ComposeModal accounts={accounts} gmailConfigs={gmailConfigs} labels={customLabels} onClose={() => setShowCompose(false)} onSend={msg => { addMessage(msg); setShowCompose(false); }} />}
+      {showImapConfig && <AccountConfigPanel accounts={accounts} onSave={saveAccounts} onClose={() => setShowImapConfig(false)} />}
+      {showGmailConnect && (
+        <GoogleMailConnect
+          onSynced={(accountId, token) => {
+            setGmailConfigs(loadGmailConfigs());
+            syncGmail(accountId, token);
+            setShowGmailConnect(false);
+          }}
+          onClose={() => setShowGmailConnect(false)}
+        />
+      )}
+      {showLabels && <LabelManager labels={labels} onSave={saveLabels} onClose={() => setShowLabels(false)} />}
+    </div>
+  );
+}
+
+function NavLabel({ children, inline }: { children: React.ReactNode; inline?: boolean }) {
+  if (inline) return <span style={{ fontSize: 10, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.06em" }}>{children}</span>;
+  return <div style={{ fontSize: 10, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.06em", padding: "10px 16px 4px" }}>{children}</div>;
+}
+function NavItem({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 16px", cursor: "pointer", fontSize: 13, color: active ? "#7c3aed" : "#374151", background: active ? "#f5f3ff" : "transparent", borderLeft: active ? "2px solid #7c3aed" : "2px solid transparent", fontWeight: active ? 500 : 400 }}
+      onMouseEnter={e => !active && (e.currentTarget.style.background = "#f9fafb")}
+      onMouseLeave={e => !active && (e.currentTarget.style.background = "transparent")}
+    >{children}</div>
+  );
+}
+function Badge({ children }: { children: React.ReactNode }) {
+  return <span style={{ background: "#7c3aed", color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 10 }}>{children}</span>;
+}
+function labelIcon(id: string) { return { inbox: "📥", sent: "📤", drafts: "📝", starred: "⭐", trash: "🗑" }[id] ?? "📧"; }
+function GIcon() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+    </svg>
+  );
+}
+
+function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend }: {
+  accounts: MailAccount[]; gmailConfigs: GmailConfig[];
+  labels: MailLabel[]; onClose: () => void; onSend: (m: MailMessage) => void;
+}) {
+  const [to, setTo] = useState(""); const [subject, setSubject] = useState(""); const [body, setBody] = useState("");
+  const [accountId, setAccountId] = useState(gmailConfigs[0]?.accountId ?? accounts[0]?.id ?? "");
+  const [selLabels, setSelLabels] = useState(["inbox", "sent"]);
+
+  function send() {
+    if (!to || !subject) return;
+    const gCfg = gmailConfigs.find(c => c.accountId === accountId);
+    const aCfg = accounts.find(a => a.id === accountId);
+    const fromEmail = gCfg?.email ?? aCfg?.email ?? "moi@agence.fr";
+    const fromName = gCfg?.name ?? aCfg?.name ?? "Moi";
+    onSend({ id: Date.now().toString(), threadId: Date.now().toString(), accountId: accountId || "local", from: { name: fromName, email: fromEmail }, to: to.split(",").map(e => ({ name: e.trim(), email: e.trim() })), subject, body: `<p>${body.replace(/\n/g, "<br/>")}</p>`, bodyText: body, date: new Date().toISOString(), status: "read", labels: selLabels });
+  }
+
+  const allAccounts = [
+    ...gmailConfigs.map(c => ({ id: c.accountId, label: c.email })),
+    ...accounts.map(a => ({ id: a.id, label: `${a.label} <${a.email}>` })),
+  ];
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 40 }} />
+      <div style={{ position: "fixed", bottom: 24, right: 24, width: 560, background: "#fff", borderRadius: 14, zIndex: 50, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ background: "#1f2937", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ color: "#fff", fontWeight: 600, fontSize: 13 }}>Nouveau message</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: 18, cursor: "pointer" }}>×</button>
+        </div>
+        <div style={{ padding: "0 16px" }}>
+          {allAccounts.length > 1 && (
+            <select value={accountId} onChange={e => setAccountId(e.target.value)} style={{ width: "100%", border: "none", borderBottom: "1px solid #f3f4f6", padding: "8px 0", fontSize: 12, outline: "none", color: "#6b7280" }}>
+              {allAccounts.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+            </select>
+          )}
+          <input value={to} onChange={e => setTo(e.target.value)} placeholder="À" style={{ width: "100%", border: "none", borderBottom: "1px solid #f3f4f6", padding: "8px 0", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+          <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Objet" style={{ width: "100%", border: "none", borderBottom: "1px solid #f3f4f6", padding: "8px 0", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+          <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="Rédigez votre message..." rows={10} style={{ width: "100%", border: "none", padding: "10px 0", fontSize: 13, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box" }} />
+        </div>
+        <div style={{ padding: "10px 16px", borderTop: "1px solid #f3f4f6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 6 }}>
+            {labels.map(l => <button key={l.id} onClick={() => setSelLabels(p => p.includes(l.id) ? p.filter(x => x !== l.id) : [...p, l.id])} style={{ border: `1px solid ${selLabels.includes(l.id) ? l.color : "#e5e7eb"}`, background: selLabels.includes(l.id) ? l.color + "18" : "transparent", color: selLabels.includes(l.id) ? l.color : "#9ca3af", borderRadius: 5, padding: "2px 8px", fontSize: 11, cursor: "pointer" }}>{l.name}</button>)}
+          </div>
+          <button onClick={send} disabled={!to || !subject} style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: (!to || !subject) ? 0.5 : 1 }}>Envoyer</button>
+        </div>
+      </div>
+    </>
+  );
+}
