@@ -727,11 +727,12 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
       )}
 
       {/* Messages — dédupliqués par messageId, on garde celui avec le plus de contenu */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 20px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "scroll" }}>
+        <div style={{ padding: "16px 20px 32px", display: "flex", flexDirection: "column", gap: 12 }}>
         {(() => {
           const seen = new Map<string, MailMessage>();
           for (const msg of thread.messages) {
-            const key = msg.id.replace(/^[^-]+-/, ""); // retire le préfixe accountId
+            const key = msg.id.replace(/^[^-]+-/, "");
             const existing = seen.get(key);
             if (!existing || (msg.body || msg.bodyText || "").length > (existing.body || existing.bodyText || "").length) {
               seen.set(key, msg);
@@ -742,6 +743,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
             <MessageBubble key={msg.id} msg={msg} isLast={i === deduped.length - 1} loadingBody={loadingBody} />
           ));
         })()}
+        </div>
       </div>
 
       {/* Boutons répondre (bas, quand le panneau réponse est fermé) */}
