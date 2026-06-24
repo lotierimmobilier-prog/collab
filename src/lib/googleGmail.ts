@@ -170,7 +170,15 @@ function parseAddress(raw: string): { name: string; email: string } {
   return { name: raw, email: raw };
 }
 
-export async function fetchGmailMessages(token: string, accountId: string, maxResults = 50) {
+export interface FetchedMessage {
+  id: string; threadId: string; accountId: string;
+  from: { name: string; email: string };
+  to: { name: string; email: string }[];
+  subject: string; body: string; bodyText: string;
+  date: string; status: "unread" | "read"; labels: string[];
+}
+
+export async function fetchGmailMessages(token: string, accountId: string, maxResults = 50): Promise<FetchedMessage[]> {
   // 1. Fetch list
   const list = await gmailFetch(`/messages?maxResults=${maxResults}&labelIds=INBOX`, token);
   if (!list.messages?.length) return [];
