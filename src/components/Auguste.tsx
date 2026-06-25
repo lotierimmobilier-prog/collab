@@ -147,17 +147,31 @@ export default function Auguste() {
 
   function clear() { setMsgs([]); setAction(null); }
 
+  function bold(s: string, kb: string) {
+    return s.split(/\*\*(.+?)\*\*/g).map((p, j) => j % 2 === 1 ? <strong key={`${kb}b${j}`}>{p}</strong> : <span key={`${kb}s${j}`}>{p}</span>);
+  }
+  function inline(text: string, kb: string) {
+    // Liens Markdown [label](url) cliquables, puis gras **texte**
+    const out: React.ReactNode[] = [];
+    const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+    let last = 0, m: RegExpExecArray | null, i = 0;
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > last) out.push(<span key={`${kb}t${i}`}>{bold(text.slice(last, m.index), `${kb}t${i}`)}</span>);
+      out.push(<a key={`${kb}a${i}`} href={m[2]} style={{ color: "#B8966A", fontWeight: 600, textDecoration: "underline" }}>{m[1]}</a>);
+      last = m.index + m[0].length; i++;
+    }
+    if (last < text.length) out.push(<span key={`${kb}e`}>{bold(text.slice(last), `${kb}e`)}</span>);
+    return out;
+  }
   function formatMsg(text: string) {
-    // Rendu basique : gras **texte**, listes, sauts de ligne
-    return text.split("\n").map((line, i) => {
-      const parts = line.split(/\*\*(.+?)\*\*/g);
-      return (
-        <span key={i}>
-          {parts.map((p, j) => j % 2 === 1 ? <strong key={j}>{p}</strong> : p)}
-          {i < text.split("\n").length - 1 && <br />}
-        </span>
-      );
-    });
+    // Rendu basique : liens, gras, sauts de ligne
+    const lines = text.split("\n");
+    return lines.map((line, i) => (
+      <span key={i}>
+        {inline(line, `l${i}`)}
+        {i < lines.length - 1 && <br />}
+      </span>
+    ));
   }
 
   if (!session?.user) return null;

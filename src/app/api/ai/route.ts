@@ -462,35 +462,45 @@ async function executeTool(
       const allowed = configs.map(c => c.id);
       const q = (input.query as string | undefined)?.trim();
       const from = (input.from as string | undefined)?.trim();
-      const limit = Math.min(Number(input.limit) || 15, 40);
-      const since = new Date(); since.setMonth(since.getMonth() - 6);
+      const limit = Math.min(Number(input.limit) || 25, 60);
+      // Recherche large : on remonte jusqu'à 24 mois.
+      const since = new Date(); since.setMonth(since.getMonth() - 24);
 
       const where: Record<string, unknown> = {
         date: { gte: since },
         OR: [{ accountId: { in: allowed } }, { ownerId: userId }],
       };
       const and: Record<string, unknown>[] = [];
-      if (q) and.push({ OR: [
-        { subject:   { contains: q, mode: "insensitive" } },
-        { fromName:  { contains: q, mode: "insensitive" } },
-        { fromEmail: { contains: q, mode: "insensitive" } },
-        { bodyText:  { contains: q, mode: "insensitive" } },
-      ] });
+      if (q) {
+        // Recherche large : chaque mot-clé peut matcher objet / expéditeur / corps / destinataire.
+        const terms = q.split(/\s+/).filter(Boolean).slice(0, 6);
+        for (const term of terms) and.push({ OR: [
+          { subject:   { contains: term, mode: "insensitive" } },
+          { fromName:  { contains: term, mode: "insensitive" } },
+          { fromEmail: { contains: term, mode: "insensitive" } },
+          { toEmail:   { contains: term, mode: "insensitive" } },
+          { bodyText:  { contains: term, mode: "insensitive" } },
+        ] });
+      }
       if (from) and.push({ fromEmail: { contains: from, mode: "insensitive" } });
       if (and.length) where.AND = and;
 
       const mails = await prisma.emailMessage.findMany({
         where, orderBy: { date: "desc" }, take: limit,
-        select: { subject: true, fromName: true, fromEmail: true, toEmail: true, date: true, bodyText: true, folder: true },
+        select: { threadId: true, subject: true, fromName: true, fromEmail: true, toEmail: true, date: true, bodyText: true, folder: true },
       });
-      return mails.map(m => ({
-        objet: m.subject,
-        de: m.fromName ? `${m.fromName} <${m.fromEmail}>` : m.fromEmail,
-        a: m.toEmail,
-        date: m.date.toISOString().split("T")[0],
-        dossier: m.folder,
-        extrait: (m.bodyText || "").replace(/\s+/g, " ").slice(0, 280),
-      }));
+      return {
+        instructions: "Présente chaque mail trouvé sous forme de lien Markdown cliquable [objet](lien) avec la date et l'expéditeur. Les liens ouvrent le mail dans la messagerie.",
+        resultats: mails.map(m => ({
+          objet: m.subject,
+          de: m.fromName ? `${m.fromName} <${m.fromEmail}>` : m.fromEmail,
+          a: m.toEmail,
+          date: m.date.toISOString().split("T")[0],
+          dossier: m.folder,
+          lien: `/messagerie?mail=${encodeURIComponent(m.threadId || "")}`,
+          extrait: (m.bodyText || "").replace(/\s+/g, " ").slice(0, 280),
+        })),
+      };
     }
 
     default:
