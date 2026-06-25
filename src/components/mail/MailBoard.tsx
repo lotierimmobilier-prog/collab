@@ -57,11 +57,16 @@ export default function MailBoard() {
   // Pagination
   const [listPage, setListPage] = useState(1);
 
+  // Tri de la liste : par date (défaut) ou par priorité (boîte priorisée)
+  const [sortMode, setSortMode] = useState<"date" | "priority">("date");
+
   // Ref pour accéder aux comptes dans le timer sans stale closure
   const accountsRef    = useRef<MailAccount[]>([]);
   const gmailConfigRef = useRef<GmailConfig[]>([]);
   accountsRef.current    = accounts;
   gmailConfigRef.current = gmailConfigs;
+  // Ref vers l'auto-classement, appelé après chaque synchro (sans stale closure)
+  const autoClassifyRef = useRef<(silent?: boolean) => Promise<void>>(async () => {});
 
   useEffect(() => {
     // Charger les comptes depuis la BDD (persistance serveur)
@@ -275,6 +280,7 @@ export default function MailBoard() {
       setNextSyncIn(SYNC_INTERVAL / 1000);
       for (const cfg of gmailConfigRef.current) await syncGmail(cfg.accountId);
       for (const a of accountsRef.current.filter(x => x.active)) await syncImap(a, 1);
+      await autoClassifyRef.current(true); // classement auto des nouveaux mails
     }, SYNC_INTERVAL);
 
     // Countdown
@@ -372,6 +378,7 @@ export default function MailBoard() {
     for (const cfg of gmailConfigs) await syncGmail(cfg.accountId);
     for (const a of accounts.filter(x => x.active)) await syncImap(a, 1);
     setNextSyncIn(SYNC_INTERVAL / 1000);
+    runAutoClassify(true); // classement auto des nouveaux mails reçus
   }
 
   /* ── Label / thread ops ─────────────────────────────────── */
@@ -431,46 +438,44 @@ export default function MailBoard() {
   /* ── Classification automatique par Auguste ─────────────────── */
   const [classifying, setClassifying] = useState(false);
 
-  async function classifyAllWithAuguste() {
-    if (classifying) return;
-    // Threads sans assignation ni libellé de type
-    const toClassify = visibleThreads.filter(t => {
-      const lbls = messages.filter(m => m.threadId === t.id).flatMap(m => m.labels);
-      return !lbls.some(l => l.startsWith("assigned:") || l.startsWith("type:"));
-    }).slice(0, 20); // max 20 à la fois
-
-    if (toClassify.length === 0) return;
-    setClassifying(true);
-    try {
-      for (const thread of toClassify) {
-        const threadMsgs = messages.filter(m => m.threadId === thread.id);
-        const last = threadMsgs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-        try {
-          const resp = await fetch("/api/mail/ai", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "classify_thread",
-              messages: threadMsgs.slice(0, 3).map(m => ({ from: m.from.email, subject: m.subject, body: (m.bodyText || m.body || "").slice(0, 300) })),
-              threadSubject: thread.subject,
-              senderEmail: last?.from.email ?? "",
-            }),
-          });
-          if (!resp.ok) continue;
-          const data = await resp.json();
-          // Appliquer les labels suggérés
-          if (data.assigneeId) {
-            applyLabel(thread.id, `assigned:${data.assigneeId}`);
-          }
-          if (data.label) {
-            applyLabel(thread.id, `type:${data.label}`);
-          }
-        } catch { /* ignore thread en erreur */ }
-      }
-    } finally {
-      setClassifying(false);
-    }
+  // Fusionne les résultats du classement auto dans l'état local
+  function applyClassification(results: { threadId: string; label: string; assigneeId: string | null; priority: string }[]) {
+    if (!results?.length) return;
+    const byThread = new Map(results.map(r => [r.threadId, r]));
+    setMessages(prev => {
+      const u = prev.map(m => {
+        const r = byThread.get(m.threadId);
+        if (!r) return m;
+        const base = m.labels.filter(l => !l.startsWith("type:") && !l.startsWith("priority:"));
+        const hasAssign = base.some(l => l.startsWith("assigned:"));
+        const tags = [`type:${r.label}`, `priority:${r.priority}`];
+        if (r.assigneeId && !hasAssign) tags.push(`assigned:${r.assigneeId}`);
+        return { ...m, labels: [...new Set([...base, ...tags])] };
+      });
+      rebuildThreads(u);
+      return u;
+    });
   }
+
+  // Classement automatique par lot (catégorie + agent + priorité) via Auguste.
+  // silent = appel de fond après synchro (pas de spinner).
+  async function runAutoClassify(silent = false) {
+    if (classifying && !silent) return;
+    if (!silent) setClassifying(true);
+    try {
+      const resp = await fetch("/api/mail/auto-classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (data.ok && Array.isArray(data.classified)) applyClassification(data.classified);
+    } catch { /* ignore — réessai à la prochaine synchro */ }
+    finally { if (!silent) setClassifying(false); }
+  }
+  autoClassifyRef.current = runAutoClassify;
+
+  function classifyAllWithAuguste() { return runAutoClassify(false); }
   function markRead(threadId: string) {
     setMessages(prev => { const u = prev.map(m => m.threadId === threadId ? { ...m, status: "read" as const } : m); rebuildThreads(u); return u; });
   }
@@ -491,7 +496,7 @@ export default function MailBoard() {
       void resultIds;
     }
 
-    return threads.filter(t => {
+    const filtered = threads.filter(t => {
       const allMsgs = messages.filter(m => m.threadId === t.id);
       if (hiddenAccounts.size > 0 && hiddenAccounts.has(t.accountId)) return false;
       if (activeAccount !== "all" && t.accountId !== activeAccount) return false;
@@ -499,6 +504,19 @@ export default function MailBoard() {
       if (activeLabel === "trash") return allMsgs.some(m => m.labels.includes("trash"));
       return allMsgs.some(m => m.labels.includes(activeLabel));
     });
+
+    // Tri par priorité (boîte priorisée) : haute → normale → basse, puis par date
+    if (sortMode === "priority") {
+      const rank = (t: MailThread) => {
+        const lbls = messages.filter(m => m.threadId === t.id).flatMap(m => m.labels);
+        if (lbls.includes("priority:haute")) return 0;
+        if (lbls.includes("priority:basse")) return 2;
+        return 1; // normale ou non classé
+      };
+      return [...filtered].sort((a, b) =>
+        rank(a) - rank(b) || new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime());
+    }
+    return filtered;
   })();
 
   const unread     = (labelId: string) => threads.filter(t => messages.some(m => m.threadId === t.id && m.labels.includes(labelId) && m.status === "unread")).length;
@@ -682,6 +700,8 @@ export default function MailBoard() {
               onAccountFilter={() => { /* filtrage géré par checkboxes sidebar */ }}
               onClassifyAll={classifyAllWithAuguste}
               classifying={classifying}
+              sortMode={sortMode}
+              onToggleSort={() => setSortMode(s => s === "priority" ? "date" : "priority")}
               onBulkTrash={bulkTrash}
               onBulkLabel={bulkLabel}
               onBulkAssign={bulkAssign}

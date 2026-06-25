@@ -29,6 +29,8 @@ interface Props {
   onAccountFilter: (id: string) => void;
   onClassifyAll?: () => void;
   classifying?: boolean;
+  sortMode?: "date" | "priority";
+  onToggleSort?: () => void;
   onBulkTrash?: (ids: string[]) => void;
   onBulkLabel?: (ids: string[], labelId: string) => void;
   onBulkAssign?: (ids: string[], userId: string | null) => void;
@@ -39,7 +41,7 @@ export default function ThreadList({
   threads, messages, labels, accounts, gmailConfigs = [], users = [],
   selectedId, activeLabel, activeAccount, customLabels, page, onPageChange,
   onSelect, onStar, onTrash, onApplyLabel, onAccountFilter,
-  onClassifyAll, classifying,
+  onClassifyAll, classifying, sortMode = "date", onToggleSort,
   onBulkTrash, onBulkLabel, onBulkAssign, onBulkMarkRead,
 }: Props) {
   const [selectMode, setSelectMode]   = useState(false);
@@ -86,6 +88,12 @@ export default function ThreadList({
     const tag = allLbls.find(l => l.startsWith("replied:"));
     return tag ? tag.slice("replied:".length) : null;
   }
+  function getPriority(t: MailThread): "haute" | "basse" | null {
+    const allLbls = messages.filter(m => m.threadId === t.id).flatMap(m => m.labels);
+    if (allLbls.includes("priority:haute")) return "haute";
+    if (allLbls.includes("priority:basse")) return "basse";
+    return null; // normale → pas de marqueur
+  }
   function accountOf(t: MailThread) { return accounts.find(a => a.id === t.accountId); }
   function formatDate(iso: string) {
     const d = new Date(iso); const now = new Date();
@@ -120,6 +128,13 @@ export default function ThreadList({
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           {totalPages > 1 && !someSelected && !selectMode && <span>Page {safePage}/{totalPages}</span>}
+          {!selectMode && onToggleSort && (
+            <button onClick={onToggleSort}
+              title={sortMode === "priority" ? "Tri par priorité actif — cliquer pour trier par date" : "Trier par priorité (urgents en haut)"}
+              style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 6, border: `1px solid ${sortMode === "priority" ? GOLD : "#e5e7eb"}`, background: sortMode === "priority" ? GOLD_BG : "#fff", cursor: "pointer", fontSize: 10, fontWeight: 600, color: sortMode === "priority" ? GOLD : "#6b7280", whiteSpace: "nowrap" }}>
+              {sortMode === "priority" ? "🔥 Priorité" : "↕ Date"}
+            </button>
+          )}
           {!selectMode && onClassifyAll && (
             <button onClick={onClassifyAll} disabled={classifying}
               style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: classifying ? "#f9fafb" : "#FFFBEB", cursor: classifying ? "default" : "pointer", fontSize: 10, fontWeight: 600, color: classifying ? "#9ca3af" : GOLD, whiteSpace: "nowrap" }}>
@@ -221,6 +236,7 @@ export default function ThreadList({
           const tLabels   = threadCustomLabels(t);
           const assignedId = getAssignedLabel(t);
           const repliedId  = getRepliedLabel(t);
+          const priority   = getPriority(t);
           const msgCount  = messages.filter(m => m.threadId === t.id).length;
           const fromName  = last?.from.name || last?.from.email || "—";
           const color     = avatarColor(fromName);
@@ -234,7 +250,7 @@ export default function ThreadList({
           return (
             <div key={t.id}
               onClick={() => selectMode ? toggleOne(t.id, { stopPropagation: () => {} } as React.MouseEvent) : onSelect(t)}
-              style={{ padding: "8px 10px", borderBottom: "1px solid #f3f4f6", cursor: "pointer", background: isChecked ? "#FEF9F0" : selectedId === t.id ? "#F7F0E6" : "#fff", borderLeft: `3px solid ${isChecked ? GOLD : selectedId === t.id ? GOLD : "transparent"}`, position: "relative", transition: "background 0.1s" }}
+              style={{ padding: "8px 10px", borderBottom: "1px solid #f3f4f6", cursor: "pointer", background: isChecked ? "#FEF9F0" : selectedId === t.id ? "#F7F0E6" : priority === "haute" ? "#FEF6F6" : "#fff", borderLeft: `3px solid ${isChecked ? GOLD : selectedId === t.id ? GOLD : priority === "haute" ? "#DC2626" : "transparent"}`, position: "relative", transition: "background 0.1s" }}
               onMouseEnter={e => !isChecked && selectedId !== t.id && (e.currentTarget.style.background = "#f9fafb")}
               onMouseLeave={e => !isChecked && selectedId !== t.id && (e.currentTarget.style.background = "#fff")}
             >
@@ -263,8 +279,13 @@ export default function ThreadList({
                     </div>
                     <span style={{ fontSize: 10, color: "#9ca3af", flexShrink: 0, marginLeft: 4 }}>{last ? formatDate(last.date) : ""}</span>
                   </div>
-                  <div style={{ fontSize: 11, fontWeight: unread ? 600 : 400, color: unread ? "#111827" : "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 1 }}>
-                    {t.subject}
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 1 }}>
+                    {priority === "haute" && (
+                      <span title="Priorité haute" style={{ flexShrink: 0, background: "#FEE2E2", color: "#DC2626", borderRadius: 4, padding: "0 4px", fontSize: 9, fontWeight: 700 }}>🔥 Urgent</span>
+                    )}
+                    <span style={{ fontSize: 11, fontWeight: unread ? 600 : 400, color: priority === "basse" ? "#9ca3af" : unread ? "#111827" : "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {t.subject}
+                    </span>
                   </div>
                   <div style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: tLabels.length > 0 ? 3 : 0 }}>
                     {last?.bodyText?.slice(0, 80) || ""}

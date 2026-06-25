@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+import { MODELS, augusteJson, normalizeError } from "@/lib/auguste";
 
 const SYSTEM = `Tu es Auguste, assistant de l'agence Lotier Immobilier.
 Tu analyses des emails et retournes UNIQUEMENT un JSON valide, sans markdown ni texte autour.`;
@@ -57,18 +55,17 @@ Règles :
 - Pour urgences/impayés : priorité haute`;
 
   try {
-    const resp = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+    const result = await augusteJson<Record<string, unknown>>({
+      model: MODELS.fast,
       max_tokens: 256,
       system: SYSTEM,
       messages: [{ role: "user", content: prompt }],
-    });
-    const text = resp.content.find(b => b.type === "text")?.text ?? "{}";
-    const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    const result = JSON.parse(cleaned);
+    }, { fallback: { labels: [], assignedToId: null, priority: "normale", reason: "" } });
     // Injecter l'info mémoire dans la réponse
     return NextResponse.json({ ...result, hasMemory: !!memory });
-  } catch {
-    return NextResponse.json({ labels: [], assignedToId: null, priority: "normale", reason: "", hasMemory: false });
+  } catch (err) {
+    const e = normalizeError(err);
+    console.error("[mail/classify] Erreur:", e.message);
+    return NextResponse.json({ labels: [], assignedToId: null, priority: "normale", reason: "", hasMemory: false, error: e.message });
   }
 }

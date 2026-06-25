@@ -6,10 +6,11 @@
 #   ./deploy.sh
 #
 # PRÉREQUIS (une seule fois) :
-#   echo 'LaMaisonDePalajaEstGrande2026+' > ~/.collab_vps_pass
+#   echo 'TON_MOT_DE_PASSE_VPS' > ~/.collab_vps_pass
 #   chmod 600 ~/.collab_vps_pass
 #
-# Le mot de passe est lu depuis un fichier local (jamais dans les args CLI).
+# Le mot de passe est lu depuis un fichier local (jamais dans les args CLI,
+# jamais committé). Ne mets JAMAIS le mot de passe en clair dans ce fichier.
 
 set -e
 
