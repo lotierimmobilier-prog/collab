@@ -178,6 +178,19 @@ export default function TaskDetail({ task, onClose, onStatusChange, onUpdate }: 
             </div>
           ) : null}
 
+          {/* Bandeau de complétion */}
+          {task.status === "done" && task.completedAt && (() => {
+            const c = users.find(u => u.id === task.completedById);
+            const d = new Date(task.completedAt);
+            const when = d.toLocaleDateString("fr-FR") + " à " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+            return (
+              <div style={{ background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 8, padding: "8px 12px", marginBottom: 16, fontSize: 12.5, color: "#065F46", display: "flex", alignItems: "center", gap: 8 }}>
+                <span>✓</span>
+                <span>Effectuée le <strong>{when}</strong>{c ? <> par <strong>{c.prenom} {c.nom}</strong></> : null}</span>
+              </div>
+            );
+          })()}
+
           {/* Champs méta */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
             {/* Statut */}

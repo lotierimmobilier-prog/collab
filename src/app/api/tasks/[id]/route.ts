@@ -8,6 +8,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const body = await req.json();
 
+  // Complétion : en passant à "done" on enregistre la date/heure et l'auteur ;
+  // en quittant "done" on les efface.
+  let completion: { completedAt?: Date | null; completedById?: string | null } = {};
+  if (body.status !== undefined) {
+    completion = body.status === "done"
+      ? { completedAt: new Date(), completedById: session.user.id }
+      : { completedAt: null, completedById: null };
+  }
+
   const task = await prisma.task.update({
     where: { id },
     data: {
@@ -20,9 +29,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ...(body.dueDate    !== undefined && { dueDate: body.dueDate ? new Date(body.dueDate) : null }),
       ...(body.tags       !== undefined && { tags: body.tags }),
       ...(body.project    !== undefined && { project: body.project }),
+      ...completion,
     },
   });
-  return NextResponse.json({ ...task, dueDate: task.dueDate?.toISOString().split("T")[0] ?? undefined });
+  return NextResponse.json({
+    ...task,
+    dueDate: task.dueDate?.toISOString().split("T")[0] ?? undefined,
+    completedAt: task.completedAt?.toISOString() ?? undefined,
+  });
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

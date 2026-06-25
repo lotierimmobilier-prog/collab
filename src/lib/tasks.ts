@@ -12,6 +12,8 @@ export interface Task {
   assigneeInitials?: string;
   assigneeColor?: string;
   dueDate?: string;
+  completedAt?: string;
+  completedById?: string;
   tags?: string[];
   project?: string;
   subtasks?: { label: string; done: boolean }[];
