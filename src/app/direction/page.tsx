@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import Sidebar from "@/components/Sidebar";
@@ -9,16 +10,17 @@ const GOLD = "#B8966A"; const DARK = "#1C1A17"; const BORDER = "#E6E1D9";
 type FieldType = "text" | "date" | "number" | "select" | "textarea";
 interface Field { key: string; label: string; type: FieldType; options?: { value: string; label: string }[]; full?: boolean }
 interface Section {
-  id: string; resource: string; title: string; icon: string;
+  id: string; resource: string; title: string;
   fields: Field[];
   required: string;
   primary: string;            // champ titre de la ligne
   expiry?: { key: string; label: string }[];  // champs date à surveiller (échéance)
+  detailBase?: string;        // base de lien vers une fiche détaillée (ex. véhicules)
 }
 
 const SECTIONS: Section[] = [
   {
-    id: "flotte", resource: "vehicles", title: "Flotte automobile", icon: "🚗", required: "label", primary: "label",
+    id: "flotte", resource: "vehicles", title: "Flotte automobile", required: "label", primary: "label", detailBase: "/direction/vehicule",
     expiry: [{ key: "controleTechnique", label: "Contrôle technique" }, { key: "endDate", label: "Fin de contrat" }],
     fields: [
       { key: "label", label: "Véhicule (marque + modèle)", type: "text", full: true },
@@ -35,7 +37,7 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    id: "locaux", resource: "premises", title: "Locaux de l'entreprise", icon: "🏢", required: "label", primary: "label",
+    id: "locaux", resource: "premises", title: "Locaux de l'entreprise", required: "label", primary: "label",
     expiry: [{ key: "endDate", label: "Fin de bail" }],
     fields: [
       { key: "label", label: "Désignation du local", type: "text", full: true },
@@ -49,7 +51,7 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    id: "cartes", resource: "procards", title: "Cartes professionnelles", icon: "🪪", required: "holderName", primary: "holderName",
+    id: "cartes", resource: "procards", title: "Cartes professionnelles", required: "holderName", primary: "holderName",
     expiry: [{ key: "expiryDate", label: "Validité" }],
     fields: [
       { key: "holderName", label: "Titulaire", type: "text", full: true },
@@ -63,7 +65,7 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    id: "assurances", resource: "insurance", title: "Assurances", icon: "🛡️", required: "type", primary: "type",
+    id: "assurances", resource: "insurance", title: "Assurances", required: "type", primary: "type",
     expiry: [{ key: "endDate", label: "Échéance" }],
     fields: [
       { key: "type", label: "Type d'assurance", type: "select", options: [
@@ -91,9 +93,9 @@ function fmtDate(v: unknown) { return v ? new Date(String(v)).toLocaleDateString
 function daysUntil(v: unknown): number | null { if (!v) return null; return Math.ceil((new Date(String(v)).getTime() - Date.now()) / 86400_000); }
 function expiryStyle(days: number | null) {
   if (days === null) return null;
-  if (days < 0)  return { bg: "#FEE2E2", color: "#DC2626", label: `expiré (${Math.abs(days)} j)` };
-  if (days <= 30) return { bg: "#FEF3C7", color: "#D97706", label: `dans ${days} j` };
-  return { bg: "#ECFDF5", color: "#059669", label: `dans ${days} j` };
+  if (days < 0)  return { bg: "#F5E9E6", color: "#9B2C2C", label: `expiré (${Math.abs(days)} j)` };
+  if (days <= 30) return { bg: "#F7F0E6", color: "#8A6D44", label: `dans ${days} j` };
+  return { bg: "#F2F1EC", color: "#6b7280", label: `dans ${days} j` };
 }
 
 export default function DirectionPage() {
@@ -120,7 +122,7 @@ export default function DirectionPage() {
                 {SECTIONS.map(s => (
                   <button key={s.id} onClick={() => setTab(s.id)}
                     style={{ display: "flex", alignItems: "center", gap: 6, border: `1px solid ${tab === s.id ? GOLD : BORDER}`, background: tab === s.id ? "#F7F0E6" : "#fff", color: tab === s.id ? GOLD : "#6b7280", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                    <span>{s.icon}</span> {s.title}
+                    {s.title}
                   </button>
                 ))}
               </div>
@@ -163,7 +165,7 @@ function DirectionSection({ section }: { section: Section }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <span style={{ fontSize: 15, fontWeight: 700, color: DARK }}>{section.icon} {section.title} <span style={{ color: "#9ca3af", fontWeight: 400 }}>({rows.length})</span></span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: DARK }}>{section.title} <span style={{ color: "#9ca3af", fontWeight: 400 }}>({rows.length})</span></span>
         <button onClick={() => { setEditing(null); setShowForm(true); }} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Ajouter</button>
       </div>
 
@@ -195,9 +197,10 @@ function DirectionSection({ section }: { section: Section }) {
                   )}
                   {!!r.note && <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 6 }}>{String(r.note)}</div>}
                 </div>
-                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                  <button onClick={() => { setEditing(r); setShowForm(true); }} title="Modifier" style={iconBtn}>✏️</button>
-                  <button onClick={() => remove(r.id)} title="Supprimer" style={iconBtn}>🗑</button>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+                  {section.detailBase && <Link href={`${section.detailBase}/${r.id}`} style={txtBtn}>Ouvrir</Link>}
+                  <button onClick={() => { setEditing(r); setShowForm(true); }} style={txtBtn}>Modifier</button>
+                  <button onClick={() => remove(r.id)} style={{ ...txtBtn, color: "#9B2C2C" }}>Supprimer</button>
                 </div>
               </div>
             </div>
@@ -241,7 +244,7 @@ function RecordForm({ section, record, onClose, onSaved }: { section: Section; r
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 14, width: 560, maxWidth: "94vw", maxHeight: "90vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
         <div style={{ background: DARK, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ color: "#fff", fontWeight: 600, fontSize: 14 }}>{section.icon} {record ? "Modifier" : "Ajouter"} — {section.title}</span>
+          <span style={{ color: "#fff", fontWeight: 600, fontSize: 14 }}>{record ? "Modifier" : "Ajouter"} — {section.title}</span>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: 20, cursor: "pointer" }}>×</button>
         </div>
         <div style={{ padding: 18, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -271,4 +274,4 @@ function RecordForm({ section, record, onClose, onSaved }: { section: Section; r
 }
 
 const inp: React.CSSProperties = { width: "100%", height: 38, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 10px", fontSize: 13, outline: "none", background: "#f9fafb", fontFamily: "inherit", boxSizing: "border-box" };
-const iconBtn: React.CSSProperties = { width: 32, height: 32, borderRadius: 8, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", fontSize: 13 };
+const txtBtn: React.CSSProperties = { background: "none", border: "none", color: GOLD, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "2px 4px", textDecoration: "none" };

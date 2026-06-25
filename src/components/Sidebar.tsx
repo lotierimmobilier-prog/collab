@@ -26,6 +26,7 @@ const nav: NavItem[] = [
   { id: "mail",      label: "Messagerie email",     icon: "@",  href: "/messagerie",         group: "Principal", badge: 3 },
   { id: "chat",      label: "Messages internes",    icon: "💬", href: "/messagerie-interne", group: "Principal" },
   { id: "appels",    label: "Appels téléphoniques", icon: "📞", href: "/appels",             group: "Principal" },
+  { id: "annuaire",  label: "Annuaire",             icon: "▤",  href: "/annuaire",           group: "Principal" },
   { id: "gestion",   label: "Gestion locative",     icon: "🏠", href: "/gestion",            group: "Gestion" },
   { id: "formation", label: "Formation",            icon: "◈",  href: "/formation",          group: "Agence" },
   { id: "reseaux",   label: "Réseaux sociaux",      icon: "⌘",  href: "/reseaux-sociaux",   group: "Agence" },
@@ -89,7 +90,7 @@ export default function Sidebar({ active }: { active: string }) {
               style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200 }} />
             <div style={{
               position: "fixed", bottom: 64, left: 0, right: 0, zIndex: 201,
-              background: "#FAFAF8", borderRadius: "20px 20px 0 0",
+              background: "#fff", borderRadius: "20px 20px 0 0",
               borderTop: `1px solid ${BORDER}`, boxShadow: "0 -8px 32px rgba(0,0,0,0.15)",
               maxHeight: "70vh", overflowY: "auto", paddingBottom: 8,
             }}>
@@ -151,7 +152,7 @@ export default function Sidebar({ active }: { active: string }) {
         {/* Bottom navigation bar */}
         <nav style={{
           position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
-          background: "#FAFAF8", borderTop: `1px solid ${BORDER}`,
+          background: "#fff", borderTop: `1px solid ${BORDER}`,
           display: "flex", alignItems: "stretch",
           height: 64, boxShadow: "0 -2px 12px rgba(0,0,0,0.08)",
         }}>
@@ -195,7 +196,7 @@ export default function Sidebar({ active }: { active: string }) {
   return (
     <aside style={{
       width: w, flexShrink: 0,
-      background: "#FAFAF8", borderRight: `1px solid ${BORDER}`,
+      background: "#fff", borderRight: `1px solid ${BORDER}`,
       display: "flex", flexDirection: "column",
       transition: "width 0.22s cubic-bezier(0.4,0,0.2,1)",
       overflow: "hidden", position: "relative",
