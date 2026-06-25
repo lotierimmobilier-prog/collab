@@ -32,14 +32,19 @@ function formatTask(t: {
   };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   // Cloisonnement : chacun ne voit que ses tâches (assignées ou créées) ; admin voit tout
   const isAdmin = session.user.roleId === "admin";
   const uid = session.user.id;
-  const where = isAdmin ? {} : { OR: [{ assigneeId: uid }, { createdById: uid }] };
+  const scope = isAdmin ? {} : { OR: [{ assigneeId: uid }, { createdById: uid }] };
+
+  // Filtre de statut optionnel : ?status=todo,in_progress (ex. tableau de bord).
+  const statusParam = req.nextUrl.searchParams.get("status");
+  const statuses = statusParam ? statusParam.split(",").map(s => s.trim()).filter(Boolean) : [];
+  const where = statuses.length ? { AND: [scope, { status: { in: statuses } }] } : scope;
 
   const tasks = await prisma.task.findMany({
     where,

@@ -18,6 +18,7 @@ export default function TaskBoard() {
   const [tasks, setTasks]           = useState<Task[]>([]);
   const [families, setFamilies]     = useState<Family[]>([]);
   const [teams, setTeams]           = useState<Team[]>([]);
+  const [users, setUsers]           = useState<{ id: string; prenom: string; nom: string }[]>([]);
   const [loading, setLoading]       = useState(true);
   const [view, setView]             = useState<"board" | "list" | "hierarchy">("board");
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -34,10 +35,11 @@ export default function TaskBoard() {
 
   const fetchTasks = useCallback(async () => {
     try {
-      const [tr, fr, tmr] = await Promise.all([fetch("/api/tasks"), fetch("/api/task-families"), fetch("/api/teams")]);
+      const [tr, fr, tmr, ur] = await Promise.all([fetch("/api/tasks"), fetch("/api/task-families"), fetch("/api/teams"), fetch("/api/users")]);
       if (tr.ok)  setTasks(await tr.json());
       if (fr.ok)  setFamilies(await fr.json());
       if (tmr.ok) setTeams(await tmr.json());
+      if (ur.ok)  { const us = await ur.json(); setUsers(Array.isArray(us) ? us : []); }
     } finally { setLoading(false); }
   }, []);
 
@@ -110,6 +112,15 @@ export default function TaskBoard() {
   }
 
   const assignees = [...new Set(tasks.map(t => t.assigneeInitials).filter(Boolean))];
+
+  // Libellé de complétion : « 24/06 à 14:30 · Barbara D. »
+  function completionInfo(task: Task): string | null {
+    if (task.status !== "done" || !task.completedAt) return null;
+    const d = new Date(task.completedAt);
+    const when = d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) + " à " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    const u = users.find(x => x.id === task.completedById);
+    return u ? `${when} · ${u.prenom} ${u.nom}` : when;
+  }
   const total = tasks.length;
   const done  = tasks.filter(t => t.status === "done").length;
 
@@ -265,7 +276,12 @@ export default function TaskBoard() {
                         style={{ width: 18, height: 18, borderRadius: "50%", border: task.status === "done" ? "none" : "1.5px solid #d1d5db", background: task.status === "done" ? "#10b981" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", flexShrink: 0, cursor: "pointer", padding: 0 }}>
                         {task.status === "done" ? "✓" : ""}
                       </button>
-                      <span style={{ fontSize: 13, flex: 1, textDecoration: task.status === "done" ? "line-through" : "none", color: task.status === "done" ? "#9ca3af" : "#111827" }}>{task.title}</span>
+                      <span style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: 13, textDecoration: task.status === "done" ? "line-through" : "none", color: task.status === "done" ? "#9ca3af" : "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.title}</span>
+                        {completionInfo(task) && (
+                          <span style={{ fontSize: 11, color: "#059669", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, marginTop: 1 }}>✓ Effectuée le {completionInfo(task)}</span>
+                        )}
+                      </span>
                       <span style={{ background: PRIORITY_STYLES[task.priority].bg, color: PRIORITY_STYLES[task.priority].text, borderRadius: 6, padding: "2px 7px", fontSize: 11 }}>{PRIORITY_STYLES[task.priority].label}</span>
                       {task.assigneeInitials && <div style={{ width: 26, height: 26, borderRadius: "50%", background: task.assigneeColor, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 600, color: "#374151" }}>{task.assigneeInitials}</div>}
                       {task.dueDate && <span style={{ fontSize: 11, color: "#9ca3af" }}>📅 {task.dueDate}</span>}

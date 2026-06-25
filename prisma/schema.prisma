@@ -173,12 +173,13 @@ model ChannelMember {
 }
 
 model InternalMessage {
-  id        String   @id @default(cuid())
-  channelId String
-  senderId  String
-  content   String
-  createdAt DateTime @default(now())
-  readBy    String[]
+  id          String   @id @default(cuid())
+  channelId   String
+  senderId    String
+  content     String
+  attachments Json?    // pièces jointes (≤20 Mo), purgées après 30 jours
+  createdAt   DateTime @default(now())
+  readBy      String[]
 
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
   sender  User    @relation("MessageSender", fields: [senderId], references: [id])
