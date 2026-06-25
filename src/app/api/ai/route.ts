@@ -160,15 +160,24 @@ async function executeTool(
   name: string,
   input: Record<string, unknown>,
   userId: string,
-  sideEffects: SideEffect[]
+  sideEffects: SideEffect[],
+  userRole: string = "user",
 ) {
+  // Cloisonnement d'Auguste : admin et direction voient tout ; un agent ne
+  // consulte que ses propres données.
+  const seeAll = userRole === "admin" || userRole === "direction";
   switch (name) {
 
     case "get_tasks": {
       const where: Record<string, unknown> = {};
       if (input.status)     where.status     = input.status;
       if (input.priority)   where.priority   = input.priority;
-      if (input.assigneeId) where.assigneeId = input.assigneeId;
+      if (!seeAll) {
+        // Agent : uniquement ses tâches (assignées ou créées)
+        where.OR = [{ assigneeId: userId }, { createdById: userId }];
+      } else if (input.assigneeId) {
+        where.assigneeId = input.assigneeId;
+      }
       const tasks = await prisma.task.findMany({
         where,
         include: { assignee: { select: { id: true, prenom: true, nom: true } }, family: true, group: true },
@@ -243,11 +252,17 @@ async function executeTool(
       const calWhere: Record<string, unknown> = {};
       if (input.from) calWhere.start = { gte: new Date(input.from as string) };
       if (input.to)   calWhere.end   = { lte: new Date(input.to   as string) };
-      const events = await prisma.calendarEvent.findMany({
+      const allEvents = await prisma.calendarEvent.findMany({
         where: calWhere,
         orderBy: { start: "asc" },
-        take: 50,
+        take: seeAll ? 50 : 200,
       });
+      // Agent : seulement les événements qu'il a créés ou auxquels il participe.
+      const events = (seeAll ? allEvents : allEvents.filter(e => {
+        if (e.createdBy === userId) return true;
+        const att = Array.isArray(e.attendees) ? (e.attendees as Array<{ type?: string; id?: string }>) : [];
+        return att.some(a => a.type === "user" && a.id === userId);
+      })).slice(0, 50);
       return events.map(e => ({
         id: e.id, title: e.title,
         start: e.start.toISOString(), end: e.end.toISOString(),
@@ -532,7 +547,8 @@ Confirme toujours clairement ce qui a été fait, par exemple :
         block.name,
         block.input as Record<string, unknown>,
         userId,
-        sideEffects
+        sideEffects,
+        userRole,
       );
       toolResults.push({
         type: "tool_result",
