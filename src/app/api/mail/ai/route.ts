@@ -59,13 +59,19 @@ export async function POST(req: NextRequest) {
   const { action, messages, threadSubject, senderEmail, tone = "professionnel", instruction = "", question = "", length = "moyen" } = await req.json();
   const ctx = buildThreadContext(messages || []);
 
+  // Cloisonnement d'Auguste : admin/direction voient tout l'historique ;
+  // un agent ne lit que ses propres mails (ownerId).
+  const uid = session.user.id;
+  const seeAll = session.user.roleId === "admin" || session.user.roleId === "direction";
+  const histScope = seeAll ? {} : { ownerId: uid };
+
   if (action === "summarize") {
     // Contexte historique avec cet expéditeur
     const fromEmail = (messages?.[0]?.from?.email || "").toLowerCase();
     let histCtx = "";
     if (fromEmail) {
       const past = await prisma.emailMessage.findMany({
-        where: { OR: [{ fromEmail: { equals: fromEmail, mode: "insensitive" } }, { toEmail: { contains: fromEmail, mode: "insensitive" } }] },
+        where: { ...histScope, OR: [{ fromEmail: { equals: fromEmail, mode: "insensitive" } }, { toEmail: { contains: fromEmail, mode: "insensitive" } }] },
         orderBy: { date: "desc" }, take: 10,
         select: { fromEmail: true, fromName: true, subject: true, bodyText: true, date: true },
       });
@@ -106,7 +112,7 @@ export async function POST(req: NextRequest) {
     if (fromEmail) {
       try {
         const past = await prisma.emailMessage.findMany({
-          where: { OR: [{ fromEmail: { equals: fromEmail, mode: "insensitive" } }, { toEmail: { contains: fromEmail, mode: "insensitive" } }] },
+          where: { ...histScope, OR: [{ fromEmail: { equals: fromEmail, mode: "insensitive" } }, { toEmail: { contains: fromEmail, mode: "insensitive" } }] },
           orderBy: { date: "desc" }, take: 5,
           select: { fromEmail: true, fromName: true, subject: true, bodyText: true, date: true },
         });
@@ -133,7 +139,7 @@ export async function POST(req: NextRequest) {
 
     // Chercher les anciens mails en parallèle
     const pastMails = fromEmail2 ? await prisma.emailMessage.findMany({
-      where: { OR: [{ fromEmail: { equals: fromEmail2, mode: "insensitive" } }, { toEmail: { contains: fromEmail2, mode: "insensitive" } }] },
+      where: { ...histScope, OR: [{ fromEmail: { equals: fromEmail2, mode: "insensitive" } }, { toEmail: { contains: fromEmail2, mode: "insensitive" } }] },
       orderBy: { date: "desc" }, take: 15,
       select: { fromEmail: true, fromName: true, subject: true, bodyText: true, date: true },
     }) : [];
@@ -181,7 +187,7 @@ export async function POST(req: NextRequest) {
     // Récupère tous les mails échangés avec cet expéditeur (envoyés et reçus) depuis la DB
     if (!senderEmail) return NextResponse.json({ error: "senderEmail requis" }, { status: 400 });
     const allMsgs = await prisma.emailMessage.findMany({
-      where: { OR: [
+      where: { ...histScope, OR: [
         { fromEmail: { equals: senderEmail, mode: "insensitive" } },
         { toEmail:   { contains: senderEmail, mode: "insensitive" } },
       ]},
