@@ -9,7 +9,9 @@ export const PERF_TYPES: { id: PerfType; label: string; short: string; color: st
   { id: "mise_en_loc",  label: "Mises en location",   short: "Mise en loc", color: "#059669", icon: "📍" },
 ];
 
-export const PERF_TYPE_IDS = PERF_TYPES.map(t => t.id);
+// Typé string[] (et non PerfType[]) pour que .includes(maStringQuelconque)
+// soit accepté en mode strict lors des validations.
+export const PERF_TYPE_IDS: string[] = PERF_TYPES.map(t => t.id);
 
 export function perfTypeMeta(id: string) {
   return PERF_TYPES.find(t => t.id === id);

@@ -20,7 +20,7 @@ function isToday(iso: string) { return new Date(iso).toDateString() === new Date
 
 // ─── Types ─────────────────────────────────────────────────────
 interface Task { id: string; title: string; status: string; priority: string; dueDate?: string; familyId?: string; family?: { name: string; color: string } }
-interface MailThread { id: string; subject: string; read: boolean; fromEmail: string; fromName: string | null; date: string; accountId: string }
+interface MailThread { id: string; threadId?: string; subject: string; read: boolean; fromEmail: string; fromName: string | null; date: string; accountId: string }
 interface CalEvent { id: string; title: string; start: string; end: string; color?: string; location?: string }
 interface PhoneCall { id: string; contact: string; phone?: string; direction: string; status: string; subject?: string; notes?: string; createdAt: string }
 interface Note { id: string; content: string; color: string; pinned: boolean; updatedAt: string }
@@ -182,8 +182,9 @@ function MailsBlock({ refreshKey }: { refreshKey: number }) {
       {threads.slice(0, 10).map(t => {
         const name = t.fromName || t.fromEmail || "—";
         const unread = !t.read;
+        const target = t.threadId || t.id;
         return (
-          <Link key={t.id} href="/messagerie" style={{ textDecoration: "none" }}>
+          <Link key={t.id} href={`/messagerie?mail=${encodeURIComponent(target)}`} style={{ textDecoration: "none" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 0", borderBottom: "1px solid #f3f4f6", cursor: "pointer" }}
               onMouseEnter={e => (e.currentTarget.style.background = "#fafaf8")}
               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
