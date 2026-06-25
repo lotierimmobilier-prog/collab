@@ -21,6 +21,28 @@ function buildThreadContext(messages: MailMsg[]): string {
   ).join("\n\n---\n\n");
 }
 
+interface ResolvedContact {
+  senderType: "user" | "owner" | "tenant" | "unknown";
+  senderId?: string;
+  name?: string;
+  role?: string | null;
+}
+
+/** Résout l'identité d'un expéditeur à partir de son email (collègue / propriétaire / locataire). */
+async function resolveContact(email?: string): Promise<ResolvedContact> {
+  const e = (email || "").toLowerCase().trim();
+  if (!e) return { senderType: "unknown" };
+  const [user, owner, tenant] = await Promise.all([
+    prisma.user.findFirst({ where: { email: { equals: e, mode: "insensitive" } }, select: { id: true, prenom: true, nom: true, roleId: true } }),
+    prisma.owner.findFirst({ where: { email: { equals: e, mode: "insensitive" } }, select: { id: true, prenom: true, nom: true } }),
+    prisma.tenant.findFirst({ where: { email: { equals: e, mode: "insensitive" } }, select: { id: true, prenom: true, nom: true } }),
+  ]);
+  if (user)   return { senderType: "user",   senderId: user.id,   name: `${user.prenom} ${user.nom}`,   role: user.roleId };
+  if (owner)  return { senderType: "owner",  senderId: owner.id,  name: `${owner.prenom} ${owner.nom}`,  role: "Propriétaire" };
+  if (tenant) return { senderType: "tenant", senderId: tenant.id, name: `${tenant.prenom} ${tenant.nom}`, role: "Locataire" };
+  return { senderType: "unknown" };
+}
+
 async function getKnowledge(category?: string): Promise<string> {
   try {
     const docs = await prisma.knowledgeDoc.findMany({ where: { active: true, ...(category ? { category } : {}) }, select: { title: true, category: true, content: true }, orderBy: { category: "asc" }, take: 8 });
@@ -34,7 +56,7 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const { action, messages, threadSubject, senderEmail, tone = "professionnel", instruction = "", question = "" } = await req.json();
+  const { action, messages, threadSubject, senderEmail, tone = "professionnel", instruction = "", question = "", length = "moyen" } = await req.json();
   const ctx = buildThreadContext(messages || []);
 
   if (action === "summarize") {
@@ -58,11 +80,28 @@ export async function POST(req: NextRequest) {
 
   if (action === "draft_reply") {
     const toneLabel: Record<string, string> = { professionnel: "professionnel et bienveillant", cordial: "cordial et chaleureux", formel: "formel et sobre", concis: "concis, aller à l'essentiel" };
+    const lengthLabel: Record<string, string> = {
+      court: "Réponse courte : 2-3 phrases, va droit au but.",
+      moyen: "Réponse de longueur moyenne : 1 paragraphe clair.",
+      détaillé: "Réponse détaillée : plusieurs paragraphes couvrant chaque point soulevé.",
+    };
+    const lengthTokens: Record<string, number> = { court: 600, moyen: 1200, détaillé: 1800 };
     const instrPart = instruction ? `\nInstruction supplémentaire : ${instruction}` : "";
+    const lengthPart = `\n${lengthLabel[length] ?? lengthLabel.moyen}`;
     const kb = await getKnowledge();
 
     // Contexte historique — optionnel, ne bloque pas si erreur
     const fromEmail = ((messages as {from?:{email?:string}}[])?.[0]?.from?.email || "").toLowerCase();
+
+    // Identité du destinataire — permet d'adapter le ton (propriétaire/locataire/collègue)
+    let identityPart = "";
+    try {
+      const contact = await resolveContact(senderEmail || fromEmail);
+      if (contact.senderType !== "unknown" && contact.name) {
+        const roleLabel = contact.senderType === "user" ? "collègue de l'agence" : (contact.role || contact.senderType);
+        identityPart = `\n\nDestinataire identifié : ${contact.name} — ${roleLabel}. Adapte le ton et les formules de politesse en conséquence.`;
+      }
+    } catch { /* identité indisponible, on continue sans */ }
     let histCtx = "";
     if (fromEmail) {
       try {
@@ -78,10 +117,10 @@ export async function POST(req: NextRequest) {
       } catch { /* historique indisponible, on continue sans */ }
     }
 
-    const prompt = `Rédige une réponse à cet email. Ton : ${toneLabel[tone] ?? "professionnel et bienveillant"}. Agence Lotier Immobilier.${instrPart}${kb}${histCtx}\n\n${ctx}\n\nRéponds UNIQUEMENT en JSON valide :\n{"reply":"texte","subject":"Re: ${threadSubject}"}`;
+    const prompt = `Rédige une réponse à cet email. Ton : ${toneLabel[tone] ?? "professionnel et bienveillant"}. Agence Lotier Immobilier.${lengthPart}${instrPart}${identityPart}${kb}${histCtx}\n\n${ctx}\n\nRéponds UNIQUEMENT en JSON valide :\n{"reply":"texte","subject":"Re: ${threadSubject}"}`;
 
     const data = await augusteJson<{ reply?: string; subject?: string }>({
-      model: MODELS.smart, max_tokens: 1200, system: SYSTEM,
+      model: MODELS.smart, max_tokens: lengthTokens[length] ?? 1200, system: SYSTEM,
       messages: [{ role: "user", content: prompt }],
     }, { fallback: { subject: `Re: ${threadSubject}` } });
     return NextResponse.json(data);
@@ -201,18 +240,7 @@ Réponds en JSON valide uniquement :
 
   if (action === "identify_sender") {
     if (!senderEmail) return NextResponse.json({ senderType: "unknown" });
-
-    const email = senderEmail.toLowerCase();
-    const [user, owner, tenant] = await Promise.all([
-      prisma.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true, prenom: true, nom: true, roleId: true } }),
-      prisma.owner.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true, prenom: true, nom: true } }),
-      prisma.tenant.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true, prenom: true, nom: true } }),
-    ]);
-
-    if (user)   return NextResponse.json({ senderType: "user",   senderId: user.id,   name: `${user.prenom} ${user.nom}`,   role: user.roleId });
-    if (owner)  return NextResponse.json({ senderType: "owner",  senderId: owner.id,  name: `${owner.prenom} ${owner.nom}`, role: "Propriétaire" });
-    if (tenant) return NextResponse.json({ senderType: "tenant", senderId: tenant.id, name: `${tenant.prenom} ${tenant.nom}`, role: "Locataire" });
-    return NextResponse.json({ senderType: "unknown" });
+    return NextResponse.json(await resolveContact(senderEmail));
   }
 
   return NextResponse.json({ error: "Action inconnue" }, { status: 400 });

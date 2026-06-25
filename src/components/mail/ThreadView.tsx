@@ -44,6 +44,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
   const [showReply, setShowReply]         = useState(false);
   const [replyBody, setReplyBody]         = useState("");
   const [aiTone, setAiTone]               = useState("professionnel");
+  const [aiLength, setAiLength]           = useState("moyen");
   const [aiInstruction, setAiInstruction] = useState("");
   const [generating, setGenerating]       = useState(false);
   const [aiError, setAiError]             = useState("");
@@ -193,7 +194,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
     try {
       const r = await fetch("/api/mail/ai", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "draft_reply", messages: thread.messages, threadSubject: thread.subject }),
+        body: JSON.stringify({ action: "draft_reply", messages: thread.messages, threadSubject: thread.subject, senderEmail: lastMsg?.from?.email, length: aiLength }),
       });
       const d = await r.json();
       setReplyBody(d.reply ?? "");
@@ -281,7 +282,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
     try {
       const resp = await fetch("/api/mail/ai", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "draft_reply", messages: thread.messages, threadSubject: thread.subject, tone: aiTone, instruction: aiInstruction }),
+        body: JSON.stringify({ action: "draft_reply", messages: thread.messages, threadSubject: thread.subject, tone: aiTone, instruction: aiInstruction, length: aiLength, senderEmail: lastMsg?.from?.email }),
       });
       const data = await resp.json();
       if (data.error) { setAiError(data.error); return; }
@@ -792,6 +793,11 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
                 <option value="cordial">Cordial</option>
                 <option value="formel">Formel</option>
                 <option value="concis">Concis</option>
+              </select>
+              <select value={aiLength} onChange={e => setAiLength(e.target.value)} title="Longueur de la réponse" style={{ height: 26, border: `1px solid ${BORDER}`, borderRadius: 6, fontSize: 11, padding: "0 6px", background: "#fff", color: "#374151" }}>
+                <option value="court">Court</option>
+                <option value="moyen">Moyen</option>
+                <option value="détaillé">Détaillé</option>
               </select>
               <input value={aiInstruction} onChange={e => setAiInstruction(e.target.value)} placeholder="Instruction IA…" style={{ flex: 1, minWidth: 100, height: 26, border: `1px solid ${BORDER}`, borderRadius: 6, fontSize: 11, padding: "0 8px", outline: "none", background: "#fff" }} />
               <button onClick={generateAIReply} disabled={generating} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: generating ? 0.7 : 1, whiteSpace: "nowrap" }}>
