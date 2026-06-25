@@ -153,6 +153,26 @@ export default function MailBoard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* ── Ouverture directe d'un mail via ?mail=<threadId> ──────
+     Depuis le tableau de bord, un clic sur un mail amène ici avec l'id du
+     thread ; on l'ouvre dès qu'il est chargé puis on nettoie l'URL. */
+  const deepLinkOpened = useRef(false);
+  useEffect(() => {
+    if (deepLinkOpened.current) return;
+    const target = new URLSearchParams(window.location.search).get("mail");
+    if (!target) { deepLinkOpened.current = true; return; }
+    const t = threads.find(x => x.id === target);
+    if (!t) return; // pas encore chargé — on réessaiera au prochain rebuild
+    deepLinkOpened.current = true;
+    setSelectedThread(t);
+    markRead(t.id);
+    loadMessageBody(t);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("mail");
+    window.history.replaceState({}, "", url.toString());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threads]);
+
   async function saveAccounts(a: MailAccount[]) {
     setAccounts(a);
     localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(a)); // garde le fallback local
