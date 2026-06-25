@@ -45,7 +45,7 @@ export default function MailBoard() {
   const [showImapConfig, setShowImapConfig]     = useState(false);
   const [showGmailConnect, setShowGmailConnect] = useState(false);
   const [showLabels, setShowLabels]             = useState(false);
-  const [labelsOpen, setLabelsOpen]             = useState(true);
+  const [labelsOpen, setLabelsOpen]             = useState(false);
   const [showCompose, setShowCompose]           = useState(false);
   const [aiKey, setAiKey]                       = useState("");
   const [syncing, setSyncing]                   = useState<string | null>(null);
