@@ -673,3 +673,57 @@ model InsurancePolicy {
 
   @@map("insurance_policies")
 }
+
+// ── Comptabilité : banque & trésorerie ───────────────────────
+
+/// Compte de trésorerie. Séparation stricte gestion / syndic (fonds mandants).
+model BankAccount {
+  id             String   @id @default(cuid())
+  name           String
+  kind           String   @default("agence") // gestion | syndic | agence
+  openingBalance Float    @default(0)
+  threshold      Float?   // seuil d'alerte (plancher)
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  transactions BankTransaction[]
+
+  @@map("bank_accounts")
+}
+
+/// Opération d'un relevé bancaire. amount > 0 = crédit, < 0 = débit.
+model BankTransaction {
+  id          String   @id @default(cuid())
+  accountId   String
+  date        DateTime
+  label       String
+  amount      Float
+  service     String?  // vente | gestion | syndic | agence
+  nature      String?
+  recurring   Boolean  @default(false)
+  source      String   @default("manual") // pdf | ofx | qif | manual
+  importId    String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  account BankAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([date])
+  @@index([service])
+  @@map("bank_transactions")
+}
+
+/// Mémoire d'auto-apprentissage : libellé normalisé → service habituel.
+model TxnMemory {
+  id          String   @id @default(cuid())
+  pattern     String   @unique
+  service     String?
+  recurring   Boolean  @default(false)
+  occurrences Int      @default(1)
+  lastDate    DateTime?
+  updatedAt   DateTime @updatedAt
+
+  @@map("txn_memory")
+}
