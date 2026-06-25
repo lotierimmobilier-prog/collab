@@ -465,39 +465,80 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
 
   const badge = senderInfo ? SENDER_BADGE[senderInfo.senderType] ?? SENDER_BADGE.unknown : null;
 
-  // ── Export / impression PDF du fil complet (date, expéditeur, destinataires, contenu) ──
+  // ── Export / impression PDF du fil complet (présentation professionnelle) ──
   function exportPdf() {
-    const w = window.open("", "_blank", "width=820,height=920");
+    const w = window.open("", "_blank", "width=860,height=960");
     if (!w) return;
     const esc = (s?: string) => (s || "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string));
     const addr = (a?: { name?: string; email: string }) => a ? esc(a.name ? `${a.name} <${a.email}>` : a.email) : "—";
     const list = (arr?: { name?: string; email: string }[]) => (arr && arr.length ? arr.map(addr).join(", ") : "—");
+    const initials = (n: string) => n.trim().split(/\s+/).slice(0, 2).map(p => p[0] || "").join("").toUpperCase();
+
     const msgs = thread.messages.map(m => {
       const isHtml = !!m.body && /<[a-z][\s\S]*>/i.test(m.body);
-      const body = isHtml ? m.body : `<pre style="white-space:pre-wrap;font-family:inherit;margin:0">${esc(m.bodyText || m.body || "")}</pre>`;
-      const cc = (m.cc && m.cc.length) ? `<div class="meta"><b>Cc :</b> ${list(m.cc)}</div>` : "";
-      return `<div class="msg">
-        <div class="meta"><b>De :</b> ${addr(m.from)}</div>
-        <div class="meta"><b>À :</b> ${list(m.to)}</div>${cc}
-        <div class="meta"><b>Date :</b> ${esc(new Date(m.date).toLocaleString("fr-FR"))}</div>
+      const body = isHtml ? m.body : `<pre>${esc(m.bodyText || m.body || "")}</pre>`;
+      const cc = (m.cc && m.cc.length) ? `<tr><td class="lbl">Cc</td><td>${list(m.cc)}</td></tr>` : "";
+      const name = m.from.name || m.from.email;
+      return `<section class="msg">
+        <div class="msg-head">
+          <div class="avatar">${esc(initials(name))}</div>
+          <div class="who"><div class="name">${esc(name)}</div><div class="addr">${esc(m.from.email)}</div></div>
+          <div class="when">${esc(new Date(m.date).toLocaleString("fr-FR", { dateStyle: "full", timeStyle: "short" }))}</div>
+        </div>
+        <table class="recipients"><tbody><tr><td class="lbl">À</td><td>${list(m.to)}</td></tr>${cc}</tbody></table>
         <div class="body">${body}</div>
-      </div>`;
-    }).join('<hr/>');
+      </section>`;
+    }).join("");
+
+    const now = new Date().toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" });
     w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(thread.subject || "Mail")}</title>
       <style>
-        body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;color:#1C1A17;padding:32px;max-width:760px;margin:0 auto}
-        .head{border-bottom:2px solid #B8966A;padding-bottom:12px;margin-bottom:18px}
-        .head img{height:32px;margin-bottom:10px}
-        h1{font-size:18px;margin:0}
-        .meta{font-size:12px;color:#444;margin:2px 0}
-        .body{margin-top:10px;font-size:13px;line-height:1.55}
-        .body img{max-width:100%}
-        .msg{margin:12px 0}
-        hr{border:none;border-top:1px solid #ddd;margin:18px 0}
+        @page { size: A4; margin: 16mm 14mm 18mm; }
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1C1A17; margin: 0; font-size: 13px; line-height: 1.55; }
+        .sheet { max-width: 720px; margin: 0 auto; padding: 8px 4px 0; }
+        .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #B8966A; padding-bottom: 14px; }
+        .header img { height: 38px; }
+        .brand { text-align: right; font-size: 11px; color: #6b6b6b; line-height: 1.4; }
+        .brand strong { color: #1C1A17; font-size: 13px; display: block; }
+        .doc-kicker { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #B8966A; font-weight: 700; margin-top: 18px; }
+        h1 { font-size: 20px; margin: 4px 0 0; font-weight: 700; }
+        .summary { margin: 14px 0 22px; border: 1px solid #E6E1D9; border-radius: 8px; overflow: hidden; }
+        .summary table { width: 100%; border-collapse: collapse; }
+        .summary td { padding: 7px 12px; font-size: 12px; vertical-align: top; border-top: 1px solid #F0ECE5; }
+        .summary tr:first-child td { border-top: none; }
+        .summary .lbl { width: 110px; color: #8a8378; font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: .04em; background: #FBF9F5; }
+        .msg { border: 1px solid #E6E1D9; border-radius: 8px; margin: 0 0 14px; page-break-inside: avoid; overflow: hidden; }
+        .msg-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #FBF9F5; border-bottom: 1px solid #F0ECE5; }
+        .avatar { width: 30px; height: 30px; border-radius: 50%; background: #B8966A; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+        .who { flex: 1; min-width: 0; }
+        .who .name { font-weight: 700; font-size: 13px; }
+        .who .addr { font-size: 11px; color: #8a8378; }
+        .when { font-size: 11px; color: #6b6b6b; text-align: right; }
+        .recipients { width: 100%; border-collapse: collapse; }
+        .recipients td { padding: 4px 14px; font-size: 11px; color: #4b4b4b; }
+        .recipients .lbl { width: 36px; color: #8a8378; font-weight: 600; }
+        .body { padding: 12px 16px 16px; font-size: 13px; }
+        .body img { max-width: 100%; height: auto; }
+        .body pre { white-space: pre-wrap; font-family: inherit; margin: 0; }
+        .body blockquote { border-left: 3px solid #E6E1D9; margin: 8px 0; padding-left: 12px; color: #6b6b6b; }
+        .footer { margin-top: 20px; padding-top: 10px; border-top: 1px solid #E6E1D9; font-size: 10px; color: #9a948a; display: flex; justify-content: space-between; }
       </style></head><body>
-      <div class="head"><img src="${location.origin}/logo.png" alt="Lotier Immobilier"/><h1>${esc(thread.subject || "(Sans objet)")}</h1></div>
-      ${msgs}
-      <script>window.onload=function(){setTimeout(function(){window.print();},350);};<\/script>
+      <div class="sheet">
+        <div class="header">
+          <img src="${location.origin}/logo.png" alt="Lotier Immobilier"/>
+          <div class="brand"><strong>Lotier Immobilier</strong>Document interne</div>
+        </div>
+        <div class="doc-kicker">Courriel archivé</div><h1>${esc(thread.subject || "(Sans objet)")}</h1>
+        <div class="summary"><table><tbody>
+          <tr><td class="lbl">Objet</td><td>${esc(thread.subject || "(Sans objet)")}</td></tr>
+          <tr><td class="lbl">De</td><td>${addr(thread.messages[0]?.from)}</td></tr>
+          <tr><td class="lbl">Messages</td><td>${thread.messages.length}</td></tr>
+        </tbody></table></div>
+        ${msgs}
+        <div class="footer"><span>Lotier Immobilier — document généré le ${esc(now)}</span><span>Confidentiel</span></div>
+      </div>
+      <script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>
     </body></html>`);
     w.document.close();
   }

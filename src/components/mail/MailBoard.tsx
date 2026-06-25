@@ -447,6 +447,20 @@ export default function MailBoard() {
   }
   function trash(threadId: string) { applyLabel(threadId, "trash"); if (selectedThread?.id === threadId) setSelectedThread(null); }
   function restore(threadId: string) { removeLabel(threadId, "trash"); }
+
+  // Glisser-déposer d'un mail vers un dossier/libellé du menu.
+  function dropOnFolder(labelId: string) {
+    return {
+      onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; },
+      onDrop: (e: React.DragEvent) => {
+        e.preventDefault();
+        const tid = e.dataTransfer.getData("text/mail-thread");
+        if (!tid) return;
+        if (labelId === "trash") trash(tid);
+        else applyLabel(tid, labelId);
+      },
+    };
+  }
   async function deletePermanent(threadId: string) {
     // Suppression définitive en base
     const ids = messages.filter(m => m.threadId === threadId).map(m => m.id);
@@ -609,11 +623,13 @@ export default function MailBoard() {
         {/* Labels */}
         <NavLabel>Boîte</NavLabel>
         {systemLabels.map(l => (
-          <NavItem key={l.id} active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); clearSearch(); setListPage(1); setSidebarOpen(false); }}>
-            <span style={{ fontSize: 14 }}>{labelIcon(l.id)}</span>
-            <span style={{ flex: 1 }}>{l.name}</span>
-            {unread(l.id) > 0 && <Badge>{unread(l.id)}</Badge>}
-          </NavItem>
+          <div key={l.id} {...dropOnFolder(l.id)}>
+            <NavItem active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); clearSearch(); setListPage(1); setSidebarOpen(false); }}>
+              <span style={{ fontSize: 14 }}>{labelIcon(l.id)}</span>
+              <span style={{ flex: 1 }}>{l.name}</span>
+              {unread(l.id) > 0 && <Badge>{unread(l.id)}</Badge>}
+            </NavItem>
+          </div>
         ))}
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px 4px" }}>
@@ -624,10 +640,12 @@ export default function MailBoard() {
           <button onClick={() => setShowLabels(true)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 16, lineHeight: 1 }}>+</button>
         </div>
         {labelsOpen && customLabels.map(l => (
-          <NavItem key={l.id} active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); clearSearch(); setListPage(1); setSidebarOpen(false); }}>
-            <span style={{ width: 10, height: 10, borderRadius: "50%", background: l.color, flexShrink: 0 }} />
-            <span style={{ flex: 1, fontSize: 12 }}>{l.name}</span>
-          </NavItem>
+          <div key={l.id} {...dropOnFolder(l.id)}>
+            <NavItem active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); clearSearch(); setListPage(1); setSidebarOpen(false); }}>
+              <span style={{ width: 10, height: 10, borderRadius: "50%", background: l.color, flexShrink: 0 }} />
+              <span style={{ flex: 1, fontSize: 12 }}>{l.name}</span>
+            </NavItem>
+          </div>
         ))}
 
         {/* Gmail accounts — checkboxes pour afficher/masquer */}

@@ -48,6 +48,9 @@ export default function ThreadList({
   const [selected, setSelected]       = useState<Set<string>>(new Set());
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [showAssignPicker, setShowAssignPicker] = useState(false);
+  const [ctxMenu, setCtxMenu]         = useState<{ x: number; y: number; t: MailThread } | null>(null);
+
+  function isUnreadThread(t: MailThread) { return messages.some(m => m.threadId === t.id && m.status === "unread"); }
 
   function exitSelectMode() { setSelectMode(false); setSelected(new Set()); }
 
@@ -249,6 +252,9 @@ export default function ThreadList({
 
           return (
             <div key={t.id}
+              draggable
+              onDragStart={e => { e.dataTransfer.setData("text/mail-thread", t.id); e.dataTransfer.effectAllowed = "move"; }}
+              onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, t }); }}
               onClick={() => selectMode ? toggleOne(t.id, { stopPropagation: () => {} } as React.MouseEvent) : onSelect(t)}
               style={{ padding: "8px 10px", borderBottom: "1px solid #f3f4f6", cursor: "pointer", background: isChecked ? "#FEF9F0" : selectedId === t.id ? "#F7F0E6" : priority === "haute" ? "#FEF6F6" : "#fff", borderLeft: `3px solid ${isChecked ? GOLD : selectedId === t.id ? GOLD : priority === "haute" ? "#DC2626" : "transparent"}`, position: "relative", transition: "background 0.1s" }}
               onMouseEnter={e => !isChecked && selectedId !== t.id && (e.currentTarget.style.background = "#f9fafb")}
@@ -339,6 +345,31 @@ export default function ThreadList({
           <PageBtn disabled={safePage >= totalPages} onClick={() => onPageChange(totalPages)}>»</PageBtn>
         </div>
       )}
+
+      {/* Menu contextuel (clic droit) */}
+      {ctxMenu && (() => {
+        const t = ctxMenu.t; const unread = isUnreadThread(t); const close = () => setCtxMenu(null);
+        const Item = ({ label, danger, onClick }: { label: string; danger?: boolean; onClick: () => void }) => (
+          <div onClick={() => { onClick(); close(); }}
+            style={{ padding: "8px 14px", fontSize: 12.5, cursor: "pointer", color: danger ? "#B91C1C" : "#374151", whiteSpace: "nowrap" }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#f6f3ee")}
+            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>{label}</div>
+        );
+        return (
+          <>
+            <div onClick={close} onContextMenu={e => { e.preventDefault(); close(); }} style={{ position: "fixed", inset: 0, zIndex: 90 }} />
+            <div style={{ position: "fixed", top: Math.min(ctxMenu.y, (typeof window !== "undefined" ? window.innerHeight : 800) - 240), left: Math.min(ctxMenu.x, (typeof window !== "undefined" ? window.innerWidth : 800) - 200), zIndex: 91, background: "#fff", border: "1px solid #E6E1D9", borderRadius: 10, boxShadow: "0 8px 28px rgba(0,0,0,0.16)", padding: "6px 0", minWidth: 190 }}>
+              <Item label={unread ? "Marquer comme lu" : "Marquer comme non lu"} onClick={() => onBulkMarkRead?.([t.id], unread)} />
+              <Item label="Marquer urgent" onClick={() => onApplyLabel(t.id, "urgents")} />
+              <div style={{ height: 1, background: "#f0ece5", margin: "4px 0" }} />
+              <Item label="Créer une tâche" onClick={() => onSelect(t)} />
+              <Item label="Créer un rendez-vous" onClick={() => onSelect(t)} />
+              <div style={{ height: 1, background: "#f0ece5", margin: "4px 0" }} />
+              <Item label="Supprimer" danger onClick={() => onTrash(t.id)} />
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }

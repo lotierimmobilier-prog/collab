@@ -267,15 +267,20 @@ function MailsBlock({ refreshKey }: { refreshKey: number }) {
 
 // ─── Bloc Agenda ────────────────────────────────────────────────
 function AgendaBlock({ refreshKey }: { refreshKey: number }) {
-  const [events, setEvents] = useState<CalEvent[]>([]);
+  const [allEvents, setAllEvents] = useState<CalEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // On récupère TOUT l'agenda (comme la page Planning) puis on filtre la semaine
+  // côté client : le tableau de bord affiche exactement les mêmes événements.
   useEffect(() => {
-    const now = new Date();
-    const start = new Date(now); start.setDate(now.getDate() - now.getDay() + 1); start.setHours(0,0,0,0);
-    const end   = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999);
-    fetch(`/api/calendar?from=${start.toISOString()}&to=${end.toISOString()}`).then(r => r.json()).then(d => setEvents(Array.isArray(d) ? d : [])).catch(() => setEvents([])).finally(() => setLoading(false));
+    fetch(`/api/calendar`).then(r => r.json()).then(d => setAllEvents(Array.isArray(d) ? d : [])).catch(() => setAllEvents([])).finally(() => setLoading(false));
   }, [refreshKey]);
+
+  const now = new Date();
+  const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay() + 1); weekStart.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6); weekEnd.setHours(23, 59, 59, 999);
+  // Chevauchement : un événement compte s'il recoupe la semaine.
+  const events = allEvents.filter(e => new Date(e.start) <= weekEnd && new Date(e.end ?? e.start) >= weekStart);
 
   const today = new Date().toDateString();
   const todayEvents = events.filter(e => new Date(e.start).toDateString() === today);
