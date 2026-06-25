@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { MODELS, augusteJson, normalizeError } from "@/lib/auguste";
+import { historicalHandler } from "@/lib/mailRouting";
 
 const SYSTEM = `Tu es Auguste, assistant de l'agence Lotier Immobilier.
 Tu analyses des emails et retournes UNIQUEMENT un JSON valide, sans markdown ni texte autour.`;
@@ -22,9 +23,17 @@ export async function POST(req: NextRequest) {
     .map(l => `${l.id}: "${l.name}"`)
     .join(", ");
 
-  const userList = (users as { id: string; prenom: string; nom: string }[])
+  const userArr = (users as { id: string; prenom: string; nom: string }[]) || [];
+  const userList = userArr
     .map(u => `${u.id}: "${u.prenom} ${u.nom}"`)
     .join(", ");
+
+  // Traitant historique réel (assignations passées / réponses envoyées)
+  const validUserIds = new Set(userArr.map(u => u.id));
+  const handler = fromEmail ? await historicalHandler(fromEmail, validUserIds) : null;
+  const historyContext = handler
+    ? `\nHistorique : cet expéditeur est habituellement traité par l'agent ${handler.userId} (${handler.reason}). Assigne-le à cet agent sauf si le contenu impose clairement un autre service.`
+    : "";
 
   const memoryContext = memory
     ? `\nMémoire Auguste : cet expéditeur a déjà été classé avec les libellés [${memory.labelIds.join(", ")}]${memory.assignedToId ? `, assigné à ${memory.assignedToId}` : ""}${memory.note ? `. Note : ${memory.note}` : ""}. Utilise ces informations comme point de départ sauf si le contenu de cet email indique clairement autre chose.`
@@ -37,7 +46,7 @@ Objet : ${subject}
 Corps : ${(bodyText || "").slice(0, 600)}
 
 Libellés disponibles : ${labelList || "(aucun)"}
-Membres de l'équipe disponibles : ${userList || "(aucun)"}${memoryContext}
+Membres de l'équipe disponibles : ${userList || "(aucun)"}${historyContext}${memoryContext}
 
 Réponds en JSON :
 {
@@ -61,8 +70,9 @@ Règles :
       system: SYSTEM,
       messages: [{ role: "user", content: prompt }],
     }, { fallback: { labels: [], assignedToId: null, priority: "normale", reason: "" } });
-    // Injecter l'info mémoire dans la réponse
-    return NextResponse.json({ ...result, hasMemory: !!memory });
+    // L'historique réel prime sur la proposition du modèle pour le traitant
+    if (handler) result.assignedToId = handler.userId;
+    return NextResponse.json({ ...result, hasMemory: !!memory, fromHistory: !!handler });
   } catch (err) {
     const e = normalizeError(err);
     console.error("[mail/classify] Erreur:", e.message);
