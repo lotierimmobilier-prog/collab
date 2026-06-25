@@ -12,9 +12,10 @@ interface Props {
   accounts: MailAccount[];
   aiKey: string;
   loadingBody?: boolean;
-  users?: { id: string; prenom: string; nom: string }[];
+  users?: { id: string; prenom: string; nom: string; email?: string }[];
   onClose: () => void;
   onReply: (m: MailMessage) => void;
+  onForward?: (data: { to: string; subject: string; body: string; accountId: string }) => void;
   onApplyLabel: (id: string) => void;
   onRemoveLabel: (id: string) => void;
   onStar: () => void;
@@ -40,7 +41,7 @@ const SENDER_BADGE: Record<string, { label: string; color: string; bg: string }>
   unknown: { label: "Inconnu",       color: "#6B7280", bg: "#F9FAFB" },
 };
 
-export default function ThreadView({ thread, labels, accounts, aiKey, loadingBody, users = [], onClose, onReply, onApplyLabel, onRemoveLabel, onStar, onTrash, onRestore, onDeletePermanent, customLabels, onSetLabels }: Props) {
+export default function ThreadView({ thread, labels, accounts, aiKey, loadingBody, users = [], onClose, onReply, onForward, onApplyLabel, onRemoveLabel, onStar, onTrash, onRestore, onDeletePermanent, customLabels, onSetLabels }: Props) {
   const [showReply, setShowReply]         = useState(false);
   const [replySize, setReplySize]         = useState<"normal" | "large" | "full">("normal");
   const [replyBody, setReplyBody]         = useState("");
@@ -408,6 +409,25 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
     setShowReply(false);
   }
 
+  // ── Transfert + suggestion syndic → Tristan ─────────────────
+  const SYNDIC_RE = /(syndic|copropri|assembl[ée]e g[ée]n[ée]rale|conseil syndical|tantièmes|charges de copropri|r[èe]glement de copropri)/i;
+  const syndicHit = SYNDIC_RE.test(`${thread.subject} ${thread.messages.map(m => m.bodyText || "").join(" ").slice(0, 3000)}`);
+  const tristan = users.find(u => (u.prenom || "").toLowerCase().startsWith("tristan"));
+
+  function buildForwardBody(): string {
+    const m = lastMsg;
+    const orig = (m.bodyText || (m.body || "").replace(/<[^>]+>/g, "")).trim();
+    return `\n\n---------- Message transféré ----------\nDe : ${m.from.name || ""} <${m.from.email}>\nDate : ${new Date(m.date).toLocaleString("fr-FR")}\nObjet : ${thread.subject}\n\n${orig}`;
+  }
+  function forward(to = "") {
+    onForward?.({
+      to,
+      subject: /^tr\s*:/i.test(thread.subject) ? thread.subject : `Tr: ${thread.subject}`,
+      body: buildForwardBody(),
+      accountId: thread.accountId,
+    });
+  }
+
   const badge = senderInfo ? SENDER_BADGE[senderInfo.senderType] ?? SENDER_BADGE.unknown : null;
 
   return (
@@ -609,12 +629,24 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
         </div>
       )}
 
+      {/* ── Suggestion Auguste : transférer au responsable syndic (Tristan) ── */}
+      {onForward && syndicHit && tristan && (
+        <div style={{ padding: "8px 20px", background: "#EFF6FF", borderBottom: "1px solid #BFDBFE", display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: "#1e3a8a" }}>✦ Ce message concerne le <strong>syndic</strong>. Le transférer à {tristan.prenom} ?</span>
+          <button onClick={() => forward(tristan.email || "")}
+            style={{ background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 7, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+            ↪ Transférer à {tristan.prenom}
+          </button>
+        </div>
+      )}
+
       {/* ── Barre d'actions IA ── */}
       <div style={{ padding: "10px 20px", background: "#FDFAF6", borderBottom: "1px solid #EDE8DF", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flexShrink: 0 }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: "0.04em", marginRight: 4 }}>✦ Auguste</span>
 
         <AiBtn loading={aiLoading === "summarize"} onClick={summarize}       icon="📝" label="Résumer" />
         <AiBtn loading={aiLoading === "draft"}     onClick={draftReply}      icon="✍" label="Répondre" />
+        {onForward && <AiBtn loading={false} onClick={() => forward("")} icon="↪" label="Transférer" />}
         <AiBtn loading={aiLoading === "task"}      onClick={suggestTask}     icon="✅" label="Créer une tâche" />
         <AiBtn loading={aiLoading === "rdv"}       onClick={detectRdv}       icon="📅" label="Valider un RDV" />
         <AiBtn loading={aiLoading === "full"}      onClick={runFullAnalysis} icon="🔍" label="Analyse complète" />
