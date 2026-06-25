@@ -48,7 +48,7 @@ export default function MailBoard() {
   const [showLabels, setShowLabels]             = useState(false);
   const [labelsOpen, setLabelsOpen]             = useState(false);
   const [showCompose, setShowCompose]           = useState(false);
-  const [forwardData, setForwardData]           = useState<{ to: string; subject: string; body: string; accountId: string } | null>(null);
+  const [forwardData, setForwardData]           = useState<{ to: string; cc?: string; subject: string; body: string; accountId: string } | null>(null);
   const [aiKey, setAiKey]                       = useState("");
   const [syncing, setSyncing]                   = useState<string | null>(null);
   const [syncStatus, setSyncStatus]             = useState("");
@@ -770,6 +770,7 @@ export default function MailBoard() {
       {forwardData && <ComposeModal accounts={accounts} gmailConfigs={gmailConfigs} labels={customLabels}
         replyTo={{ to: forwardData.to, subject: forwardData.subject, accountId: forwardData.accountId }}
         initialBody={forwardData.body}
+        initialCc={forwardData.cc}
         onClose={() => setForwardData(null)} onSend={msg => { addMessage(msg); setForwardData(null); }} />}
       {showImapConfig && <AccountConfigPanel accounts={accounts} onSave={async (newList) => {
         // Détecter les comptes ajoutés (pas de dbId)
@@ -861,11 +862,12 @@ function GIcon() {
   );
 }
 
-function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo, initialBody }: {
+function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo, initialBody, initialCc }: {
   accounts: MailAccount[]; gmailConfigs: GmailConfig[];
   labels: MailLabel[]; onClose: () => void; onSend: (m: MailMessage) => void;
   replyTo?: { to: string; subject: string; inReplyTo?: string; accountId?: string };
   initialBody?: string;
+  initialCc?: string;
 }) {
   const allAccounts = [
     ...gmailConfigs.map(c => ({ id: c.accountId, dbId: undefined as string|undefined, label: `${c.email}`, email: c.email, name: c.name ?? c.email, smtpHost: "", smtpPort: 587, smtpSsl: true, username: c.email, password: "", signature: "", color: "#4285f4" })),
@@ -875,10 +877,10 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
   const firstId = replyTo?.accountId ?? allAccounts[0]?.id ?? "";
   const [accountId, setAccountId] = useState(firstId);
   const [to, setTo]               = useState(replyTo?.to ?? "");
-  const [cc, setCc]               = useState("");
+  const [cc, setCc]               = useState(initialCc ?? "");
   const [subject, setSubject]     = useState(replyTo?.subject ?? "");
   const [body, setBody]           = useState(initialBody ?? "");
-  const [showCc, setShowCc]       = useState(false);
+  const [showCc, setShowCc]       = useState(!!initialCc);
   const [showSig, setShowSig]     = useState(false);
   const [sending, setSending]     = useState(false);
   const [error, setError]         = useState("");
