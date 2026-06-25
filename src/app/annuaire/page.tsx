@@ -13,6 +13,7 @@ interface Contact {
   id: string; type: string;
   prenom?: string | null; nom?: string | null; raisonSociale?: string | null;
   email?: string | null; phone?: string | null; note?: string | null;
+  icsType?: string | null; icsRef?: string | null;
 }
 
 const typeMeta = (cats: ContactCategory[], t: string) =>
@@ -34,6 +35,11 @@ export default function AnnuairePage() {
   const [importMsg, setImportMsg] = useState("");
   const [taskFor, setTaskFor] = useState<Contact | null>(null);
   const [rdvFor, setRdvFor]   = useState<Contact | null>(null);
+  const [showExport, setShowExport] = useState(false);
+  const [exportSel, setExportSel]   = useState<string[]>([]);
+
+  // Par défaut, l'export sélectionne toutes les catégories disponibles.
+  useEffect(() => { setExportSel(categories.map(c => c.id)); }, [categories]);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -73,18 +79,30 @@ export default function AnnuairePage() {
 
   const counts = categories.map(t => ({ ...t, n: contacts.filter(c => c.type === t.id).length }));
 
-  function exportCsv() {
+  async function runExport(catIds: string[]) {
+    if (catIds.length === 0) return;
+    // Récupère tous les contacts accessibles (au-delà du filtre/recherche en cours).
+    let all: Contact[] = contacts;
+    try {
+      const r = await fetch("/api/contacts");
+      const d = await r.json();
+      if (Array.isArray(d.contacts)) all = d.contacts;
+    } catch { /* repli sur la liste affichée */ }
+
+    const sel = new Set(catIds);
     const head = ["Type", "Prénom", "Nom", "Raison sociale", "Email", "Téléphone", "Note"];
     const esc = (v: string) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const rows = contacts.map(c => [
+    const rows = all.filter(c => sel.has(c.type)).map(c => [
       typeMeta(categories, c.type).label, c.prenom ?? "", c.nom ?? "", c.raisonSociale ?? "",
       c.email ?? "", c.phone ?? "", c.note ?? "",
     ].map(esc).join(";"));
     const csv = "﻿" + [head.map(esc).join(";"), ...rows].join("\r\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
-    a.href = url; a.download = `annuaire-${new Date().toISOString().slice(0, 10)}.csv`;
+    const tag = catIds.length === categories.length ? "annuaire" : `annuaire-${catIds.join("-")}`;
+    a.href = url; a.download = `${tag}-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click(); URL.revokeObjectURL(url);
+    setShowExport(false);
   }
 
   return (
@@ -103,10 +121,41 @@ export default function AnnuairePage() {
               style={{ background: "#fff", color: "#374151", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
               {importing ? "Import…" : "⤓ Importer l'existant"}
             </button>
-            <button onClick={exportCsv} disabled={contacts.length === 0} title="Télécharger l'annuaire au format CSV (Excel)"
-              style={{ background: "#fff", color: "#374151", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: contacts.length ? "pointer" : "default", opacity: contacts.length ? 1 : 0.5, whiteSpace: "nowrap" }}>
-              ⤒ Exporter (CSV)
-            </button>
+            <div style={{ position: "relative" }}>
+              <button onClick={() => setShowExport(s => !s)} title="Exporter l'annuaire au format CSV (Excel)"
+                style={{ background: "#fff", color: "#374151", border: `1px solid ${showExport ? GOLD : BORDER}`, borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                ⤒ Exporter (CSV)
+              </button>
+              {showExport && (
+                <>
+                  <div onClick={() => setShowExport(false)} style={{ position: "fixed", inset: 0, zIndex: 30 }} />
+                  <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 31, width: 250, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.14)", padding: 12 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>Catégories à exporter</div>
+                    <label style={exportRow}>
+                      <input type="checkbox"
+                        checked={exportSel.length === categories.length}
+                        ref={el => { if (el) el.indeterminate = exportSel.length > 0 && exportSel.length < categories.length; }}
+                        onChange={e => setExportSel(e.target.checked ? categories.map(c => c.id) : [])} />
+                      <span style={{ fontWeight: 600 }}>Toutes</span>
+                    </label>
+                    <div style={{ borderTop: `1px solid #f3f4f6`, margin: "4px 0", maxHeight: 220, overflowY: "auto" }}>
+                      {categories.map(c => (
+                        <label key={c.id} style={exportRow}>
+                          <input type="checkbox" checked={exportSel.includes(c.id)}
+                            onChange={e => setExportSel(s => e.target.checked ? [...s, c.id] : s.filter(x => x !== c.id))} />
+                          <span style={{ width: 9, height: 9, borderRadius: "50%", background: c.color, flexShrink: 0 }} />
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <button onClick={() => runExport(exportSel)} disabled={exportSel.length === 0}
+                      style={{ width: "100%", marginTop: 8, background: exportSel.length ? GOLD : "#e5e7eb", color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontSize: 13, fontWeight: 600, cursor: exportSel.length ? "pointer" : "default" }}>
+                      Exporter la sélection
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             {isAdmin && (
               <button onClick={() => setShowCats(true)} title="Gérer les catégories de contacts"
                 style={{ background: "#fff", color: "#374151", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
@@ -152,6 +201,9 @@ export default function AnnuairePage() {
                       </div>
                     </div>
                     <span style={{ background: m.color + "18", color: m.color, borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{m.label.replace(/s$|x$/, "")}</span>
+                    {c.icsRef && (
+                      <span title={`Fiche rapprochée d'ICS (${c.icsType ?? "ICS"})`} style={{ background: "#1C7A4A18", color: "#1C7A4A", borderRadius: 6, padding: "3px 8px", fontSize: 10.5, fontWeight: 700, flexShrink: 0 }}>ICS ✓</span>
+                    )}
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                       {c.email && <a href={`mailto:${c.email}`} title="Envoyer un mail" style={iconBtn}>✉</a>}
                       {c.phone && <a href={`tel:${c.phone}`} title="Appeler" style={iconBtn}>📞</a>}
@@ -406,4 +458,5 @@ function L({ label, children }: { label: string; children: React.ReactNode }) {
 const inp: React.CSSProperties = { width: "100%", height: 36, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 10px", fontSize: 13, outline: "none", background: "#f9fafb", fontFamily: "inherit", boxSizing: "border-box" };
 const iconBtn: React.CSSProperties = { width: 32, height: 32, borderRadius: 8, border: `1px solid ${BORDER}`, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 14, color: "#374151" };
 const iconBtnBtn: React.CSSProperties = { ...iconBtn, cursor: "pointer" };
+const exportRow: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, padding: "6px 4px", fontSize: 13, color: "#1C1A17", cursor: "pointer" };
 const saveBtn: React.CSSProperties = { background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 4 };
