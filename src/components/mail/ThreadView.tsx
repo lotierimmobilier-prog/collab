@@ -42,6 +42,7 @@ const SENDER_BADGE: Record<string, { label: string; color: string; bg: string }>
 
 export default function ThreadView({ thread, labels, accounts, aiKey, loadingBody, users = [], onClose, onReply, onApplyLabel, onRemoveLabel, onStar, onTrash, onRestore, onDeletePermanent, customLabels, onSetLabels }: Props) {
   const [showReply, setShowReply]         = useState(false);
+  const [replySize, setReplySize]         = useState<"normal" | "large" | "full">("normal");
   const [replyBody, setReplyBody]         = useState("");
   const [aiTone, setAiTone]               = useState("professionnel");
   const [aiLength, setAiLength]           = useState("moyen");
@@ -773,12 +774,21 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
       {showReply && (
         <div style={{ position: "absolute", inset: 0, zIndex: 20, display: "flex", alignItems: "flex-end", background: "rgba(0,0,0,0.18)", pointerEvents: "all" }}
           onClick={e => { if (e.target === e.currentTarget) { setShowReply(false); setReplyBody(""); } }}>
-          <div style={{ width: "100%", background: "#fff", borderRadius: "16px 16px 0 0", boxShadow: "0 -8px 32px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", maxHeight: "75%", overflow: "hidden" }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", background: "#fff", borderRadius: replySize === "full" ? 0 : "16px 16px 0 0", boxShadow: "0 -8px 32px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", height: replySize === "full" ? "100%" : undefined, maxHeight: replySize === "full" ? "100%" : replySize === "large" ? "92%" : "75%", overflow: "hidden" }}>
 
             {/* En-tête */}
             <div style={{ background: GOLD_BG, padding: "10px 16px", borderBottom: `1px solid ${BORDER}`, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flexShrink: 0 }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: GOLD, flexShrink: 0 }}>✦ Réponse à</span>
               <span style={{ fontSize: 12, color: "#374151", fontWeight: 500, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lastMsg.from.name || lastMsg.from.email}</span>
+              {/* Agrandir / plein écran */}
+              <button onClick={() => setReplySize(s => s === "large" ? "normal" : "large")} title={replySize === "large" ? "Réduire" : "Agrandir"}
+                style={{ width: 28, height: 28, borderRadius: "50%", background: "#fff", border: `1px solid ${BORDER}`, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#374151", flexShrink: 0, lineHeight: 1 }}>
+                {replySize === "large" ? "❏" : "⤢"}
+              </button>
+              <button onClick={() => setReplySize(s => s === "full" ? "normal" : "full")} title={replySize === "full" ? "Quitter le plein écran" : "Plein écran"}
+                style={{ width: 28, height: 28, borderRadius: "50%", background: "#fff", border: `1px solid ${BORDER}`, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#374151", flexShrink: 0, lineHeight: 1 }}>
+                {replySize === "full" ? "🗗" : "⛶"}
+              </button>
               {/* Bouton fermer bien visible */}
               <button onClick={() => { setShowReply(false); setReplyBody(""); }}
                 style={{ width: 28, height: 28, borderRadius: "50%", background: "#f3f4f6", border: "1px solid #e5e7eb", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "#374151", fontWeight: 700, flexShrink: 0, lineHeight: 1 }}>
