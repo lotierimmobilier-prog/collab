@@ -68,6 +68,12 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
   const [rdvSaving, setRdvSaving]           = useState(false);
   const [actionResult, setActionResult]     = useState<{ ok: boolean; msg: string } | null>(null);
 
+  // Annuaire — détection d'expéditeur inconnu
+  const [contactLookup, setContactLookup]   = useState<{ found: boolean; type?: string; name?: string } | null>(null);
+  const [contactType, setContactType]       = useState("fournisseur");
+  const [savingContact, setSavingContact]   = useState(false);
+  const [savedContact, setSavedContact]     = useState<string | null>(null);
+
   // Conseil juridique
   const [showLegal, setShowLegal]           = useState(false);
   const [legalQuestion, setLegalQuestion]   = useState("");
@@ -85,6 +91,39 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
   const lastMsg   = thread.messages[thread.messages.length - 1];
   const firstMsg  = thread.messages[0];
   const account   = accounts.find(a => a.id === thread.accountId);
+
+  // Vérifie si l'expéditeur existe déjà dans l'annuaire (sinon : proposer de l'ajouter)
+  const senderEmail = (firstMsg?.from?.email || lastMsg?.from?.email || "").toLowerCase();
+  useEffect(() => {
+    if (!senderEmail) { setContactLookup(null); return; }
+    setContactLookup(null); setSavedContact(null);
+    fetch(`/api/contacts/lookup?email=${encodeURIComponent(senderEmail)}`)
+      .then(r => r.json())
+      .then(d => { setContactLookup(d); if (d?.type) setContactType(d.type); })
+      .catch(() => {});
+  }, [senderEmail]);
+
+  async function saveContact() {
+    const from = firstMsg?.from || lastMsg?.from;
+    if (!from?.email || savingContact) return;
+    setSavingContact(true);
+    try {
+      // Découpe un éventuel "Prénom Nom" présent dans le nom d'affichage
+      const parts = (from.name || "").trim().split(/\s+/);
+      const prenom = parts.length > 1 ? parts.slice(0, -1).join(" ") : (from.name || "");
+      const nom = parts.length > 1 ? parts[parts.length - 1] : "";
+      const r = await fetch("/api/contacts", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: contactType, prenom, nom, email: from.email }),
+      });
+      const d = await r.json();
+      if (d.contact) {
+        setSavedContact(from.name || from.email);
+        setContactLookup({ found: true, type: contactType, name: from.name || from.email });
+      }
+    } catch { /* silencieux */ }
+    finally { setSavingContact(false); }
+  }
   const threadLabelIds = new Set(thread.messages.flatMap(m => m.labels));
   const appliedCustom  = customLabels.filter(l => threadLabelIds.has(l.id));
 
@@ -542,6 +581,33 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
           </select>
         </div>
       </div>
+
+      {/* ── Annuaire : expéditeur inconnu ── */}
+      {contactLookup && !contactLookup.found && senderEmail && (
+        <div style={{ padding: "9px 20px", background: "#FFF7ED", borderBottom: "1px solid #FED7AA", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: "#9A3412", fontWeight: 600 }}>👤 Expéditeur inconnu</span>
+          <span style={{ fontSize: 12, color: "#9A3412" }}>{firstMsg?.from?.name || senderEmail} n'est pas dans l'annuaire.</span>
+          <select value={contactType} onChange={e => setContactType(e.target.value)}
+            style={{ height: 28, border: "1px solid #FED7AA", borderRadius: 6, fontSize: 12, padding: "0 6px", background: "#fff", color: "#374151" }}>
+            <option value="fournisseur">Fournisseur</option>
+            <option value="proprietaire">Propriétaire</option>
+            <option value="locataire">Locataire</option>
+            <option value="direction">Direction</option>
+            <option value="commercial">Agent commercial</option>
+            <option value="tutelle">Tutelle</option>
+            <option value="autre">Autre</option>
+          </select>
+          <button onClick={saveContact} disabled={savingContact}
+            style={{ background: "#EA580C", color: "#fff", border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: savingContact ? 0.7 : 1 }}>
+            {savingContact ? "Enregistrement…" : "+ Enregistrer dans l'annuaire"}
+          </button>
+        </div>
+      )}
+      {savedContact && (
+        <div style={{ padding: "8px 20px", background: "#ECFDF5", borderBottom: "1px solid #A7F3D0", fontSize: 12, color: "#047857", fontWeight: 600, flexShrink: 0 }}>
+          ✓ {savedContact} ajouté à l'annuaire ({contactType}).
+        </div>
+      )}
 
       {/* ── Barre d'actions IA ── */}
       <div style={{ padding: "10px 20px", background: "#FDFAF6", borderBottom: "1px solid #EDE8DF", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flexShrink: 0 }}>
