@@ -417,9 +417,17 @@ function NotesBlock({ refreshKey }: { refreshKey: number }) {
 // ─── Bloc Classement du trimestre ───────────────────────────────
 interface RankRow { userId: string; name: string; roleId: string | null; counts: Record<string, number>; amount: number; total: number }
 
+function fmtEuroShort(n: number): string {
+  if (!n) return "0 €";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} M€`;
+  if (n >= 1_000) return `${(n / 1_000).toLocaleString("fr-FR", { maximumFractionDigits: 0 })} k€`;
+  return `${n.toLocaleString("fr-FR")} €`;
+}
+
 function RankingBlock({ refreshKey, currentUserId }: { refreshKey: number; currentUserId?: string }) {
   const [data, setData]     = useState<{ quarterLabel: string; ranking: RankRow[]; totals: Record<string, number> } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mode, setMode]     = useState<"nombre" | "ca">("nombre");
 
   useEffect(() => {
     fetch("/api/performance/ranking").then(r => r.json())
@@ -428,16 +436,36 @@ function RankingBlock({ refreshKey, currentUserId }: { refreshKey: number; curre
       .finally(() => setLoading(false));
   }, [refreshKey]);
 
-  const ranking = data?.ranking ?? [];
+  const rankingRaw = data?.ranking ?? [];
+  const ranking = mode === "ca"
+    ? [...rankingRaw].sort((a, b) => b.amount - a.amount || b.total - a.total || a.name.localeCompare(b.name))
+    : rankingRaw;
   const totals  = data?.totals ?? {};
+  const totalCA = rankingRaw.reduce((s, r) => s + (r.amount || 0), 0);
   const medal = (i: number) => (i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`);
+
+  // En mode « nombre » : colonnes par type + total des mandats.
+  // En mode « CA » : une seule colonne chiffre d'affaires.
+  const gridCols = mode === "ca" ? "28px 1fr 80px" : "28px 1fr repeat(4, 38px) 42px";
+
+  const TabBtn = ({ id, label }: { id: "nombre" | "ca"; label: string }) => (
+    <button onClick={() => setMode(id)} style={{
+      background: mode === id ? GOLD : "#fff", color: mode === id ? "#fff" : "#6b7280",
+      border: `1px solid ${mode === id ? GOLD : BORDER}`, borderRadius: 7, padding: "3px 9px",
+      fontSize: 10.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+    }}>{label}</button>
+  );
 
   return (
     <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, boxShadow: "0 1px 4px rgba(0,0,0,0.05)", overflow: "hidden" }}>
-      <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid #f3f4f6`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid #f3f4f6`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>🏆 Classement du trimestre</span>
           {data?.quarterLabel && <span style={{ background: GOLD_BG, color: GOLD, borderRadius: 8, padding: "1px 8px", fontSize: 10, fontWeight: 700 }}>{data.quarterLabel}</span>}
+        </div>
+        <div style={{ display: "flex", gap: 4 }}>
+          <TabBtn id="nombre" label="Nombre" />
+          <TabBtn id="ca" label="Chiffre d'affaires" />
         </div>
       </div>
       <div style={{ padding: "10px 16px 14px" }}>
@@ -448,33 +476,56 @@ function RankingBlock({ refreshKey, currentUserId }: { refreshKey: number; curre
         {!loading && ranking.length > 0 && (
           <>
             {/* En-tête colonnes */}
-            <div style={{ display: "grid", gridTemplateColumns: "28px 1fr repeat(4, 38px) 42px", gap: 4, alignItems: "center", padding: "0 4px 6px", fontSize: 9, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" }}>
+            <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, alignItems: "center", padding: "0 4px 6px", fontSize: 9, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" }}>
               <span></span><span></span>
-              {PERF_TYPES.map(t => <span key={t.id} title={t.label} style={{ textAlign: "center" }}>{t.icon}</span>)}
-              <span style={{ textAlign: "center" }}>Tot.</span>
+              {mode === "ca" ? (
+                <span style={{ textAlign: "right" }}>CA</span>
+              ) : (
+                <>
+                  {PERF_TYPES.map(t => <span key={t.id} title={t.label} style={{ textAlign: "center" }}>{t.icon}</span>)}
+                  <span style={{ textAlign: "center" }}>Mand.</span>
+                </>
+              )}
             </div>
             {ranking.slice(0, 8).map((r, i) => {
               const isMe = r.userId === currentUserId;
               return (
-                <div key={r.userId} style={{ display: "grid", gridTemplateColumns: "28px 1fr repeat(4, 38px) 42px", gap: 4, alignItems: "center", padding: "6px 4px", borderTop: i === 0 ? "none" : "1px solid #f6f6f4", background: isMe ? GOLD_BG : "transparent", borderRadius: 6 }}>
+                <div key={r.userId} style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, alignItems: "center", padding: "6px 4px", borderTop: i === 0 ? "none" : "1px solid #f6f6f4", background: isMe ? GOLD_BG : "transparent", borderRadius: 6 }}>
                   <span style={{ fontSize: 13, textAlign: "center" }}>{medal(i)}</span>
                   <span style={{ fontSize: 12, fontWeight: isMe ? 700 : 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {r.name}{isMe && <span style={{ color: GOLD, fontWeight: 700 }}> · vous</span>}
                   </span>
-                  {PERF_TYPES.map(t => (
-                    <span key={t.id} style={{ textAlign: "center", fontSize: 12, color: r.counts[t.id] ? t.color : "#d1d5db", fontWeight: r.counts[t.id] ? 700 : 400 }}>
-                      {r.counts[t.id] ?? 0}
-                    </span>
-                  ))}
-                  <span style={{ textAlign: "center", fontSize: 13, fontWeight: 700, color: GOLD }}>{r.total}</span>
+                  {mode === "ca" ? (
+                    <span style={{ textAlign: "right", fontSize: 12.5, fontWeight: 700, color: r.amount ? GOLD : "#d1d5db" }}>{fmtEuroShort(r.amount || 0)}</span>
+                  ) : (
+                    <>
+                      {PERF_TYPES.map(t => (
+                        <span key={t.id} style={{ textAlign: "center", fontSize: 12, color: r.counts[t.id] ? t.color : "#d1d5db", fontWeight: r.counts[t.id] ? 700 : 400 }}>
+                          {r.counts[t.id] ?? 0}
+                        </span>
+                      ))}
+                      <span style={{ textAlign: "center", fontSize: 13, fontWeight: 700, color: GOLD }}>{r.total}</span>
+                    </>
+                  )}
                 </div>
               );
             })}
             {/* Total agence */}
-            <div style={{ display: "grid", gridTemplateColumns: "28px 1fr repeat(4, 38px) 42px", gap: 4, alignItems: "center", padding: "8px 4px 2px", marginTop: 4, borderTop: "2px solid #f3f4f6", fontSize: 11, fontWeight: 700, color: "#6b7280" }}>
+            <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, alignItems: "center", padding: "8px 4px 2px", marginTop: 4, borderTop: "2px solid #f3f4f6", fontSize: 11, fontWeight: 700, color: "#6b7280" }}>
               <span></span><span style={{ textTransform: "uppercase", fontSize: 10 }}>Total agence</span>
-              {PERF_TYPES.map(t => <span key={t.id} style={{ textAlign: "center", color: t.color }}>{totals[t.id] ?? 0}</span>)}
-              <span style={{ textAlign: "center", color: GOLD }}>{PERF_TYPES.reduce((s, t) => s + (totals[t.id] ?? 0), 0)}</span>
+              {mode === "ca" ? (
+                <span style={{ textAlign: "right", color: GOLD }}>{fmtEuroShort(totalCA)}</span>
+              ) : (
+                <>
+                  {PERF_TYPES.map(t => <span key={t.id} style={{ textAlign: "center", color: t.color }}>{totals[t.id] ?? 0}</span>)}
+                  <span style={{ textAlign: "center", color: GOLD }}>{PERF_TYPES.reduce((s, t) => s + (totals[t.id] ?? 0), 0)}</span>
+                </>
+              )}
+            </div>
+            <div style={{ marginTop: 8, fontSize: 10, color: "#9ca3af", textAlign: "center" }}>
+              {mode === "ca"
+                ? "Classement par chiffre d'affaires (honoraires encaissés ce trimestre)."
+                : "Classement par nombre de mandats et d'opérations enregistrés."}
             </div>
           </>
         )}
