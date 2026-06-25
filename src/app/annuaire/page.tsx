@@ -30,6 +30,22 @@ export default function AnnuairePage() {
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState("");
+  const [taskFor, setTaskFor] = useState<Contact | null>(null);
+  const [rdvFor, setRdvFor]   = useState<Contact | null>(null);
+
+  async function importExisting() {
+    setImporting(true); setImportMsg("");
+    try {
+      const r = await fetch("/api/contacts/sync", { method: "POST" });
+      const d = await r.json();
+      if (d.error) { setImportMsg(d.error); return; }
+      setImportMsg(d.imported > 0 ? `✓ ${d.imported} contact(s) importé(s)` : "Annuaire déjà à jour");
+      load();
+    } catch { setImportMsg("Erreur réseau"); }
+    finally { setImporting(false); setTimeout(() => setImportMsg(""), 5000); }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,8 +79,13 @@ export default function AnnuairePage() {
           <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center" }}>
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher un contact (nom, email, téléphone)…"
               style={{ flex: 1, height: 38, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 12px", fontSize: 13, outline: "none", background: "#fff" }} />
+            <button onClick={importExisting} disabled={importing} title="Rapprocher propriétaires, locataires, fournisseurs et agents déjà en base"
+              style={{ background: "#fff", color: "#374151", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+              {importing ? "Import…" : "⤓ Importer l'existant"}
+            </button>
             <button onClick={() => setShowAdd(true)} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>+ Ajouter</button>
           </div>
+          {importMsg && <div style={{ fontSize: 12, color: "#059669", marginTop: -8, marginBottom: 12 }}>{importMsg}</div>}
 
           {/* Filtres par type */}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 18 }}>
@@ -101,6 +122,8 @@ export default function AnnuairePage() {
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                       {c.email && <a href={`mailto:${c.email}`} title="Envoyer un mail" style={iconBtn}>✉</a>}
                       {c.phone && <a href={`tel:${c.phone}`} title="Appeler" style={iconBtn}>📞</a>}
+                      <button onClick={() => setTaskFor(c)} title="Créer une tâche liée" style={iconBtnBtn}>✅</button>
+                      <button onClick={() => setRdvFor(c)} title="Créer un rendez-vous lié" style={iconBtnBtn}>📅</button>
                     </div>
                   </div>
                 );
@@ -111,6 +134,113 @@ export default function AnnuairePage() {
       </div>
 
       {showAdd && <AddContactModal onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />}
+      {taskFor && <TaskFromContactModal contact={taskFor} onClose={() => setTaskFor(null)} />}
+      {rdvFor  && <RdvFromContactModal  contact={rdvFor}  onClose={() => setRdvFor(null)} />}
+    </div>
+  );
+}
+
+function TaskFromContactModal({ contact, onClose }: { contact: Contact; onClose: () => void }) {
+  const name = contactName(contact);
+  const [title, setTitle] = useState(`Suivi — ${name}`);
+  const [description, setDescription] = useState(contact.email ? `Contact : ${contact.email}` : "");
+  const [priority, setPriority] = useState("moyenne");
+  const [dueDate, setDueDate] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function save() {
+    if (!title.trim()) return;
+    setSaving(true); setErr("");
+    try {
+      const r = await fetch("/api/tasks", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title.trim(), description, priority, dueDate: dueDate || null, tags: [`contact:${contact.id}`] }),
+      });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || "Erreur"); return; }
+      setDone(true); setTimeout(onClose, 900);
+    } catch { setErr("Erreur réseau"); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <ModalShell title={`✅ Nouvelle tâche — ${name}`} onClose={onClose}>
+      <L label="Titre"><input value={title} onChange={e => setTitle(e.target.value)} style={inp} /></L>
+      <L label="Description"><input value={description} onChange={e => setDescription(e.target.value)} style={inp} /></L>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <L label="Priorité">
+          <select value={priority} onChange={e => setPriority(e.target.value)} style={inp}>
+            <option value="urgent">Urgente</option><option value="haute">Haute</option>
+            <option value="moyenne">Moyenne</option><option value="basse">Basse</option>
+          </select>
+        </L>
+        <L label="Échéance"><input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={inp} /></L>
+      </div>
+      {err && <span style={{ color: "#dc2626", fontSize: 12 }}>{err}</span>}
+      <button onClick={save} disabled={saving || done} style={saveBtn}>{done ? "✓ Créée" : saving ? "Création…" : "Créer la tâche"}</button>
+    </ModalShell>
+  );
+}
+
+function RdvFromContactModal({ contact, onClose }: { contact: Contact; onClose: () => void }) {
+  const name = contactName(contact);
+  const [title, setTitle] = useState(`RDV — ${name}`);
+  const [start, setStart] = useState("");
+  const [duration, setDuration] = useState("30");
+  const [location, setLocation] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function save() {
+    if (!title.trim() || !start) { setErr("Titre et date/heure requis"); return; }
+    setSaving(true); setErr("");
+    try {
+      const startD = new Date(start);
+      const endD = new Date(startD.getTime() + parseInt(duration, 10) * 60000);
+      const r = await fetch("/api/calendar", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(), location, start: startD.toISOString(), end: endD.toISOString(), type: "rdv",
+          attendees: [{ type: "contact", id: contact.id, name, email: contact.email ?? undefined }],
+        }),
+      });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || "Erreur"); return; }
+      setDone(true); setTimeout(onClose, 900);
+    } catch { setErr("Erreur réseau"); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <ModalShell title={`📅 Nouveau rendez-vous — ${name}`} onClose={onClose}>
+      <L label="Titre"><input value={title} onChange={e => setTitle(e.target.value)} style={inp} /></L>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: 12 }}>
+        <L label="Début"><input type="datetime-local" value={start} onChange={e => setStart(e.target.value)} style={inp} /></L>
+        <L label="Durée">
+          <select value={duration} onChange={e => setDuration(e.target.value)} style={inp}>
+            <option value="15">15 min</option><option value="30">30 min</option>
+            <option value="60">1 h</option><option value="90">1 h 30</option><option value="120">2 h</option>
+          </select>
+        </L>
+      </div>
+      <L label="Lieu"><input value={location} onChange={e => setLocation(e.target.value)} placeholder="Adresse ou visio" style={inp} /></L>
+      {err && <span style={{ color: "#dc2626", fontSize: 12 }}>{err}</span>}
+      <button onClick={save} disabled={saving || done} style={saveBtn}>{done ? "✓ Créé" : saving ? "Création…" : "Créer le rendez-vous"}</button>
+    </ModalShell>
+  );
+}
+
+function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 14, width: 460, maxWidth: "92vw", maxHeight: "90vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+        <div style={{ background: DARK, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ color: "#fff", fontWeight: 600, fontSize: 14 }}>{title}</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: 20, cursor: "pointer" }}>×</button>
+        </div>
+        <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 12 }}>{children}</div>
+      </div>
     </div>
   );
 }
@@ -184,3 +314,5 @@ function L({ label, children }: { label: string; children: React.ReactNode }) {
 
 const inp: React.CSSProperties = { width: "100%", height: 36, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 10px", fontSize: 13, outline: "none", background: "#f9fafb", fontFamily: "inherit", boxSizing: "border-box" };
 const iconBtn: React.CSSProperties = { width: 32, height: 32, borderRadius: 8, border: `1px solid ${BORDER}`, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 14, color: "#374151" };
+const iconBtnBtn: React.CSSProperties = { ...iconBtn, cursor: "pointer" };
+const saveBtn: React.CSSProperties = { background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 4 };
