@@ -56,6 +56,7 @@ function useAutoRefresh() {
 function TasksBlock({ refreshKey }: { refreshKey: number }) {
   const [tasks, setTasks]   = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editTask, setEditTask] = useState<Task | null>(null);
 
   useEffect(() => {
     fetch("/api/tasks?status=todo,in_progress&limit=15").then(r => r.json()).then(d => setTasks(Array.isArray(d) ? d : d.tasks ?? [])).finally(() => setLoading(false));
@@ -64,6 +65,14 @@ function TasksBlock({ refreshKey }: { refreshKey: number }) {
   async function done(id: string) {
     await fetch(`/api/tasks/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "done" }) });
     setTasks(p => p.filter(t => t.id !== id));
+  }
+
+  async function saveEdit(id: string, patch: Partial<Task>) {
+    const r = await fetch(`/api/tasks/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+    if (r.ok) {
+      setTasks(p => p.map(t => t.id === id ? { ...t, ...patch } : t).filter(t => patch.status !== "done" || t.id !== id));
+      setEditTask(null);
+    }
   }
 
   const urgent  = tasks.filter(t => t.priority === "urgent" || t.priority === "high");
@@ -76,7 +85,7 @@ function TasksBlock({ refreshKey }: { refreshKey: number }) {
           <button onClick={() => done(t.id)} title="Marquer terminée"
             style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${PRIORITY_COLOR[t.priority] ?? "#d1d5db"}`, background: "none", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
           </button>
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => setEditTask(t)} title="Modifier la tâche">
             <div style={{ fontSize: 12, fontWeight: 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
             {t.dueDate && <div style={{ fontSize: 10, color: isToday(t.dueDate) ? "#DC2626" : "#9ca3af", marginTop: 1 }}>
               {isToday(t.dueDate) ? "Aujourd'hui" : fmtDate(t.dueDate)}
@@ -86,9 +95,58 @@ function TasksBlock({ refreshKey }: { refreshKey: number }) {
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: PRIORITY_COLOR[t.priority] ?? "#d1d5db", flexShrink: 0 }} />
         </div>
       ))}
+      {editTask && <TaskEditModal task={editTask} onClose={() => setEditTask(null)} onSave={saveEdit} />}
     </Block>
   );
 }
+
+function TaskEditModal({ task, onClose, onSave }: { task: Task; onClose: () => void; onSave: (id: string, patch: Partial<Task>) => void }) {
+  const [title, setTitle] = useState(task.title);
+  const [priority, setPriority] = useState(task.priority);
+  const [dueDate, setDueDate] = useState(task.dueDate ? task.dueDate.slice(0, 10) : "");
+  const [status, setStatus] = useState(task.status);
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 14, width: 420, maxWidth: "94vw", boxShadow: "0 20px 60px rgba(0,0,0,0.25)", overflow: "hidden" }}>
+        <div style={{ background: "#1C1A17", padding: "12px 16px", color: "#fff", fontWeight: 600, fontSize: 14, display: "flex", justifyContent: "space-between" }}>
+          <span>Modifier la tâche</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: 20, cursor: "pointer" }}>×</button>
+        </div>
+        <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>Titre</label>
+            <input value={title} onChange={e => setTitle(e.target.value)} style={editInp} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>Priorité</label>
+              <select value={priority} onChange={e => setPriority(e.target.value)} style={editInp}>
+                <option value="urgent">Urgente</option><option value="high">Haute</option>
+                <option value="medium">Moyenne</option><option value="low">Basse</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>Échéance</label>
+              <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={editInp} />
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>Statut</label>
+            <select value={status} onChange={e => setStatus(e.target.value)} style={editInp}>
+              <option value="todo">À faire</option><option value="in_progress">En cours</option><option value="done">Terminée</option>
+            </select>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button onClick={onClose} style={{ background: "#fff", border: "1px solid #E6E1D9", borderRadius: 8, padding: "9px 16px", fontSize: 13, cursor: "pointer" }}>Annuler</button>
+            <button onClick={() => onSave(task.id, { title: title.trim(), priority, dueDate: dueDate || undefined, status })} disabled={!title.trim()} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Enregistrer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const editInp: React.CSSProperties = { width: "100%", height: 36, border: "1px solid #E6E1D9", borderRadius: 8, padding: "0 10px", fontSize: 13, outline: "none", background: "#f9fafb", boxSizing: "border-box", marginTop: 4 };
 
 // ─── Bloc Appels ────────────────────────────────────────────────
 function CallsBlock({ refreshKey }: { refreshKey: number }) {

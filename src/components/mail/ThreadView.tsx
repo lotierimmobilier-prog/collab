@@ -465,6 +465,43 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
 
   const badge = senderInfo ? SENDER_BADGE[senderInfo.senderType] ?? SENDER_BADGE.unknown : null;
 
+  // ── Export / impression PDF du fil complet (date, expéditeur, destinataires, contenu) ──
+  function exportPdf() {
+    const w = window.open("", "_blank", "width=820,height=920");
+    if (!w) return;
+    const esc = (s?: string) => (s || "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string));
+    const addr = (a?: { name?: string; email: string }) => a ? esc(a.name ? `${a.name} <${a.email}>` : a.email) : "—";
+    const list = (arr?: { name?: string; email: string }[]) => (arr && arr.length ? arr.map(addr).join(", ") : "—");
+    const msgs = thread.messages.map(m => {
+      const isHtml = !!m.body && /<[a-z][\s\S]*>/i.test(m.body);
+      const body = isHtml ? m.body : `<pre style="white-space:pre-wrap;font-family:inherit;margin:0">${esc(m.bodyText || m.body || "")}</pre>`;
+      const cc = (m.cc && m.cc.length) ? `<div class="meta"><b>Cc :</b> ${list(m.cc)}</div>` : "";
+      return `<div class="msg">
+        <div class="meta"><b>De :</b> ${addr(m.from)}</div>
+        <div class="meta"><b>À :</b> ${list(m.to)}</div>${cc}
+        <div class="meta"><b>Date :</b> ${esc(new Date(m.date).toLocaleString("fr-FR"))}</div>
+        <div class="body">${body}</div>
+      </div>`;
+    }).join('<hr/>');
+    w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(thread.subject || "Mail")}</title>
+      <style>
+        body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;color:#1C1A17;padding:32px;max-width:760px;margin:0 auto}
+        .head{border-bottom:2px solid #B8966A;padding-bottom:12px;margin-bottom:18px}
+        .head img{height:32px;margin-bottom:10px}
+        h1{font-size:18px;margin:0}
+        .meta{font-size:12px;color:#444;margin:2px 0}
+        .body{margin-top:10px;font-size:13px;line-height:1.55}
+        .body img{max-width:100%}
+        .msg{margin:12px 0}
+        hr{border:none;border-top:1px solid #ddd;margin:18px 0}
+      </style></head><body>
+      <div class="head"><img src="${location.origin}/logo.png" alt="Lotier Immobilier"/><h1>${esc(thread.subject || "(Sans objet)")}</h1></div>
+      ${msgs}
+      <script>window.onload=function(){setTimeout(function(){window.print();},350);};<\/script>
+    </body></html>`);
+    w.document.close();
+  }
+
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#f9fafb", minWidth: 0, minHeight: 0 }}>
       {/* Header */}
@@ -511,8 +548,13 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
             </div>
           </div>
 
-          {/* Boutons droite : ★ 🗑 × */}
+          {/* Boutons droite : PDF ★ 🗑 × */}
           <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+            <button onClick={exportPdf} title="Exporter / imprimer en PDF (date, expéditeur, destinataires, contenu)"
+              style={{ height: 30, padding: "0 10px", borderRadius: 7, border: "1px solid #E6E1D9", background: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 800, letterSpacing: "0.02em", color: "#B91C1C", display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ display: "inline-block", width: 13, height: 15, border: "1.5px solid #B91C1C", borderRadius: 2, position: "relative" }} />
+              PDF
+            </button>
             <button onClick={onStar} title="Suivre"
               style={{ width: 30, height: 30, borderRadius: 7, border: `1px solid ${threadLabelIds.has("starred") ? "#FDE68A" : "#e5e7eb"}`, background: threadLabelIds.has("starred") ? "#FEF9C3" : "#f9fafb", cursor: "pointer", fontSize: 14, color: threadLabelIds.has("starred") ? "#f59e0b" : "#9ca3af", display: "flex", alignItems: "center", justifyContent: "center" }}>★</button>
             <button onClick={onTrash} title="Corbeille"
