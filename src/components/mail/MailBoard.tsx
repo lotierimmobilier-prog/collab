@@ -280,6 +280,20 @@ export default function MailBoard() {
     setTimeout(() => setSyncStatus(""), 5000);
   }, [syncImap]);
 
+  /* ── Synchro forcée à l'ouverture de la messagerie (une fois) ── */
+  const didInitialSync = useRef(false);
+  useEffect(() => {
+    if (didInitialSync.current) return;
+    if (accounts.length === 0 && gmailConfigs.length === 0) return;
+    didInitialSync.current = true;
+    (async () => {
+      setNextSyncIn(SYNC_INTERVAL / 1000);
+      for (const cfg of gmailConfigRef.current) await syncGmail(cfg.accountId);
+      for (const a of accountsRef.current.filter(x => x.active)) await syncImap(a, 1);
+      await autoClassifyRef.current(true);
+    })();
+  }, [accounts, gmailConfigs, syncGmail, syncImap]);
+
   /* ── Sync toutes les 5 minutes ──────────────────────────── */
   useEffect(() => {
     const timer = setInterval(async () => {

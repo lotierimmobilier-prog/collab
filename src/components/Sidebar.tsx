@@ -51,6 +51,7 @@ const MOBILE_NAV = [
 
 export default function Sidebar({ active }: { active: string }) {
   const { data: session } = useSession();
+  const isAdmin = session?.user?.roleId === "admin";
   const bp = useBreakpoint();
   const [collapsed, setCollapsed]   = useState(false);
   const [mounted, setMounted]       = useState(false);
@@ -101,10 +102,14 @@ export default function Sidebar({ active }: { active: string }) {
                 </div>
               ))}
 
-              <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: LABEL_COLOR, padding: "10px 20px 4px", fontWeight: 600 }}>Administration</div>
-              {adminNav.map(item => (
-                <MobileMenuItem key={item.id} item={item as NavItem} active={active} onClose={() => setMobileOpen(false)} />
-              ))}
+              {isAdmin && (
+                <>
+                  <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: LABEL_COLOR, padding: "10px 20px 4px", fontWeight: 600 }}>Administration</div>
+                  {adminNav.map(item => (
+                    <MobileMenuItem key={item.id} item={item as NavItem} active={active} onClose={() => setMobileOpen(false)} />
+                  ))}
+                </>
+              )}
 
               {/* Déconnexion */}
               {session?.user && (
@@ -215,9 +220,13 @@ export default function Sidebar({ active }: { active: string }) {
           );
         })}
 
-        {!isCollapsed && <NavLabel>Administration</NavLabel>}
-        {isCollapsed && <div style={{ height: 8 }} />}
-        {adminNav.map(item => <NavItemRow key={item.id} item={item as NavItem} active={active} collapsed={isCollapsed} />)}
+        {isAdmin && (
+          <>
+            {!isCollapsed && <NavLabel>Administration</NavLabel>}
+            {isCollapsed && <div style={{ height: 8 }} />}
+            {adminNav.map(item => <NavItemRow key={item.id} item={item as NavItem} active={active} collapsed={isCollapsed} />)}
+          </>
+        )}
       </nav>
 
       {/* Utilisateur */}
