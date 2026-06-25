@@ -988,8 +988,8 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 40 }} />
-      <div style={{ position: "fixed", ...frame, background: "#fff", borderRadius: size === "full" ? 12 : 14, zIndex: 50, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 80 }} />
+      <div style={{ position: "fixed", ...frame, background: "#fff", borderRadius: size === "full" ? 12 : 14, zIndex: 81, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Header */}
         <div style={{ background: "#1f2937", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
           <span style={{ color: "#fff", fontWeight: 600, fontSize: 13 }}>✉ Nouveau message</span>
