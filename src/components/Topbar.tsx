@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import UserMenu from "./UserMenu";
 
 const GOLD   = "#B8966A";
 const GOLD_BG = "#F7F0E6";
@@ -175,6 +176,9 @@ export default function Topbar({ title }: { title: string }) {
             </div>
           )}
         </div>
+
+        {/* 👤 Mon compte */}
+        <UserMenu />
       </div>
     </div>
   );
