@@ -9,6 +9,7 @@ import {
   fetchGmailMessages, saveGmailToken,
   requestGmailToken, GmailConfig,
 } from "@/lib/googleGmail";
+import { useIsMobile } from "@/lib/useIsMobile";
 import AccountConfigPanel from "./AccountConfigPanel";
 import LabelManager from "./LabelManager";
 import ThreadList from "./ThreadList";
@@ -59,6 +60,10 @@ export default function MailBoard() {
 
   // Tri de la liste : par date (défaut) ou par priorité (boîte priorisée)
   const [sortMode, setSortMode] = useState<"date" | "priority">("date");
+
+  // Responsive : sur mobile la sidebar devient un tiroir coulissant
+  const isMobile = useIsMobile();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Ref pour accéder aux comptes dans le timer sans stale closure
   const accountsRef    = useRef<MailAccount[]>([]);
@@ -528,9 +533,15 @@ export default function MailBoard() {
   const fmtCountdown = (s: number) => s < 60 ? `${s}s` : `${Math.ceil(s / 60)}min`;
 
   return (
-    <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden", height: "100%" }}>
-      {/* SIDEBAR */}
-      <div style={{ width: 224, flexShrink: 0, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", overflowY: "scroll" }}>
+    <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden", height: "100%", position: "relative" }}>
+      {/* Fond sombre derrière le tiroir (mobile) */}
+      {isMobile && sidebarOpen && (
+        <div onClick={() => setSidebarOpen(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 55 }} />
+      )}
+      {/* SIDEBAR — tiroir coulissant sur mobile */}
+      <div style={isMobile
+        ? { position: "absolute", top: 0, bottom: 0, left: 0, width: 270, zIndex: 60, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", overflowY: "auto", transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)", transition: "transform 0.25s ease", boxShadow: sidebarOpen ? "0 0 40px rgba(0,0,0,0.3)" : "none" }
+        : { width: 224, flexShrink: 0, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", overflowY: "scroll" }}>
         <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
           <button onClick={() => setShowCompose(true)} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             ✏ Nouveau message
@@ -557,7 +568,7 @@ export default function MailBoard() {
         {/* Labels */}
         <NavLabel>Boîte</NavLabel>
         {systemLabels.map(l => (
-          <NavItem key={l.id} active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); clearSearch(); setListPage(1); }}>
+          <NavItem key={l.id} active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); clearSearch(); setListPage(1); setSidebarOpen(false); }}>
             <span style={{ fontSize: 14 }}>{labelIcon(l.id)}</span>
             <span style={{ flex: 1 }}>{l.name}</span>
             {unread(l.id) > 0 && <Badge>{unread(l.id)}</Badge>}
@@ -572,7 +583,7 @@ export default function MailBoard() {
           <button onClick={() => setShowLabels(true)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 16, lineHeight: 1 }}>+</button>
         </div>
         {labelsOpen && customLabels.map(l => (
-          <NavItem key={l.id} active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); clearSearch(); setListPage(1); }}>
+          <NavItem key={l.id} active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); clearSearch(); setListPage(1); setSidebarOpen(false); }}>
             <span style={{ width: 10, height: 10, borderRadius: "50%", background: l.color, flexShrink: 0 }} />
             <span style={{ flex: 1, fontSize: 12 }}>{l.name}</span>
           </NavItem>
@@ -663,6 +674,13 @@ export default function MailBoard() {
 
       {/* MAIN */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        {/* Barre mobile : ouvre le tiroir des dossiers/comptes */}
+        {isMobile && (
+          <div style={{ flexShrink: 0, background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "6px 10px", display: "flex", alignItems: "center", gap: 8 }}>
+            <button onClick={() => setSidebarOpen(true)} style={{ background: "#F7F0E6", border: "1px solid #E8D9C0", borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 600, color: "#B8966A", cursor: "pointer" }}>☰ Dossiers</button>
+            <button onClick={() => setShowCompose(true)} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✏ Nouveau</button>
+          </div>
+        )}
         {/* Bandeau statut sync / recherche */}
         {(syncStatus || (search && searchResults !== null)) && (
           <div style={{ background: syncing ? "#eff6ff" : syncStatus.startsWith("Erreur") ? "#fef2f2" : search ? "#F7F0E6" : "#f0fdf4", borderBottom: "1px solid #e5e7eb", padding: "7px 16px", fontSize: 12, color: syncing ? "#1e40af" : syncStatus.startsWith("Erreur") ? "#991b1b" : search ? "#92400e" : "#166534", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -845,9 +863,12 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
   const [error, setError]         = useState("");
   const [selLabels, setSelLabels] = useState(["sent"]);
   const [size, setSize]           = useState<"normal" | "large" | "full">("normal");
+  const isMobile = useIsMobile();
 
-  // Dimensions de la fenêtre selon l'état d'agrandissement
-  const frame: React.CSSProperties = size === "full"
+  // Dimensions de la fenêtre selon l'état d'agrandissement (plein écran d'office sur mobile)
+  const frame: React.CSSProperties = isMobile
+    ? { top: 8, left: 8, right: 8, bottom: 8, width: "auto", maxHeight: "none" }
+    : size === "full"
     ? { top: 16, left: 16, right: 16, bottom: 16, width: "auto", maxHeight: "none" }
     : size === "large"
     ? { bottom: 24, right: 24, width: "min(900px, 94vw)", height: "90vh", maxHeight: "none" }
