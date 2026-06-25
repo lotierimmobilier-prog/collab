@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { isDirection } from "@/lib/direction";
 import { decryptSecret } from "@/lib/ics-crypto";
-import { icsLogin } from "@/lib/ics";
+import { icsLogin, icsGedLink } from "@/lib/ics";
 
 const ID = "default";
 
@@ -25,6 +25,22 @@ export async function POST() {
 
   const result = await icsLogin(cfg, cfg.username, password);
 
+  // Si l'authentification réussit, on vérifie aussi l'accès à la GED en
+  // demandant le lien d'un bail d'exemple (le 1er de l'index ICS, s'il existe).
+  let ged: { tested: boolean; ok: boolean; status?: number; detail?: string } = { tested: false, ok: false };
+  if (result.ok && result.accessToken) {
+    const sample = await prisma.icsTenant.findFirst({ select: { idBail: true } });
+    if (sample) {
+      const link = await icsGedLink(cfg, result.accessToken, { idBail: sample.idBail });
+      ged = {
+        tested: true, ok: link.ok, status: link.status,
+        detail: link.ok ? "Lien GED obtenu : l'accès aux documents fonctionne." : (link.error ?? "Échec GedServlet"),
+      };
+    } else {
+      ged = { tested: false, ok: false, detail: "Importez d'abord l'export Locataires pour tester l'accès aux documents." };
+    }
+  }
+
   await prisma.icsConfig.update({
     where: { id: ID },
     data: { lastTestAt: new Date(), lastTestOk: result.ok, lastError: result.ok ? null : (result.error ?? "Échec") },
@@ -35,5 +51,6 @@ export async function POST() {
     error: result.error ?? null,
     ropcUnsupported: result.ropcUnsupported ?? false,
     expiresIn: result.expiresIn ?? null,
+    ged,
   });
 }

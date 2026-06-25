@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
@@ -11,6 +11,13 @@ interface IcsConfig {
   authBaseUrl: string; realm: string; clientId: string; portalUrl: string;
   apiBaseUrl: string | null; username: string | null; enabled: boolean;
   hasPassword: boolean; lastTestAt: string | null; lastTestOk: boolean; lastError: string | null;
+}
+
+interface IcsTenant {
+  id: string; idBail: string; idLot: string | null; idMandat: string | null;
+  nomLocataire: string | null; prenomLocataire: string | null; email: string | null; mobile: string | null;
+  nomImmeuble: string | null; adresseImmeuble: string | null;
+  nomProprietaire: string | null; prenomProprietaire: string | null; loyer: string | null;
 }
 
 export default function IcsPage() {
@@ -25,11 +32,42 @@ export default function IcsPage() {
   const [testing, setTesting] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err" | "info"; text: string } | null>(null);
 
+  // Index ICS (export Locataires)
+  const [tenants, setTenants] = useState<IcsTenant[]>([]);
+  const [tenantTotal, setTenantTotal] = useState(0);
+  const [search, setSearch] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     fetch("/api/ics/config").then(r => r.json()).then(d => {
       if (d.config) { setCfg(d.config); setUsername(d.config.username ?? ""); }
     }).catch(() => {});
   }, []);
+
+  const loadTenants = useCallback(async (q: string) => {
+    try {
+      const r = await fetch(`/api/ics/tenants?q=${encodeURIComponent(q)}`);
+      if (!r.ok) return;
+      const d = await r.json();
+      setTenants(d.tenants ?? []); setTenantTotal(d.total ?? 0);
+    } catch { /* silencieux */ }
+  }, []);
+  useEffect(() => { const t = setTimeout(() => loadTenants(search), 250); return () => clearTimeout(t); }, [search, loadTenants]);
+
+  async function importFile(file: File) {
+    setImporting(true); setImportMsg("");
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const r = await fetch("/api/ics/tenants/import", { method: "POST", body: fd });
+      const d = await r.json();
+      if (!r.ok) { setImportMsg(d.error || "Échec de l'import"); return; }
+      setImportMsg(d.message || "Import terminé.");
+      loadTenants(search);
+    } catch { setImportMsg("Erreur réseau pendant l'import."); }
+    finally { setImporting(false); }
+  }
 
   async function save() {
     setSaving(true); setMsg(null);
@@ -53,7 +91,10 @@ export default function IcsPage() {
       const r = await fetch("/api/ics/test", { method: "POST" });
       const d = await r.json();
       if (d.ok) {
-        setMsg({ kind: "ok", text: "✓ Connexion à ICS réussie. Le robot peut s'authentifier." });
+        const gedTxt = d.ged?.tested
+          ? (d.ged.ok ? " Accès aux documents GED confirmé ✓" : ` (accès documents : ${d.ged.detail || "à finaliser"})`)
+          : (d.ged?.detail ? ` (${d.ged.detail})` : "");
+        setMsg({ kind: d.ged?.tested && !d.ged.ok ? "info" : "ok", text: `✓ Connexion à ICS réussie. Le robot peut s'authentifier.${gedTxt}` });
       } else if (d.ropcUnsupported) {
         setMsg({ kind: "info", text: d.error || "ICS exige un login par navigateur (étape suivante du connecteur)." });
       } else {
@@ -129,7 +170,7 @@ export default function IcsPage() {
               <div style={{ fontSize: 13, fontWeight: 700, color: DARK, marginBottom: 12 }}>État de la connexion</div>
               <Row label="Portail">{cfg?.portalUrl ?? "—"}</Row>
               <Row label="Serveur d'authentification">{cfg?.authBaseUrl ?? "—"} · realm {cfg?.realm ?? "—"}</Row>
-              <Row label="API documents">{cfg?.apiBaseUrl || <span style={{ color: "#9ca3af" }}>à configurer (étape 2, via le HAR)</span>}</Row>
+              <Row label="API documents">{cfg?.apiBaseUrl || <span style={{ color: "#9ca3af" }}>GED ICS native (spirit6back · ged-tomcat1)</span>}</Row>
               <Row label="Dernier test">
                 {cfg?.lastTestAt
                   ? <span style={{ color: cfg.lastTestOk ? GREEN : RED, fontWeight: 600 }}>
@@ -142,12 +183,59 @@ export default function IcsPage() {
               )}
             </div>
 
+            {/* Index ICS (export Locataires) */}
+            <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, padding: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: DARK }}>Index ICS — locataires & propriétaires</div>
+                <span style={{ fontSize: 11.5, color: "#6b7280" }}>{tenantTotal} bail(s) référencé(s)</span>
+              </div>
+              <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 12px", lineHeight: 1.5 }}>
+                Importez l'export ICS « Locataires » (.xls, .xlsx ou .csv). Il relie chaque bail à son locataire,
+                son bien et son propriétaire — sans copier aucun document, uniquement les références.
+              </p>
+              <input ref={fileRef} type="file" accept=".xls,.xlsx,.csv" style={{ display: "none" }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) importFile(f); e.target.value = ""; }} />
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <button onClick={() => fileRef.current?.click()} disabled={importing} style={btnPrimary}>
+                  {importing ? "Import en cours…" : "Importer l'export Locataires"}
+                </button>
+                {importMsg && <span style={{ fontSize: 12, color: importMsg.startsWith("Échec") || importMsg.startsWith("Erreur") ? RED : GREEN }}>{importMsg}</span>}
+              </div>
+
+              {tenantTotal > 0 && (
+                <>
+                  <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un locataire, propriétaire, adresse ou idBail…"
+                    style={{ ...inp, marginTop: 16, background: "#fff" }} />
+                  <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6, maxHeight: 360, overflowY: "auto" }}>
+                    {tenants.length === 0 && <div style={{ fontSize: 12, color: "#9ca3af", padding: 12, textAlign: "center" }}>Aucun résultat.</div>}
+                    {tenants.map(t => (
+                      <div key={t.id} style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 12px", display: "flex", gap: 12, alignItems: "center" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: DARK }}>
+                            {[t.prenomLocataire, t.nomLocataire].filter(Boolean).join(" ") || "—"}
+                          </div>
+                          <div style={{ fontSize: 11.5, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {t.adresseImmeuble || t.nomImmeuble || "—"}
+                            {t.nomProprietaire && <> · propriétaire : {[t.prenomProprietaire, t.nomProprietaire].filter(Boolean).join(" ")}</>}
+                          </div>
+                        </div>
+                        <a href={cfg?.portalUrl || "https://my.ics.fr"} target="_blank" rel="noopener noreferrer"
+                          title="Ouvrir le portail ICS" style={{ ...btnGhost, textDecoration: "none", fontSize: 12, padding: "7px 12px" }}>
+                          Documents ICS →
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
             {/* Feuille de route */}
             <div style={{ background: GOLD_BG, borderRadius: 14, border: `1px solid ${GOLD}33`, padding: 18 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: DARK, marginBottom: 10 }}>Étapes du connecteur</div>
               <Step n="1" done state="Fait">Fondation : stockage chiffré des identifiants + test d'authentification Keycloak.</Step>
-              <Step n="2" state="En attente du HAR">Cartographie de l'API Spirit (URL des tiers et des documents) à partir de l'enregistrement réseau.</Step>
-              <Step n="3" state="À venir">Récupération des documents et rangement automatique dans la GED Collab.</Step>
+              <Step n="2" done state="Fait">Index ICS : import de l'export Locataires (bail ↔ locataire ↔ bien ↔ propriétaire).</Step>
+              <Step n="3" state="Après test de connexion">Consultation des documents ICS en direct (sans copie), depuis chaque fiche.</Step>
             </div>
 
           </div>

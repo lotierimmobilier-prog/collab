@@ -745,7 +745,10 @@ model IcsConfig {
   realm       String    @default("Production")
   clientId    String    @default("myics-customer")
   portalUrl   String    @default("https://my.ics.fr")
-  apiBaseUrl  String?   // base de l'API Spirit, renseignée depuis le HAR
+  apiBaseUrl    String?   // base de l'API Spirit, renseignée depuis le HAR
+  spiritApiBase String   @default("https://spirit6back.ics.fr/GeranceNet")
+  gedApiBase    String   @default("https://ged-tomcat1.ics.fr/tomcat/Ged")
+  idSociete     String   @default("54246")
   username    String?
   passwordEnc String?   // mot de passe chiffré (format iv:tag:cipher en base64)
   enabled     Boolean   @default(false)
@@ -756,4 +759,35 @@ model IcsConfig {
   updatedAt   DateTime  @updatedAt @default(now())
 
   @@map("ics_config")
+}
+
+/// Correspondance issue de l'export ICS « Locataires » : relie un bail à son
+/// locataire, son lot (bien) et son mandat (propriétaire). Sert d'index pour
+/// ouvrir la GED ICS en direct, sans recherche par nom. Aucun document stocké.
+model IcsTenant {
+  id                 String   @id @default(cuid())
+  idBail             String   @unique
+  idLot              String?
+  idMandat           String?
+  portefeuille       String?
+  civiliteLoc        String?
+  nomLocataire       String?
+  prenomLocataire    String?
+  email              String?
+  mobile             String?
+  telephone          String?
+  categorieBail      String?
+  typeBail           String?
+  dateEffet          String?
+  loyer              String?
+  nomImmeuble        String?
+  adresseImmeuble    String?
+  civiliteProprio    String?
+  nomProprietaire    String?
+  prenomProprietaire String?
+  updatedAt          DateTime @updatedAt @default(now())
+
+  @@index([nomLocataire])
+  @@index([nomProprietaire])
+  @@map("ics_tenants")
 }

@@ -16,7 +16,15 @@ export interface IcsConfigData {
   clientId: string;
   portalUrl: string;
   apiBaseUrl?: string | null;
+  spiritApiBase?: string | null;
+  gedApiBase?: string | null;
+  idSociete?: string | null;
   username?: string | null;
+}
+
+/** Rôles autorisés à consulter la GED ICS depuis Collab : direction + gestion locative. */
+export function canAccessIcsGed(roleId?: string | null): boolean {
+  return roleId === "admin" || roleId === "direction" || roleId === "dirigeant" || roleId === "gestionnaire";
 }
 
 export interface IcsLoginResult {
@@ -91,4 +99,50 @@ export async function icsLogin(cfg: IcsConfigData, username: string, password: s
       ? "ICS n'autorise pas l'authentification directe pour ce client : un login par navigateur sera nécessaire (étape suivante)."
       : (desc || err || `Réponse inattendue d'ICS (HTTP ${res.status}).`),
   };
+}
+
+export interface IcsGedLink {
+  ok: boolean;
+  status: number;
+  raw?: string;        // réponse brute du GedServlet (URL magique)
+  gedToken?: string;
+  dossier?: string;
+  error?: string;
+}
+
+/**
+ * Appelle le GedServlet de Spirit pour un bail (ou un mandat) et extrait le
+ * jeton GED + le dossier. Authentifié par Bearer (jeton Keycloak).
+ * Réponse attendue : une URL texte de la forme
+ *   https://ged1.ics.fr/#/login?token=…&dossier=…&login=…&mdp=…&cle=…
+ */
+export async function icsGedLink(
+  cfg: IcsConfigData, accessToken: string, params: { idBail?: string; idMandat?: string },
+): Promise<IcsGedLink> {
+  const base = (cfg.spiritApiBase || "https://spirit6back.ics.fr/GeranceNet").replace(/\/+$/, "");
+  const qs = new URLSearchParams({ idSociete: cfg.idSociete || "54246" });
+  if (params.idBail) qs.set("idBail", params.idBail);
+  if (params.idMandat) qs.set("idMandat", params.idMandat);
+  const url = `${base}/GedServlet?${qs}`;
+
+  let res: Response;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 20_000);
+    res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}`, Accept: "text/plain" }, signal: ctrl.signal });
+    clearTimeout(t);
+  } catch (e) {
+    return { ok: false, status: 0, error: `Appel GedServlet impossible : ${(e as Error).message}` };
+  }
+
+  const raw = (await res.text().catch(() => "")).trim();
+  if (!res.ok) {
+    return { ok: false, status: res.status, raw: raw.slice(0, 200), error: `GedServlet a renvoyé HTTP ${res.status}.` };
+  }
+  const tok = /[?&]token=([^&\s]+)/.exec(raw);
+  const dos = /[?&]dossier=([^&\s]+)/.exec(raw);
+  if (!tok) {
+    return { ok: false, status: res.status, raw: raw.slice(0, 200), error: "Réponse GedServlet inattendue (pas de jeton)." };
+  }
+  return { ok: true, status: res.status, raw, gedToken: tok[1], dossier: dos?.[1] };
 }
