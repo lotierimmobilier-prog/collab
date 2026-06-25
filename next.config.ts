@@ -31,6 +31,7 @@ const SECURITY_HEADERS = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,                 // retire "X-Powered-By: Next.js"
+  output: "standalone",                   // build autonome pour l'image Docker
 
   async headers() {
     return [
