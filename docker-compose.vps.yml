@@ -9,6 +9,11 @@ services:
     container_name: collab
     restart: unless-stopped
     env_file: .env.local            # DATABASE_URL, AUTH_SECRET, ANTHROPIC_API_KEY, NEXT_PUBLIC_GOOGLE_CLIENT_ID
+    # Force Next.js à écouter sur toutes les interfaces (sinon il se lie au nom
+    # d'hôte en réseau host et nginx → 127.0.0.1:3000 ne le joint pas → 502).
+    environment:
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
     # Réseau de l'hôte : le conteneur voit la base via localhost (comme l'ancien
     # pm2) et écoute sur :3000 que nginx proxifie déjà. Aucun changement de .env.
     network_mode: host
