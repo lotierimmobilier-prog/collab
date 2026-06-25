@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Task, COLUMNS, PRIORITY_STYLES, Status } from "@/lib/tasks";
+import { Task, COLUMNS, PRIORITY_STYLES, Status, RECURRENCES } from "@/lib/tasks";
 
 const GOLD = "#B8966A";
 
@@ -40,6 +40,7 @@ export default function TaskDetail({ task, onClose, onStatusChange, onUpdate }: 
   const [priority, setPriority]   = useState(task.priority);
   const [assigneeId, setAssignee] = useState(task.assigneeId ?? "");
   const [dueDate, setDueDate]     = useState(task.dueDate ?? "");
+  const [recurrence, setRecurrence] = useState(task.recurrence ?? "");
   const [tags, setTags]           = useState<string[]>(task.tags ?? []);
   const [project, setProject]     = useState(task.project ?? "");
 
@@ -66,6 +67,7 @@ export default function TaskDetail({ task, onClose, onStatusChange, onUpdate }: 
     setPriority(task.priority);
     setAssignee(task.assigneeId ?? "");
     setDueDate(task.dueDate ?? "");
+    setRecurrence(task.recurrence ?? "");
     setTags(task.tags ?? []);
     setProject(task.project ?? "");
     setEditMode(false);
@@ -78,7 +80,7 @@ export default function TaskDetail({ task, onClose, onStatusChange, onUpdate }: 
       const r = await fetch(`/api/tasks/${task.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), description: description || null, priority, assigneeId: assigneeId || null, dueDate: dueDate || null, tags, project: project || null }),
+        body: JSON.stringify({ title: title.trim(), description: description || null, priority, assigneeId: assigneeId || null, dueDate: dueDate || null, recurrence: recurrence || null, tags, project: project || null }),
       });
       if (r.ok) {
         const updated = await r.json();
@@ -276,6 +278,19 @@ export default function TaskDetail({ task, onClose, onStatusChange, onUpdate }: 
                 </span>
               )}
             </MetaField>
+
+            {/* Récurrence */}
+            {(editMode || (task.recurrence && task.recurrence !== "")) && (
+              <MetaField label="Récurrence">
+                {editMode ? (
+                  <select value={recurrence} onChange={e => setRecurrence(e.target.value)} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, background: "#f9fafb", outline: "none" }}>
+                    {RECURRENCES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+                  </select>
+                ) : (
+                  <span style={{ fontSize: 12, color: "#374151" }}>{RECURRENCES.find(r => r.id === task.recurrence)?.label ?? "—"}</span>
+                )}
+              </MetaField>
+            )}
 
             {/* Projet */}
             {(editMode || task.project) && (

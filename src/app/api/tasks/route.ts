@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   const body = await req.json();
-  const { title, description, status, priority, assigneeId, assigneeName, dueDate, tags, project, familyId, groupId } = body;
+  const { title, description, status, priority, assigneeId, assigneeName, dueDate, tags, project, familyId, groupId, recurrence } = body;
 
   if (!title?.trim()) return NextResponse.json({ error: "Titre requis" }, { status: 400 });
 
@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
       project:     project || null,
       familyId:    familyId || null,
       groupId:     groupId  || null,
+      recurrence:  recurrence || null,
       createdById: session.user.id,
       ...(status === "done" ? { completedAt: new Date(), completedById: session.user.id } : {}),
     },
