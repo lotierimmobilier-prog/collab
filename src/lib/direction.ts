@@ -24,7 +24,7 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     required: "label",
   },
   premises: {
-    strings: ["label", "address", "bailleur", "note"],
+    strings: ["label", "address", "bailleur", "insurer", "note"],
     dates:   ["startDate", "endDate"],
     numbers: ["rentMonthly", "charges"],
     required: "label",

@@ -37,12 +37,13 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    id: "locaux", resource: "premises", title: "Locaux de l'entreprise", required: "label", primary: "label",
+    id: "locaux", resource: "premises", title: "Locaux de l'entreprise", required: "label", primary: "label", detailBase: "/direction/local",
     expiry: [{ key: "endDate", label: "Fin de bail" }],
     fields: [
       { key: "label", label: "Désignation du local", type: "text", full: true },
       { key: "address", label: "Adresse", type: "text", full: true },
       { key: "bailleur", label: "Bailleur", type: "text" },
+      { key: "insurer", label: "Assureur", type: "text" },
       { key: "rentMonthly", label: "Loyer (€/mois)", type: "number" },
       { key: "charges", label: "Charges (€/mois)", type: "number" },
       { key: "startDate", label: "Début du bail", type: "date" },
@@ -56,8 +57,12 @@ const SECTIONS: Section[] = [
     fields: [
       { key: "holderName", label: "Titulaire", type: "text", full: true },
       { key: "cardNumber", label: "Numéro de carte", type: "text" },
-      { key: "cardType", label: "Type", type: "select", options: [
-        { value: "transaction", label: "Transaction" }, { value: "gestion", label: "Gestion immobilière" }, { value: "both", label: "Transaction + Gestion" } ] },
+      { key: "cardType", label: "Mention(s)", type: "select", options: [
+        { value: "transaction", label: "Transaction (T)" },
+        { value: "gestion",     label: "Gestion immobilière (G)" },
+        { value: "syndic",      label: "Syndic de copropriété (S)" },
+        { value: "tg",          label: "Transaction + Gestion (T + G)" },
+        { value: "tgs",         label: "T + G + S" } ] },
       { key: "issuedBy", label: "Délivrée par (CCI)", type: "text" },
       { key: "startDate", label: "Délivrance", type: "date" },
       { key: "expiryDate", label: "Date de validité", type: "date" },
@@ -83,7 +88,7 @@ const SECTIONS: Section[] = [
 
 const SELECT_LABEL: Record<string, string> = {
   propriete: "Propriété", leasing: "Leasing / LOA", location: "Location",
-  transaction: "Transaction", gestion: "Gestion", both: "Transaction + Gestion",
+  transaction: "Transaction (T)", gestion: "Gestion (G)", syndic: "Syndic (S)", both: "Transaction + Gestion", tg: "T + G", tgs: "T + G + S",
   rc: "Responsabilité civile", rcpro: "RC professionnelle", bureaux: "Assurance bureaux", autre: "Autre",
 };
 

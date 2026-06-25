@@ -466,9 +466,9 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
   const badge = senderInfo ? SENDER_BADGE[senderInfo.senderType] ?? SENDER_BADGE.unknown : null;
 
   // ── Export / impression PDF du fil complet (présentation professionnelle) ──
+  // Impression via iframe caché → boîte d'impression du navigateur où l'on
+  // choisit « Enregistrer au format PDF » (pas de popup à débloquer).
   function exportPdf() {
-    const w = window.open("", "_blank", "width=860,height=960");
-    if (!w) return;
     const esc = (s?: string) => (s || "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string));
     const addr = (a?: { name?: string; email: string }) => a ? esc(a.name ? `${a.name} <${a.email}>` : a.email) : "—";
     const list = (arr?: { name?: string; email: string }[]) => (arr && arr.length ? arr.map(addr).join(", ") : "—");
@@ -491,7 +491,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
     }).join("");
 
     const now = new Date().toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" });
-    w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(thread.subject || "Mail")}</title>
+    const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(thread.subject || "Mail")}</title>
       <style>
         @page { size: A4; margin: 16mm 14mm 18mm; }
         * { box-sizing: border-box; }
@@ -538,9 +538,21 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
         ${msgs}
         <div class="footer"><span>Lotier Immobilier — document généré le ${esc(now)}</span><span>Confidentiel</span></div>
       </div>
-      <script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>
-    </body></html>`);
-    w.document.close();
+    </body></html>`;
+
+    // Iframe caché : on imprime son contenu (→ « Enregistrer au format PDF »).
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
+    document.body.appendChild(iframe);
+    const cleanup = () => { setTimeout(() => { try { document.body.removeChild(iframe); } catch { /* déjà retiré */ } }, 1500); };
+    iframe.onload = () => {
+      const win = iframe.contentWindow;
+      if (!win) { cleanup(); return; }
+      setTimeout(() => { win.focus(); win.print(); cleanup(); }, 350);
+    };
+    const doc = iframe.contentWindow?.document;
+    if (doc) { doc.open(); doc.write(html); doc.close(); } else { document.body.removeChild(iframe); }
   }
 
   return (
