@@ -24,6 +24,10 @@ services:
     image: containrrr/watchtower
     container_name: watchtower
     restart: unless-stopped
+    environment:
+      # Docker récent (29.x) refuse l'API 1.25 par défaut de Watchtower : on
+      # force une version d'API compatible.
+      - DOCKER_API_VERSION=1.44
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${HOME}/.docker/config.json:/config.json:ro   # auth GHCR pour images privées
