@@ -114,8 +114,14 @@ export default function InternalChat() {
         fetchChannels();
       } else {
         const d = await r.json().catch(() => ({}));
-        setAttachErr(d.error || "Échec de l'envoi"); setInput(content); setPending(atts);
+        const reason = d.error
+          || (r.status === 413 ? "Fichier trop volumineux pour le serveur (limite réseau)."
+          :  r.status === 500 ? "Erreur serveur — les pièces jointes ne sont peut-être pas encore activées en base."
+          :  `Échec de l'envoi (code ${r.status}).`);
+        setAttachErr(reason); setInput(content); setPending(atts);
       }
+    } catch {
+      setAttachErr("Échec de l'envoi (réseau)."); setInput(content); setPending(atts);
     } finally { setSending(false); }
   }
 
