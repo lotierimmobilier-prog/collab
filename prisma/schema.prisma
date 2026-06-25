@@ -530,3 +530,26 @@ model DepotGarantie {
 
   @@map("depots_garantie")
 }
+
+/// Annuaire unifié : tout contact (interne ou externe) avec son type/label.
+/// Carnet d'adresses central, relié aux mails / tâches / agenda.
+model Contact {
+  id            String   @id @default(cuid())
+  type          String   @default("autre") // fournisseur|proprietaire|locataire|direction|commercial|tutelle|autre
+  prenom        String?
+  nom           String?
+  raisonSociale String?
+  email         String?
+  phone         String?
+  note          String?
+  /// Lien optionnel vers l'entité métier d'origine
+  sourceType    String?  // owner|tenant|supplier|user
+  sourceId      String?
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([email])
+  @@index([type])
+  @@map("contacts")
+}

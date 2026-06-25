@@ -15,6 +15,7 @@ export default function MessageriePage() {
 
         {/* Accès rapides */}
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <QuickLink href="/annuaire" icon="📒" label="Annuaire" />
           <QuickLink href="/taches"   icon="✅" label="Tâches" />
           <QuickLink href="/planning" icon="📅" label="Agenda" />
           <QuickLink href="/appels"   icon="📞" label="Appels" />
