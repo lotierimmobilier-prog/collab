@@ -250,17 +250,28 @@ export default function InternalChat() {
                   )}
                   {(msg.attachments?.length ?? 0) > 0 && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: msg.content ? 4 : 0, maxWidth: "70%", alignItems: msg.isMe ? "flex-end" : "flex-start" }}>
-                      {msg.attachments!.map((a, k) => (
-                        <a key={k} href={`data:${a.mime || "application/octet-stream"};base64,${a.data}`} download={a.name}
-                          title={`Télécharger ${a.name}`}
-                          style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "7px 10px", maxWidth: 260 }}>
-                          <span style={{ fontSize: 16, flexShrink: 0 }}>📎</span>
-                          <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: DARK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
-                            <span style={{ fontSize: 10, color: "#9ca3af" }}>{humanSize(a.size)}</span>
-                          </span>
-                        </a>
-                      ))}
+                      {msg.attachments!.map((a, k) => {
+                        const src = `data:${a.mime || "application/octet-stream"};base64,${a.data}`;
+                        const isImage = (a.mime || "").startsWith("image/");
+                        if (isImage) {
+                          return (
+                            <a key={k} href={src} target="_blank" rel="noreferrer" title={a.name} style={{ display: "block" }}>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={src} alt={a.name} style={{ maxWidth: 240, maxHeight: 240, borderRadius: 10, border: `1px solid ${BORDER}`, display: "block", objectFit: "cover" }} />
+                            </a>
+                          );
+                        }
+                        return (
+                          <a key={k} href={src} download={a.name} title={`Télécharger ${a.name}`}
+                            style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "7px 10px", maxWidth: 260 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: GOLD, flexShrink: 0 }}>↓</span>
+                            <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: DARK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+                              <span style={{ fontSize: 10, color: "#9ca3af" }}>{humanSize(a.size)}</span>
+                            </span>
+                          </a>
+                        );
+                      })}
                     </div>
                   )}
                   {msg.isMe && showSender && (
