@@ -99,9 +99,12 @@ model Task {
   dueDate      DateTime?
   tags         String[]
   project      String?
+  createdById  String?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
+  @@index([assigneeId])
+  @@index([createdById])
   @@map("tasks")
 }
 
@@ -284,9 +287,11 @@ model EmailMessage {
   labels      String[] @default([])
   senderType  String?  // "user"|"owner"|"tenant"|"unknown"
   senderId    String?
+  ownerId     String?  // utilisateur agence ayant synchronisé/envoyé ce message (cloisonnement)
   createdAt   DateTime @default(now())
 
   @@unique([uid, accountId, folder])
+  @@index([ownerId])
   @@map("email_messages")
 }
 

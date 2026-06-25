@@ -18,6 +18,19 @@ export async function GET(req: NextRequest) {
   const where: Record<string, unknown> = { folder, date: { gte: since } };
   if (accountId) where.accountId = accountId;
 
+  // Cloisonnement : on ne voit que les mails des comptes qu'on possède / qui nous
+  // sont partagés, ou ceux qu'on a soi-même synchronisés/envoyés (ownerId).
+  // Admin voit tout.
+  if (session.user.roleId !== "admin") {
+    const uid = session.user.id;
+    const configs = await prisma.mailAccountConfig.findMany({
+      where: { OR: [{ createdBy: uid }, { sharedUserIds: { has: uid } }] },
+      select: { id: true },
+    });
+    const allowed = configs.map(c => c.id);
+    where.OR = [{ accountId: { in: allowed } }, { ownerId: uid }];
+  }
+
   const messages = await prisma.emailMessage.findMany({
     where,
     orderBy: { date: "desc" },
@@ -59,6 +72,7 @@ export async function POST(req: NextRequest) {
           labels:     m.labels || ["inbox"],
           senderType: m.senderType,
           senderId:   m.senderId,
+          ownerId:    session.user.id,
         },
         update: {
           read:    m.status === "read",
@@ -66,6 +80,7 @@ export async function POST(req: NextRequest) {
           labels:  m.labels || ["inbox"],
           bodyText: m.bodyText || undefined,
           bodyHtml: m.body    || undefined,
+          ownerId:  session.user.id,
         },
       });
       saved++;

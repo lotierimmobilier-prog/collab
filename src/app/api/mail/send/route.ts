@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
         date:       new Date(),
         labels:     ["sent"],
         read:       true,
+        ownerId:    session.user.id,
       },
     }).catch(() => {}); // silencieux si erreur (ex: table manquante)
 

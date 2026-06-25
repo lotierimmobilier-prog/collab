@@ -33,7 +33,13 @@ export async function GET() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
+  // Cloisonnement : chacun ne voit que ses tâches (assignées ou créées) ; admin voit tout
+  const isAdmin = session.user.roleId === "admin";
+  const uid = session.user.id;
+  const where = isAdmin ? {} : { OR: [{ assigneeId: uid }, { createdById: uid }] };
+
   const tasks = await prisma.task.findMany({
+    where,
     orderBy: { createdAt: "desc" },
     include: {
       assignee: { select: { id: true, prenom: true, nom: true } },
@@ -67,6 +73,7 @@ export async function POST(req: NextRequest) {
       project:     project || null,
       familyId:    familyId || null,
       groupId:     groupId  || null,
+      createdById: session.user.id,
     },
     include: {
       assignee: { select: { id: true, prenom: true, nom: true } },
