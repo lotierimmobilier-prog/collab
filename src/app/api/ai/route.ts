@@ -146,6 +146,18 @@ const TOOLS: Anthropic.Tool[] = [
       required: ["channelId","content"],
     },
   },
+  {
+    name: "search_mail",
+    description: "Recherche dans les emails de l'utilisateur courant (uniquement sa propre messagerie). Utile pour retrouver une information, un expéditeur, un objet ou un échange.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query:  { type: "string", description: "Mots-clés à chercher dans l'objet, l'expéditeur ou le contenu." },
+        from:   { type: "string", description: "Filtrer par adresse/expéditeur (optionnel)." },
+        limit:  { type: "number", description: "Nombre max de résultats (défaut 15)." },
+      },
+    },
+  },
 ];
 
 // ── Exécution des outils ─────────────────────────────────────
@@ -440,6 +452,45 @@ async function executeTool(
       }
       sideEffects.push({ type: "message_sent", id: msg.id, title: input.content as string });
       return { ok: true, messageId: msg.id };
+    }
+
+    case "search_mail": {
+      // Cloisonnement strict : Auguste ne lit QUE la messagerie de l'utilisateur
+      // courant (comptes dont il est l'agent, ou messages qui lui sont rattachés),
+      // quel que soit son rôle.
+      const configs = await prisma.mailAccountConfig.findMany({ where: { sharedUserIds: { has: userId } }, select: { id: true } });
+      const allowed = configs.map(c => c.id);
+      const q = (input.query as string | undefined)?.trim();
+      const from = (input.from as string | undefined)?.trim();
+      const limit = Math.min(Number(input.limit) || 15, 40);
+      const since = new Date(); since.setMonth(since.getMonth() - 6);
+
+      const where: Record<string, unknown> = {
+        date: { gte: since },
+        OR: [{ accountId: { in: allowed } }, { ownerId: userId }],
+      };
+      const and: Record<string, unknown>[] = [];
+      if (q) and.push({ OR: [
+        { subject:   { contains: q, mode: "insensitive" } },
+        { fromName:  { contains: q, mode: "insensitive" } },
+        { fromEmail: { contains: q, mode: "insensitive" } },
+        { bodyText:  { contains: q, mode: "insensitive" } },
+      ] });
+      if (from) and.push({ fromEmail: { contains: from, mode: "insensitive" } });
+      if (and.length) where.AND = and;
+
+      const mails = await prisma.emailMessage.findMany({
+        where, orderBy: { date: "desc" }, take: limit,
+        select: { subject: true, fromName: true, fromEmail: true, toEmail: true, date: true, bodyText: true, folder: true },
+      });
+      return mails.map(m => ({
+        objet: m.subject,
+        de: m.fromName ? `${m.fromName} <${m.fromEmail}>` : m.fromEmail,
+        a: m.toEmail,
+        date: m.date.toISOString().split("T")[0],
+        dossier: m.folder,
+        extrait: (m.bodyText || "").replace(/\s+/g, " ").slice(0, 280),
+      }));
     }
 
     default:
