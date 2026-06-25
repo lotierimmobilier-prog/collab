@@ -228,6 +228,21 @@ model Setting {
   @@map("settings")
 }
 
+// ── Journal des demandes à Auguste (audit admin) ─────────────
+model AugusteLog {
+  id        String   @id @default(cuid())
+  userId    String
+  userName  String
+  question  String
+  reply     String?
+  tools     String[] @default([])
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId])
+  @@map("auguste_logs")
+}
+
 // ── Annonces ─────────────────────────────────────────────────
 
 model Announcement {
