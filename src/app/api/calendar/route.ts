@@ -11,10 +11,13 @@ export async function GET(req: NextRequest) {
   const from = searchParams.get("from");
   const to   = searchParams.get("to");
 
+  // Chevauchement de la fenêtre [from, to] : un événement est inclus dès qu'il
+  // recoupe la période (début ≤ to ET fin ≥ from). Évite d'exclure ceux qui
+  // débordent la semaine (journées entières, multi-jours).
   const all = await prisma.calendarEvent.findMany({
     where: {
-      ...(from && { start: { gte: new Date(from) } }),
-      ...(to   && { end:   { lte: new Date(to)   } }),
+      ...(to   && { start: { lte: new Date(to)   } }),
+      ...(from && { end:   { gte: new Date(from) } }),
     },
     orderBy: { start: "asc" },
   });
