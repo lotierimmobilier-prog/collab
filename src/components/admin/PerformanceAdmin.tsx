@@ -78,9 +78,11 @@ export default function PerformanceAdmin() {
       const r = map.get(e.userId)!;
       r[e.type] = (r[e.type] ?? 0) + 1;
       r.total = (r.total ?? 0) + 1;
+      r.ca = (r.ca ?? 0) + (e.amount ?? 0);
     }
     return [...map.entries()].sort((a, b) => (b[1].total ?? 0) - (a[1].total ?? 0));
   }, [entries]);
+  const fmtEuro = (n: number) => n ? `${n.toLocaleString("fr-FR")} €` : "—";
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: 24, background: "#F3F1EC" }}>
@@ -120,7 +122,7 @@ export default function PerformanceAdmin() {
             <Field label="Bien / référence (option.)">
               <input value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} placeholder="12 rue… / réf." style={inp} />
             </Field>
-            <Field label="Montant € (option.)">
+            <Field label="CA / honoraires € (opt.)">
               <input type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" style={inp} />
             </Field>
             <button onClick={add} disabled={saving}
@@ -144,7 +146,8 @@ export default function PerformanceAdmin() {
                 <tr style={{ background: "#FAFAF8", color: "#6b7280", fontSize: 11, textTransform: "uppercase" }}>
                   <th style={{ ...th, textAlign: "left" }}>Agent</th>
                   {PERF_TYPES.map(t => <th key={t.id} style={th}>{t.short}</th>)}
-                  <th style={th}>Total</th>
+                  <th style={th}>Mandats</th>
+                  <th style={th}>CA</th>
                 </tr>
               </thead>
               <tbody>
@@ -153,6 +156,7 @@ export default function PerformanceAdmin() {
                     <td style={{ ...td, textAlign: "left", fontWeight: 600 }}>{i === 0 ? "🥇 " : i === 1 ? "🥈 " : i === 2 ? "🥉 " : ""}{userName(uid)}</td>
                     {PERF_TYPES.map(t => <td key={t.id} style={td}>{r[t.id] ?? 0}</td>)}
                     <td style={{ ...td, fontWeight: 700, color: GOLD }}>{r.total ?? 0}</td>
+                    <td style={{ ...td, fontWeight: 600 }}>{fmtEuro(r.ca ?? 0)}</td>
                   </tr>
                 ))}
               </tbody>
