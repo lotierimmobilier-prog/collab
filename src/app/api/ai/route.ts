@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
+import { searchDrive } from "@/lib/googleDrive";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -144,6 +145,17 @@ const TOOLS: Anthropic.Tool[] = [
         content:   { type: "string" },
       },
       required: ["channelId","content"],
+    },
+  },
+  {
+    name: "search_drive",
+    description: "Recherche des documents dans le Google Drive partagé de l'agence (lecture seule). Utilise-le quand l'utilisateur cherche un fichier, un document, un contrat, un bail, une facture, etc. Renvoie les noms et liens des fichiers trouvés.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Termes de recherche (mots-clés du document recherché)" },
+      },
+      required: ["query"],
     },
   },
 ];
@@ -427,6 +439,14 @@ async function executeTool(
       return { ok: true, messageId: msg.id };
     }
 
+    case "search_drive": {
+      const result = await searchDrive(String(input.query ?? ""), 8);
+      if (!result.configured) return { error: "L'accès au Google Drive de l'agence n'est pas configuré." };
+      if (result.error) return { error: result.error };
+      if (result.files.length === 0) return { files: [], message: "Aucun document trouvé dans le Drive partagé." };
+      return { files: result.files.map(f => ({ nom: f.name, lien: f.link, modifié: f.modifiedTime })) };
+    }
+
     default:
       return { error: `Outil inconnu: ${name}` };
   }
@@ -458,6 +478,7 @@ Tu as accès aux données réelles et peux agir directement sur le logiciel :
 - Messagerie interne : lire, envoyer
 - Utilisateurs : consulter la liste
 - Notifications : consulter
+- Google Drive de l'agence : rechercher des documents en LECTURE SEULE (search_drive). Quand on te demande un fichier/document/contrat/bail/facture, utilise search_drive et cite les fichiers trouvés avec leur lien. Tu ne peux jamais écrire ni modifier le Drive.
 
 ══ RÈGLES DE CRÉATION (TRÈS IMPORTANTES) ══
 
