@@ -1,7 +1,8 @@
 "use client";
-import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import Sidebar from "@/components/Sidebar";
+import Topbar from "@/components/Topbar";
 import { DEFAULT_CONTACT_CATEGORIES, ContactCategory } from "@/lib/contactCategories";
 
 const GOLD = "#B8966A";
@@ -72,24 +73,39 @@ export default function AnnuairePage() {
 
   const counts = categories.map(t => ({ ...t, n: contacts.filter(c => c.type === t.id).length }));
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#F3F1EC", overflow: "hidden" }}>
-      {/* Barre haut */}
-      <div style={{ height: 44, flexShrink: 0, background: "#fff", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", padding: "0 16px", gap: 12 }}>
-        <Link href="/" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 7, background: "#F7F0E6", border: `1px solid ${GOLD}44`, borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, color: GOLD }}>← Retour Collab</Link>
-        <span style={{ fontSize: 13, fontWeight: 600, color: DARK }}>Annuaire</span>
-        <Link href="/messagerie" style={{ marginLeft: "auto", textDecoration: "none", fontSize: 12, fontWeight: 600, color: "#1C1A17", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "5px 11px" }}>✉ Messagerie</Link>
-      </div>
+  function exportCsv() {
+    const head = ["Type", "Prénom", "Nom", "Raison sociale", "Email", "Téléphone", "Note"];
+    const esc = (v: string) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const rows = contacts.map(c => [
+      typeMeta(categories, c.type).label, c.prenom ?? "", c.nom ?? "", c.raisonSociale ?? "",
+      c.email ?? "", c.phone ?? "", c.note ?? "",
+    ].map(esc).join(";"));
+    const csv = "﻿" + [head.map(esc).join(";"), ...rows].join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = `annuaire-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  }
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "20px 24px" }}>
+  return (
+    <div style={{ display: "flex", minHeight: "100vh", background: "#F3F1EC" }}>
+      <Sidebar active="annuaire" />
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100vh", overflow: "hidden" }}>
+        <Topbar title="Annuaire" />
+
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "20px 24px" }}>
         <div style={{ maxWidth: 900, margin: "0 auto" }}>
           {/* Recherche + ajout */}
-          <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center", flexWrap: "wrap" }}>
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher un contact (nom, email, téléphone)…"
-              style={{ flex: 1, height: 38, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 12px", fontSize: 13, outline: "none", background: "#fff" }} />
+              style={{ flex: 1, minWidth: 220, height: 38, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 12px", fontSize: 13, outline: "none", background: "#fff" }} />
             <button onClick={importExisting} disabled={importing} title="Rapprocher propriétaires, locataires, fournisseurs et agents déjà en base"
               style={{ background: "#fff", color: "#374151", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
               {importing ? "Import…" : "⤓ Importer l'existant"}
+            </button>
+            <button onClick={exportCsv} disabled={contacts.length === 0} title="Télécharger l'annuaire au format CSV (Excel)"
+              style={{ background: "#fff", color: "#374151", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: contacts.length ? "pointer" : "default", opacity: contacts.length ? 1 : 0.5, whiteSpace: "nowrap" }}>
+              ⤒ Exporter (CSV)
             </button>
             {isAdmin && (
               <button onClick={() => setShowCats(true)} title="Gérer les catégories de contacts"
@@ -147,6 +163,7 @@ export default function AnnuairePage() {
               })}
             </div>
           )}
+        </div>
         </div>
       </div>
 
