@@ -38,7 +38,7 @@ export async function GET_teams() {
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session?.user || session.user.roleId !== "admin")
+  if (!session?.user || !["admin","direction","dirigeant"].includes(session.user.roleId ?? ""))
     return NextResponse.json({ error: "Réservé aux admins" }, { status: 403 });
 
   const { name, description, color, icon, teamId } = await req.json();

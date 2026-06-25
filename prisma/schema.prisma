@@ -631,10 +631,14 @@ model Premise {
   label       String    // nom / désignation du local
   address     String?
   bailleur    String?
+  insurer     String?   // assureur du local
   startDate   DateTime?
   endDate     DateTime?
   rentMonthly Float?
   charges     Float?
+  documents   Json?     // documents (assurance, bail, diagnostics…) : fichiers base64
+  sinistres   Json?     // [{ id, date, type, declared, description }]
+  controls    Json?     // contrôles de sécurité [{ id, type, date, nextDate, status, note }]
   note        String?
   createdById String?
   createdAt   DateTime  @default(now())

@@ -26,7 +26,6 @@ export interface Task {
 export const COLUMNS: { id: Status; label: string; color: string }[] = [
   { id: "todo",       label: "À faire",     color: "#6b7280" },
   { id: "inprogress", label: "En cours",    color: "#f59e0b" },
-  { id: "review",     label: "En révision", color: "#B8966A" },
   { id: "done",       label: "Terminé",     color: "#10b981" },
 ];
 
