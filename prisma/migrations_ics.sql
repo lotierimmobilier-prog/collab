@@ -54,3 +54,8 @@ CREATE TABLE IF NOT EXISTS ics_tenants (
 );
 CREATE INDEX IF NOT EXISTS ics_tenants_nomlocataire_idx ON ics_tenants ("nomLocataire");
 CREATE INDEX IF NOT EXISTS ics_tenants_nomproprietaire_idx ON ics_tenants ("nomProprietaire");
+
+-- Rapprochement des fiches annuaire avec les références ICS.
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "icsType"  TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "icsRef"   TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "icsIdLot" TEXT;

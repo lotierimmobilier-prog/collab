@@ -570,6 +570,10 @@ model Contact {
   /// Lien optionnel vers l'entité métier d'origine
   sourceType    String?  // owner|tenant|supplier|user
   sourceId      String?
+  /// Rapprochement ICS (renseigné à l'import de l'export Locataires)
+  icsType       String?  // locataire|proprietaire|coproprietaire
+  icsRef        String?  // idBail (locataire) ou idMandat (propriétaire)
+  icsIdLot      String?
   createdById   String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
