@@ -511,6 +511,7 @@ Confirme toujours clairement ce qui a été fait, par exemple :
 - Pour les questions légales : base-toi sur la loi française, indique si ta connaissance est limitée à août 2025`;
 
   const sideEffects: SideEffect[] = [];
+  const toolsUsed: string[] = [];
 
   const apiMessages: Anthropic.MessageParam[] = messages.map((m: { role: string; content: string }) => ({
     role: m.role as "user" | "assistant",
@@ -543,6 +544,7 @@ Confirme toujours clairement ce qui a été fait, par exemple :
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     for (const block of assistantContent) {
       if (block.type !== "tool_use") continue;
+      toolsUsed.push(block.name);
       const result = await executeTool(
         block.name,
         block.input as Record<string, unknown>,
@@ -559,6 +561,18 @@ Confirme toujours clairement ce qui a été fait, par exemple :
 
     apiMessages.push({ role: "user", content: toolResults });
   }
+
+  // Journalise la demande (audit admin) — best-effort, ne bloque pas la réponse
+  const lastUser = [...(messages as { role: string; content: string }[])].reverse().find(m => m.role === "user")?.content ?? "";
+  prisma.augusteLog.create({
+    data: {
+      userId,
+      userName: userName || "—",
+      question: String(lastUser).slice(0, 2000),
+      reply: finalText.slice(0, 4000),
+      tools: [...new Set(toolsUsed)],
+    },
+  }).catch(() => {});
 
   return NextResponse.json({ reply: finalText, sideEffects });
 }
