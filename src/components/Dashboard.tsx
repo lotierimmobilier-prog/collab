@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { PERF_TYPES } from "@/lib/performance";
 
 const GOLD = "#B8966A"; const GOLD_BG = "#F7F0E6"; const BORDER = "#E6E1D9";
 
@@ -33,14 +34,32 @@ const CALL_STATUS: Record<string, { label: string; color: string; bg: string }> 
   callback: { label: "Rappel",     color: "#6366F1", bg: "#EEF2FF" },
 };
 
+// ─── Rafraîchissement auto à chaque ouverture / focus de la page ──
+// Le tableau de bord reste monté lors de la navigation côté client : sans
+// ce signal, le planning (et les autres blocs) affichent des données figées.
+function useAutoRefresh() {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setTick(t => t + 1);
+    const onVisible = () => { if (document.visibilityState === "visible") bump(); };
+    window.addEventListener("focus", bump);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", bump);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+  return tick;
+}
+
 // ─── Bloc Tâches ───────────────────────────────────────────────
-function TasksBlock() {
+function TasksBlock({ refreshKey }: { refreshKey: number }) {
   const [tasks, setTasks]   = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/tasks?status=todo,in_progress&limit=15").then(r => r.json()).then(d => setTasks(Array.isArray(d) ? d : d.tasks ?? [])).finally(() => setLoading(false));
-  }, []);
+  }, [refreshKey]);
 
   async function done(id: string) {
     await fetch(`/api/tasks/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "done" }) });
@@ -72,13 +91,13 @@ function TasksBlock() {
 }
 
 // ─── Bloc Appels ────────────────────────────────────────────────
-function CallsBlock() {
+function CallsBlock({ refreshKey }: { refreshKey: number }) {
   const [calls, setCalls]   = useState<PhoneCall[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ contact: "", phone: "", direction: "inbound", subject: "" });
 
-  useEffect(() => { fetch("/api/phone-calls").then(r => r.json()).then(setCalls).finally(() => setLoading(false)); }, []);
+  useEffect(() => { fetch("/api/phone-calls").then(r => r.json()).then(setCalls).finally(() => setLoading(false)); }, [refreshKey]);
 
   async function add() {
     if (!form.contact) return;
@@ -147,13 +166,13 @@ function CallsBlock() {
 }
 
 // ─── Bloc Mails ─────────────────────────────────────────────────
-function MailsBlock() {
+function MailsBlock({ refreshKey }: { refreshKey: number }) {
   const [threads, setThreads] = useState<MailThread[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/mail/messages?limit=10").then(r => r.json()).then(d => setThreads(Array.isArray(d) ? d : d.messages ?? [])).catch(() => setThreads([])).finally(() => setLoading(false));
-  }, []);
+  }, [refreshKey]);
 
   const COLORS = ["#B8966A","#2563EB","#059669","#7C3AED","#DC2626"];
   function avatarColor(s: string) { let h = 0; for (const c of s) h = (h*31+c.charCodeAt(0))%COLORS.length; return COLORS[h]; }
@@ -188,7 +207,7 @@ function MailsBlock() {
 }
 
 // ─── Bloc Agenda ────────────────────────────────────────────────
-function AgendaBlock() {
+function AgendaBlock({ refreshKey }: { refreshKey: number }) {
   const [events, setEvents] = useState<CalEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -197,7 +216,7 @@ function AgendaBlock() {
     const start = new Date(now); start.setDate(now.getDate() - now.getDay() + 1); start.setHours(0,0,0,0);
     const end   = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999);
     fetch(`/api/calendar?from=${start.toISOString()}&to=${end.toISOString()}`).then(r => r.json()).then(d => setEvents(Array.isArray(d) ? d : [])).catch(() => setEvents([])).finally(() => setLoading(false));
-  }, []);
+  }, [refreshKey]);
 
   const today = new Date().toDateString();
   const todayEvents = events.filter(e => new Date(e.start).toDateString() === today);
@@ -254,7 +273,7 @@ function EventRow({ event, highlight }: { event: CalEvent; highlight?: boolean }
 }
 
 // ─── Bloc Notes ─────────────────────────────────────────────────
-function NotesBlock() {
+function NotesBlock({ refreshKey }: { refreshKey: number }) {
   const [notes, setNotes]   = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<string | null>(null);
@@ -262,7 +281,7 @@ function NotesBlock() {
   const [addColor, setAddColor] = useState(NOTE_COLORS[0]);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => { fetch("/api/notes").then(r => r.json()).then(setNotes).finally(() => setLoading(false)); }, []);
+  useEffect(() => { fetch("/api/notes").then(r => r.json()).then(setNotes).finally(() => setLoading(false)); }, [refreshKey]);
 
   async function addNote() {
     if (!draft.trim()) return;
@@ -331,6 +350,75 @@ function NotesBlock() {
   );
 }
 
+// ─── Bloc Classement du trimestre ───────────────────────────────
+interface RankRow { userId: string; name: string; roleId: string | null; counts: Record<string, number>; amount: number; total: number }
+
+function RankingBlock({ refreshKey, currentUserId }: { refreshKey: number; currentUserId?: string }) {
+  const [data, setData]     = useState<{ quarterLabel: string; ranking: RankRow[]; totals: Record<string, number> } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/performance/ranking").then(r => r.json())
+      .then(d => setData(d?.ranking ? d : { quarterLabel: "", ranking: [], totals: {} }))
+      .catch(() => setData({ quarterLabel: "", ranking: [], totals: {} }))
+      .finally(() => setLoading(false));
+  }, [refreshKey]);
+
+  const ranking = data?.ranking ?? [];
+  const totals  = data?.totals ?? {};
+  const medal = (i: number) => (i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`);
+
+  return (
+    <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, boxShadow: "0 1px 4px rgba(0,0,0,0.05)", overflow: "hidden" }}>
+      <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid #f3f4f6`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>🏆 Classement du trimestre</span>
+          {data?.quarterLabel && <span style={{ background: GOLD_BG, color: GOLD, borderRadius: 8, padding: "1px 8px", fontSize: 10, fontWeight: 700 }}>{data.quarterLabel}</span>}
+        </div>
+      </div>
+      <div style={{ padding: "10px 16px 14px" }}>
+        {loading && <div style={{ padding: "16px 0", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>Chargement…</div>}
+        {!loading && ranking.length === 0 && (
+          <div style={{ padding: "16px 0", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>Aucune opération enregistrée ce trimestre.</div>
+        )}
+        {!loading && ranking.length > 0 && (
+          <>
+            {/* En-tête colonnes */}
+            <div style={{ display: "grid", gridTemplateColumns: "28px 1fr repeat(4, 38px) 42px", gap: 4, alignItems: "center", padding: "0 4px 6px", fontSize: 9, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" }}>
+              <span></span><span></span>
+              {PERF_TYPES.map(t => <span key={t.id} title={t.label} style={{ textAlign: "center" }}>{t.icon}</span>)}
+              <span style={{ textAlign: "center" }}>Tot.</span>
+            </div>
+            {ranking.slice(0, 8).map((r, i) => {
+              const isMe = r.userId === currentUserId;
+              return (
+                <div key={r.userId} style={{ display: "grid", gridTemplateColumns: "28px 1fr repeat(4, 38px) 42px", gap: 4, alignItems: "center", padding: "6px 4px", borderTop: i === 0 ? "none" : "1px solid #f6f6f4", background: isMe ? GOLD_BG : "transparent", borderRadius: 6 }}>
+                  <span style={{ fontSize: 13, textAlign: "center" }}>{medal(i)}</span>
+                  <span style={{ fontSize: 12, fontWeight: isMe ? 700 : 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {r.name}{isMe && <span style={{ color: GOLD, fontWeight: 700 }}> · vous</span>}
+                  </span>
+                  {PERF_TYPES.map(t => (
+                    <span key={t.id} style={{ textAlign: "center", fontSize: 12, color: r.counts[t.id] ? t.color : "#d1d5db", fontWeight: r.counts[t.id] ? 700 : 400 }}>
+                      {r.counts[t.id] ?? 0}
+                    </span>
+                  ))}
+                  <span style={{ textAlign: "center", fontSize: 13, fontWeight: 700, color: GOLD }}>{r.total}</span>
+                </div>
+              );
+            })}
+            {/* Total agence */}
+            <div style={{ display: "grid", gridTemplateColumns: "28px 1fr repeat(4, 38px) 42px", gap: 4, alignItems: "center", padding: "8px 4px 2px", marginTop: 4, borderTop: "2px solid #f3f4f6", fontSize: 11, fontWeight: 700, color: "#6b7280" }}>
+              <span></span><span style={{ textTransform: "uppercase", fontSize: 10 }}>Total agence</span>
+              {PERF_TYPES.map(t => <span key={t.id} style={{ textAlign: "center", color: t.color }}>{totals[t.id] ?? 0}</span>)}
+              <span style={{ textAlign: "center", color: GOLD }}>{PERF_TYPES.reduce((s, t) => s + (totals[t.id] ?? 0), 0)}</span>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Conteneur générique ────────────────────────────────────────
 function Block({ title, count, href, loading, empty, emptyMsg, children, action }: {
   title: string; count?: number; href: string; loading: boolean; empty: boolean; emptyMsg: string; children: React.ReactNode; action?: React.ReactNode;
@@ -362,6 +450,8 @@ const inp: React.CSSProperties = { height: 32, border: `1px solid ${BORDER}`, bo
 export default function Dashboard() {
   const { data: session } = useSession();
   const firstName = (session?.user as { prenom?: string })?.prenom ?? session?.user?.name?.split(" ")[0] ?? "vous";
+  const currentUserId = (session?.user as { id?: string })?.id;
+  const refreshKey = useAutoRefresh();
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
@@ -374,17 +464,22 @@ export default function Dashboard() {
         <div style={{ fontSize: 42, opacity: 0.15 }}>◈</div>
       </div>
 
+      {/* Classement du trimestre — pleine largeur */}
+      <div style={{ marginBottom: 16 }}>
+        <RankingBlock refreshKey={refreshKey} currentUserId={currentUserId} />
+      </div>
+
       {/* Grille 2×2 */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <TasksBlock />
-        <CallsBlock />
-        <MailsBlock />
-        <AgendaBlock />
+        <TasksBlock refreshKey={refreshKey} />
+        <CallsBlock refreshKey={refreshKey} />
+        <MailsBlock refreshKey={refreshKey} />
+        <AgendaBlock refreshKey={refreshKey} />
       </div>
 
       {/* Notes — pleine largeur en bas */}
       <div style={{ marginTop: 16 }}>
-        <NotesBlock />
+        <NotesBlock refreshKey={refreshKey} />
       </div>
     </div>
   );

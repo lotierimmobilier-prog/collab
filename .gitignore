@@ -22,3 +22,6 @@ Thumbs.db
 npm-debug.log*
 
 /src/generated/prisma
+
+# TypeScript incremental build info
+tsconfig.tsbuildinfo

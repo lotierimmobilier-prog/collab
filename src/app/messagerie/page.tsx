@@ -1,5 +1,6 @@
 import Link from "next/link";
 import MailBoard from "@/components/mail/MailBoard";
+import UserMenu from "@/components/UserMenu";
 
 const GOLD = "#B8966A";
 
@@ -14,11 +15,12 @@ export default function MessageriePage() {
         <span className="hide-sm" style={{ fontSize: 13, fontWeight: 600, color: "#1C1A17", flexShrink: 0 }}>Messagerie</span>
 
         {/* Accès rapides */}
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexShrink: 0 }}>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <QuickLink href="/annuaire" icon="📒" label="Annuaire" />
           <QuickLink href="/taches"   icon="✅" label="Tâches" />
           <QuickLink href="/planning" icon="📅" label="Agenda" />
           <QuickLink href="/appels"   icon="📞" label="Appels" />
+          <UserMenu />
         </div>
       </div>
       {/* Contenu plein écran */}
