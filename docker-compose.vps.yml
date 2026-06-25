@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────
-# À placer sur le VPS (ex: /opt/collab/docker-compose.yml).
-# Tire l'image construite par GitHub Actions et l'auto-met à jour
-# via Watchtower. Lancer :  docker compose up -d
+# À lancer depuis le dossier du repo sur le VPS (/var/www/collab) :
+#   docker compose -f docker-compose.vps.yml up -d
+# Réutilise le .env existant. Watchtower auto-met à jour l'image.
 # ─────────────────────────────────────────────────────────────
 services:
   app:
@@ -9,8 +9,9 @@ services:
     container_name: collab
     restart: unless-stopped
     env_file: .env            # DATABASE_URL, AUTH_SECRET, ANTHROPIC_API_KEY, NEXT_PUBLIC_GOOGLE_CLIENT_ID
-    ports:
-      - "127.0.0.1:3000:3000" # exposé en local ; nginx fait le reverse proxy + TLS
+    # Réseau de l'hôte : le conteneur voit la base via localhost (comme l'ancien
+    # pm2) et écoute sur :3000 que nginx proxifie déjà. Aucun changement de .env.
+    network_mode: host
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
 
