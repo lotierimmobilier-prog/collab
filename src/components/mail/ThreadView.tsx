@@ -15,7 +15,7 @@ interface Props {
   users?: { id: string; prenom: string; nom: string; email?: string }[];
   onClose: () => void;
   onReply: (m: MailMessage) => void;
-  onForward?: (data: { to: string; subject: string; body: string; accountId: string }) => void;
+  onForward?: (data: { to: string; cc?: string; subject: string; body: string; accountId: string }) => void;
   onApplyLabel: (id: string) => void;
   onRemoveLabel: (id: string) => void;
   onStar: () => void;
@@ -428,6 +428,31 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
     });
   }
 
+  // ── Répondre à tous : expéditeur en destinataire + autres (To/Cc d'origine) en copie ──
+  function replyAll() {
+    const myEmail = (account?.email || "").toLowerCase();
+    const fromEmail = lastMsg.from.email;
+    const others = [
+      ...(lastMsg.to || []),
+      ...(lastMsg.cc || []),
+    ]
+      .map(r => r.email)
+      .filter(Boolean)
+      .filter(e => {
+        const le = e.toLowerCase();
+        return le !== myEmail && le !== fromEmail.toLowerCase();
+      });
+    const cc = [...new Set(others)].join(", ");
+    const quote = `\n\n\nLe ${new Date(lastMsg.date).toLocaleString("fr-FR")}, ${lastMsg.from.name || fromEmail} a écrit :\n${(lastMsg.bodyText || (lastMsg.body || "").replace(/<[^>]+>/g, "")).trim()}`;
+    onForward?.({
+      to: fromEmail,
+      cc,
+      subject: /^re\s*:/i.test(thread.subject) ? thread.subject : `Re: ${thread.subject}`,
+      body: quote,
+      accountId: thread.accountId,
+    });
+  }
+
   const badge = senderInfo ? SENDER_BADGE[senderInfo.senderType] ?? SENDER_BADGE.unknown : null;
 
   return (
@@ -646,6 +671,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
 
         <AiBtn loading={aiLoading === "summarize"} onClick={summarize}       icon="📝" label="Résumer" />
         <AiBtn loading={aiLoading === "draft"}     onClick={draftReply}      icon="✍" label="Répondre" />
+        {onForward && <AiBtn loading={false} onClick={replyAll} icon="↩↩" label="Répondre à tous" />}
         {onForward && <AiBtn loading={false} onClick={() => forward("")} icon="↪" label="Transférer" />}
         <AiBtn loading={aiLoading === "task"}      onClick={suggestTask}     icon="✅" label="Créer une tâche" />
         <AiBtn loading={aiLoading === "rdv"}       onClick={detectRdv}       icon="📅" label="Valider un RDV" />
