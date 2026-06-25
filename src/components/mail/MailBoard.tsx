@@ -48,11 +48,12 @@ export default function MailBoard() {
   const [showLabels, setShowLabels]             = useState(false);
   const [labelsOpen, setLabelsOpen]             = useState(false);
   const [showCompose, setShowCompose]           = useState(false);
+  const [forwardData, setForwardData]           = useState<{ to: string; subject: string; body: string; accountId: string } | null>(null);
   const [aiKey, setAiKey]                       = useState("");
   const [syncing, setSyncing]                   = useState<string | null>(null);
   const [syncStatus, setSyncStatus]             = useState("");
   const [loadingBody, setLoadingBody]           = useState(false);
-  const [users, setUsers]                       = useState<{ id: string; prenom: string; nom: string }[]>([]);
+  const [users, setUsers]                       = useState<{ id: string; prenom: string; nom: string; email?: string }[]>([]);
   const [nextSyncIn, setNextSyncIn]             = useState(SYNC_INTERVAL / 1000);
 
   // Pagination
@@ -115,7 +116,7 @@ export default function MailBoard() {
     if (l) setLabels(JSON.parse(l));
     const k = localStorage.getItem(AI_KEY_STORE);
     if (k) setAiKey(k);
-    fetch("/api/users").then(r => r.json()).then((us: { id: string; prenom: string; nom: string; active: boolean }[]) => setUsers(us.filter(u => u.active))).catch(() => {});
+    fetch("/api/users").then(r => r.json()).then((us: { id: string; prenom: string; nom: string; email?: string; active: boolean }[]) => setUsers(us.filter(u => u.active))).catch(() => {});
     setGmailConfigs(loadGmailConfigs());
 
     // Charger les emails persistés en BDD au démarrage
@@ -752,6 +753,10 @@ export default function MailBoard() {
       </div>
 
       {showCompose && <ComposeModal accounts={accounts} gmailConfigs={gmailConfigs} labels={customLabels} onClose={() => setShowCompose(false)} onSend={msg => { addMessage(msg); setShowCompose(false); }} />}
+      {forwardData && <ComposeModal accounts={accounts} gmailConfigs={gmailConfigs} labels={customLabels}
+        replyTo={{ to: forwardData.to, subject: forwardData.subject, accountId: forwardData.accountId }}
+        initialBody={forwardData.body}
+        onClose={() => setForwardData(null)} onSend={msg => { addMessage(msg); setForwardData(null); }} />}
       {showImapConfig && <AccountConfigPanel accounts={accounts} onSave={async (newList) => {
         // Détecter les comptes ajoutés (pas de dbId)
         const updatedList: MailAccount[] = [];
@@ -798,6 +803,7 @@ export default function MailBoard() {
               users={users}
               onClose={() => setSelectedThread(null)}
               onReply={msg => { addMessage(msg); setSelectedThread(prev => prev ? { ...prev, messages: [...prev.messages, msg] } : null); }}
+              onForward={data => setForwardData(data)}
               onApplyLabel={id => applyLabel(selectedThread.id, id)}
               onRemoveLabel={id => removeLabel(selectedThread.id, id)}
               onStar={() => toggleStar(selectedThread.id)}
@@ -841,10 +847,11 @@ function GIcon() {
   );
 }
 
-function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo }: {
+function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo, initialBody }: {
   accounts: MailAccount[]; gmailConfigs: GmailConfig[];
   labels: MailLabel[]; onClose: () => void; onSend: (m: MailMessage) => void;
   replyTo?: { to: string; subject: string; inReplyTo?: string; accountId?: string };
+  initialBody?: string;
 }) {
   const allAccounts = [
     ...gmailConfigs.map(c => ({ id: c.accountId, dbId: undefined as string|undefined, label: `${c.email}`, email: c.email, name: c.name ?? c.email, smtpHost: "", smtpPort: 587, smtpSsl: true, username: c.email, password: "", signature: "", color: "#4285f4" })),
@@ -856,7 +863,7 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
   const [to, setTo]               = useState(replyTo?.to ?? "");
   const [cc, setCc]               = useState("");
   const [subject, setSubject]     = useState(replyTo?.subject ?? "");
-  const [body, setBody]           = useState("");
+  const [body, setBody]           = useState(initialBody ?? "");
   const [showCc, setShowCc]       = useState(false);
   const [showSig, setShowSig]     = useState(false);
   const [sending, setSending]     = useState(false);
