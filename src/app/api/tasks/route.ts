@@ -11,6 +11,7 @@ function formatTask(t: {
   id: string; title: string; description: string | null; status: string;
   priority: string; assigneeName: string | null; dueDate: Date | null;
   tags: string[]; project: string | null; createdAt: Date; updatedAt: Date;
+  completedAt?: Date | null; completedById?: string | null;
   assignee?: { id: string; prenom: string; nom: string } | null;
   family?: { id: string; name: string; color: string } | null;
   group?: { id: string; name: string } | null;
@@ -24,6 +25,8 @@ function formatTask(t: {
     assigneeInitials: a ? (a.prenom[0] + a.nom[0]).toUpperCase() : undefined,
     assigneeColor:    a ? colorForId(a.id) : undefined,
     dueDate:          t.dueDate?.toISOString().split("T")[0] ?? undefined,
+    completedAt:      t.completedAt?.toISOString() ?? undefined,
+    completedById:    t.completedById ?? undefined,
     createdAt:        t.createdAt.toISOString(),
     updatedAt:        t.updatedAt.toISOString(),
   };
@@ -74,6 +77,7 @@ export async function POST(req: NextRequest) {
       familyId:    familyId || null,
       groupId:     groupId  || null,
       createdById: session.user.id,
+      ...(status === "done" ? { completedAt: new Date(), completedById: session.user.id } : {}),
     },
     include: {
       assignee: { select: { id: true, prenom: true, nom: true } },
