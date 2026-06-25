@@ -1,6 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+
+const MAX_ATTACH_BYTES = 20 * 1024 * 1024; // 20 Mo
+const ATTACH_TTL_DAYS  = 30;
+
+interface Attachment { name: string; size: number; mime?: string; data: string }
+
+// Purge paresseuse : retire les pièces jointes de plus de 30 jours (SQL brut
+// pour éviter le typage Json nul de Prisma).
+async function purgeOldAttachments() {
+  await prisma.$executeRawUnsafe(
+    `UPDATE internal_messages SET attachments = NULL
+       WHERE attachments IS NOT NULL
+         AND "createdAt" < now() - INTERVAL '${ATTACH_TTL_DAYS} days'`
+  ).catch(() => {});
+}
 
 // GET — messages d'un channel, avec marquage "lu"
 export async function GET(req: NextRequest) {
@@ -16,6 +32,8 @@ export async function GET(req: NextRequest) {
     where: { channelId_userId: { channelId, userId: session.user.id } },
   });
   if (!membership) return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+
+  await purgeOldAttachments();
 
   const messages = await prisma.internalMessage.findMany({
     where: { channelId },
@@ -37,6 +55,7 @@ export async function GET(req: NextRequest) {
     id: m.id,
     channelId: m.channelId,
     content: m.content,
+    attachments: m.attachments ?? [],
     createdAt: m.createdAt.toISOString(),
     sender: m.sender,
     isMe: m.senderId === session.user!.id,
@@ -48,8 +67,16 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const { channelId, content } = await req.json();
-  if (!channelId || !content?.trim()) return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 });
+  const { channelId, content, attachments } = await req.json();
+  const atts: Attachment[] = Array.isArray(attachments) ? attachments : [];
+  const text = (content || "").trim();
+  if (!channelId || (!text && atts.length === 0))
+    return NextResponse.json({ error: "Message ou pièce jointe requis" }, { status: 400 });
+
+  // Validation des pièces jointes : taille totale ≤ 20 Mo.
+  const totalBytes = atts.reduce((s, a) => s + (Number(a.size) || Math.ceil((a.data?.length || 0) * 3 / 4)), 0);
+  if (totalBytes > MAX_ATTACH_BYTES)
+    return NextResponse.json({ error: "Pièces jointes trop volumineuses (max 20 Mo)" }, { status: 413 });
 
   const membership = await prisma.channelMember.findUnique({
     where: { channelId_userId: { channelId, userId: session.user.id } },
@@ -60,7 +87,9 @@ export async function POST(req: NextRequest) {
     data: {
       channelId,
       senderId: session.user.id,
-      content: content.trim(),
+      content: text,
+      // Json optionnel : on omet le champ s'il n'y a pas de pièce jointe.
+      ...(atts.length ? { attachments: atts as unknown as Prisma.InputJsonValue } : {}),
       readBy: [session.user.id],
     },
     include: { sender: { select: { id: true, prenom: true, nom: true, avatar: true } } },
@@ -76,7 +105,7 @@ export async function POST(req: NextRequest) {
         userId: m.userId,
         type: "message",
         title: `${session.user.prenom ?? ""} ${session.user.nom ?? ""}`,
-        body: content.trim().slice(0, 100),
+        body: text ? text.slice(0, 100) : `📎 ${atts.length} pièce(s) jointe(s)`,
         link: "/messagerie-interne",
       },
     });
@@ -86,6 +115,7 @@ export async function POST(req: NextRequest) {
     id: message.id,
     channelId: message.channelId,
     content: message.content,
+    attachments: atts,
     createdAt: message.createdAt.toISOString(),
     sender: message.sender,
     isMe: true,

@@ -186,6 +186,28 @@ export default function Topbar({ title }: { title: string }) {
 
 const NEWS = [
   {
+    version: "v1.5",
+    title: "Tableau de bord & annuaire",
+    items: [
+      "Classement du trimestre (ventes, mandats, mises en location)",
+      "Synchronisation automatique du tableau de bord à chaque ouverture",
+      "Clic sur un mail du tableau de bord → ouverture directe",
+      "Annuaire cloisonné par rôle + catégories personnalisables (admin)",
+      "Tâches terminées : date, heure et auteur de la complétion",
+    ],
+  },
+  {
+    version: "v1.4",
+    title: "Messagerie & pièces jointes",
+    items: [
+      "Pièces jointes dans la messagerie interne (jusqu'à 20 Mo)",
+      "Dossier « Publicité » pour les newsletters",
+      "Historique des envoyés sur 6 mois",
+      "Brouillon IA en fenêtre centrée avec signature",
+      "Menu profil (mot de passe, téléphone, déconnexion)",
+    ],
+  },
+  {
     version: "v1.3",
     title: "Messagerie interne & notifications",
     items: [

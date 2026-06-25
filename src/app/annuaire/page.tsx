@@ -1,6 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
+import { DEFAULT_CONTACT_CATEGORIES, ContactCategory } from "@/lib/contactCategories";
 
 const GOLD = "#B8966A";
 const DARK = "#1C1A17";
@@ -12,28 +14,34 @@ interface Contact {
   email?: string | null; phone?: string | null; note?: string | null;
 }
 
-const TYPES: { id: string; label: string; color: string }[] = [
-  { id: "fournisseur",  label: "Fournisseurs",  color: "#0EA5E9" },
-  { id: "proprietaire", label: "Propriétaires", color: "#8B5CF6" },
-  { id: "locataire",    label: "Locataires",    color: "#10B981" },
-  { id: "direction",    label: "Direction",     color: "#B8966A" },
-  { id: "commercial",   label: "Agents comm.",  color: "#F59E0B" },
-  { id: "tutelle",      label: "Tutelles",      color: "#EF4444" },
-  { id: "autre",        label: "Autres",        color: "#6B7280" },
-];
-const typeMeta = (t: string) => TYPES.find(x => x.id === t) ?? TYPES[TYPES.length - 1];
+const typeMeta = (cats: ContactCategory[], t: string) =>
+  cats.find(x => x.id === t) ?? cats[cats.length - 1] ?? { id: t, label: t, color: "#6B7280" };
 const contactName = (c: Contact) => c.raisonSociale || [c.prenom, c.nom].filter(Boolean).join(" ") || c.email || "—";
 
 export default function AnnuairePage() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.roleId === "admin";
+
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [categories, setCategories] = useState<ContactCategory[]>(DEFAULT_CONTACT_CATEGORIES);
   const [filter, setFilter] = useState("");
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [showCats, setShowCats] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState("");
   const [taskFor, setTaskFor] = useState<Contact | null>(null);
   const [rdvFor, setRdvFor]   = useState<Contact | null>(null);
+
+  const loadCategories = useCallback(async () => {
+    try {
+      const r = await fetch("/api/contacts/categories");
+      const d = await r.json();
+      if (Array.isArray(d.categories) && d.categories.length) setCategories(d.categories);
+    } catch { /* garde les défauts */ }
+  }, []);
+  useEffect(() => { loadCategories(); }, [loadCategories]);
 
   async function importExisting() {
     setImporting(true); setImportMsg("");
@@ -62,7 +70,7 @@ export default function AnnuairePage() {
 
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
 
-  const counts = TYPES.map(t => ({ ...t, n: contacts.filter(c => c.type === t.id).length }));
+  const counts = categories.map(t => ({ ...t, n: contacts.filter(c => c.type === t.id).length }));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#F3F1EC", overflow: "hidden" }}>
@@ -83,8 +91,17 @@ export default function AnnuairePage() {
               style={{ background: "#fff", color: "#374151", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
               {importing ? "Import…" : "⤓ Importer l'existant"}
             </button>
+            {isAdmin && (
+              <button onClick={() => setShowCats(true)} title="Gérer les catégories de contacts"
+                style={{ background: "#fff", color: "#374151", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                🏷 Catégories
+              </button>
+            )}
             <button onClick={() => setShowAdd(true)} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>+ Ajouter</button>
           </div>
+          {!isAdmin && session?.user && (
+            <div style={{ fontSize: 11.5, color: "#9ca3af", marginTop: -8, marginBottom: 12 }}>Vous voyez vos propres contacts. La direction dispose d&apos;une vue globale de l&apos;annuaire.</div>
+          )}
           {importMsg && <div style={{ fontSize: 12, color: "#059669", marginTop: -8, marginBottom: 12 }}>{importMsg}</div>}
 
           {/* Filtres par type */}
@@ -105,7 +122,7 @@ export default function AnnuairePage() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {contacts.map(c => {
-                const m = typeMeta(c.type);
+                const m = typeMeta(categories, c.type);
                 return (
                   <div key={c.id} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
                     <div style={{ width: 38, height: 38, borderRadius: "50%", background: m.color + "1A", color: m.color, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
@@ -133,7 +150,8 @@ export default function AnnuairePage() {
         </div>
       </div>
 
-      {showAdd && <AddContactModal onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />}
+      {showAdd && <AddContactModal categories={categories} onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />}
+      {showCats && <CategoryManagerModal categories={categories} onClose={() => setShowCats(false)} onChange={setCategories} />}
       {taskFor && <TaskFromContactModal contact={taskFor} onClose={() => setTaskFor(null)} />}
       {rdvFor  && <RdvFromContactModal  contact={rdvFor}  onClose={() => setRdvFor(null)} />}
     </div>
@@ -245,8 +263,8 @@ function ModalShell({ title, onClose, children }: { title: string; onClose: () =
   );
 }
 
-function AddContactModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ type: "fournisseur", prenom: "", nom: "", raisonSociale: "", email: "", phone: "", note: "" });
+function AddContactModal({ categories, onClose, onSaved }: { categories: ContactCategory[]; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({ type: categories[0]?.id ?? "autre", prenom: "", nom: "", raisonSociale: "", email: "", phone: "", note: "" });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
@@ -272,7 +290,7 @@ function AddContactModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
         <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 12 }}>
           <L label="Type">
             <select value={form.type} onChange={e => set("type", e.target.value)} style={inp}>
-              {TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+              {categories.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
           </L>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -292,6 +310,62 @@ function AddContactModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
         </div>
       </div>
     </div>
+  );
+}
+
+function CategoryManagerModal({ categories, onClose, onChange }: { categories: ContactCategory[]; onClose: () => void; onChange: (c: ContactCategory[]) => void }) {
+  const [label, setLabel] = useState("");
+  const [color, setColor] = useState("#6B7280");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const PALETTE = ["#0EA5E9", "#8B5CF6", "#10B981", "#B8966A", "#F59E0B", "#EF4444", "#EC4899", "#6B7280"];
+
+  async function add() {
+    if (!label.trim()) return;
+    setSaving(true); setErr("");
+    try {
+      const r = await fetch("/api/contacts/categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label: label.trim(), color }) });
+      const d = await r.json();
+      if (!r.ok) { setErr(d.error || "Erreur"); return; }
+      onChange(d.categories); setLabel("");
+    } catch { setErr("Erreur réseau"); }
+    finally { setSaving(false); }
+  }
+
+  async function remove(id: string) {
+    const r = await fetch(`/api/contacts/categories?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    const d = await r.json();
+    if (r.ok) onChange(d.categories);
+  }
+
+  return (
+    <ModalShell title="🏷 Catégories de contacts" onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 6 }}>
+        {categories.map(c => (
+          <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 4px", borderBottom: "1px solid #f3f4f6" }}>
+            <span style={{ width: 12, height: 12, borderRadius: "50%", background: c.color, flexShrink: 0 }} />
+            <span style={{ flex: 1, fontSize: 13, color: DARK }}>{c.label}</span>
+            {c.custom
+              ? <button onClick={() => remove(c.id)} title="Supprimer" style={{ background: "none", border: "none", color: "#d1d5db", fontSize: 16, cursor: "pointer" }}>×</button>
+              : <span style={{ fontSize: 10, color: "#9ca3af" }}>par défaut</span>}
+          </div>
+        ))}
+      </div>
+      <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 6, textTransform: "uppercase" }}>Nouvelle catégorie</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input value={label} onChange={e => setLabel(e.target.value)} placeholder="Nom de la catégorie" style={{ ...inp, flex: 1 }} />
+          <button onClick={add} disabled={saving || !label.trim()} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "0 14px", height: 36, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{saving ? "…" : "Ajouter"}</button>
+        </div>
+        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+          {PALETTE.map(c => (
+            <button key={c} onClick={() => setColor(c)} style={{ width: 22, height: 22, borderRadius: "50%", background: c, border: color === c ? `2px solid ${DARK}` : "2px solid transparent", cursor: "pointer", padding: 0 }} />
+          ))}
+        </div>
+        {err && <span style={{ color: "#dc2626", fontSize: 12, display: "block", marginTop: 6 }}>{err}</span>}
+      </div>
+    </ModalShell>
   );
 }
 

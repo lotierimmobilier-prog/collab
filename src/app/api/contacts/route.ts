@@ -1,20 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { seesAllContacts } from "@/lib/contactCategories";
 
-const TYPES = new Set(["fournisseur", "proprietaire", "locataire", "direction", "commercial", "tutelle", "autre"]);
-
-/** GET /api/contacts?type=&q=  → liste de l'annuaire unifié. */
+/** GET /api/contacts?type=&q=  → liste de l'annuaire unifié.
+ *  Cloisonnement : admin / gestionnaire / direction voient tout ;
+ *  les autres ne voient que les contacts qu'ils ont créés. */
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const type = req.nextUrl.searchParams.get("type") || "";
+  const type = (req.nextUrl.searchParams.get("type") || "").trim();
   const q = (req.nextUrl.searchParams.get("q") || "").trim();
+  const seeAll = seesAllContacts(session.user.roleId);
 
   const contacts = await prisma.contact.findMany({
     where: {
-      ...(TYPES.has(type) ? { type } : {}),
+      ...(seeAll ? {} : { createdById: session.user.id }),
+      ...(type ? { type } : {}),
       ...(q ? { OR: [
         { nom:           { contains: q, mode: "insensitive" } },
         { prenom:        { contains: q, mode: "insensitive" } },
@@ -36,7 +39,9 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  const type = TYPES.has(body.type) ? body.type : "autre";
+  // Le type peut être une catégorie par défaut ou personnalisée (admin) ;
+  // on accepte tout identifiant non vide, sinon « autre ».
+  const type = (body.type || "").trim() || "autre";
   const email = (body.email || "").toLowerCase().trim() || null;
   const prenom = (body.prenom || "").trim() || null;
   const nom = (body.nom || "").trim() || null;

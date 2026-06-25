@@ -14,9 +14,17 @@ interface Channel {
   lastMessage?: { content: string; createdAt: string } | null;
   unread: number;
 }
+interface Attachment { name: string; size: number; mime?: string; data: string }
 interface Message {
   id: string; channelId: string; content: string; createdAt: string;
-  sender: Member; isMe: boolean;
+  sender: Member; isMe: boolean; attachments?: Attachment[];
+}
+
+const MAX_ATTACH_BYTES = 20 * 1024 * 1024; // 20 Mo
+function humanSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} Mo`;
 }
 
 export default function InternalChat() {
@@ -26,11 +34,33 @@ export default function InternalChat() {
   const [messages, setMessages]           = useState<Message[]>([]);
   const [input, setInput]                 = useState("");
   const [sending, setSending]             = useState(false);
+  const [pending, setPending]             = useState<Attachment[]>([]);
+  const [attachErr, setAttachErr]         = useState("");
   const [showNewDirect, setShowNewDirect] = useState(false);
   const [showNewGroup, setShowNewGroup]   = useState(false);
   const [allUsers, setAllUsers]           = useState<Member[]>([]);
   const messagesEnd = useRef<HTMLDivElement>(null);
+  const fileRef     = useRef<HTMLInputElement>(null);
   const pollRef     = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  async function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    setAttachErr("");
+    const files = Array.from(e.target.files ?? []);
+    if (e.target) e.target.value = "";
+    const next: Attachment[] = [...pending];
+    for (const f of files) {
+      const data = await new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(String(r.result).split(",")[1] ?? "");
+        r.onerror = rej;
+        r.readAsDataURL(f);
+      });
+      next.push({ name: f.name, size: f.size, mime: f.type || undefined, data });
+    }
+    const total = next.reduce((s, a) => s + a.size, 0);
+    if (total > MAX_ATTACH_BYTES) { setAttachErr("Pièces jointes trop volumineuses (max 20 Mo au total)."); return; }
+    setPending(next);
+  }
 
   const fetchChannels = useCallback(async () => {
     const r = await fetch("/api/internal/channels");
@@ -67,20 +97,24 @@ export default function InternalChat() {
   }, [messages]);
 
   async function send() {
-    if (!input.trim() || !activeChannel || sending) return;
+    if ((!input.trim() && pending.length === 0) || !activeChannel || sending) return;
     setSending(true);
     const content = input.trim();
-    setInput("");
+    const atts = pending;
+    setInput(""); setPending([]); setAttachErr("");
     try {
       const r = await fetch("/api/internal/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channelId: activeChannel.id, content }),
+        body: JSON.stringify({ channelId: activeChannel.id, content, attachments: atts }),
       });
       if (r.ok) {
         const msg = await r.json();
         setMessages(prev => [...prev, msg]);
         fetchChannels();
+      } else {
+        const d = await r.json().catch(() => ({}));
+        setAttachErr(d.error || "Échec de l'envoi"); setInput(content); setPending(atts);
       }
     } finally { setSending(false); }
   }
@@ -198,14 +232,31 @@ export default function InternalChat() {
                       <span style={{ fontSize: 10, color: "#9ca3af" }}>{formatTime(msg.createdAt)}</span>
                     </div>
                   )}
-                  <div style={{
-                    maxWidth: "70%", padding: "8px 12px", borderRadius: msg.isMe ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                    background: msg.isMe ? GOLD : "#f3f4f6",
-                    color: msg.isMe ? "#fff" : DARK,
-                    fontSize: 13, lineHeight: 1.5,
-                  }}>
-                    {msg.content}
-                  </div>
+                  {msg.content && (
+                    <div style={{
+                      maxWidth: "70%", padding: "8px 12px", borderRadius: msg.isMe ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                      background: msg.isMe ? GOLD : "#f3f4f6",
+                      color: msg.isMe ? "#fff" : DARK,
+                      fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word",
+                    }}>
+                      {msg.content}
+                    </div>
+                  )}
+                  {(msg.attachments?.length ?? 0) > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: msg.content ? 4 : 0, maxWidth: "70%", alignItems: msg.isMe ? "flex-end" : "flex-start" }}>
+                      {msg.attachments!.map((a, k) => (
+                        <a key={k} href={`data:${a.mime || "application/octet-stream"};base64,${a.data}`} download={a.name}
+                          title={`Télécharger ${a.name}`}
+                          style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "7px 10px", maxWidth: 260 }}>
+                          <span style={{ fontSize: 16, flexShrink: 0 }}>📎</span>
+                          <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: DARK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+                            <span style={{ fontSize: 10, color: "#9ca3af" }}>{humanSize(a.size)}</span>
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
                   {msg.isMe && showSender && (
                     <span style={{ fontSize: 10, color: "#9ca3af", marginTop: 2 }}>{formatTime(msg.createdAt)}</span>
                   )}
@@ -216,21 +267,39 @@ export default function InternalChat() {
           </div>
 
           {/* Saisie */}
-          <div style={{ padding: "12px 20px", borderTop: `1px solid ${BORDER}`, display: "flex", gap: 8 }}>
-            <input
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
-              placeholder={`Message à ${activeChannel.name}…`}
-              style={{ flex: 1, height: 40, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "0 14px", fontSize: 13, outline: "none", fontFamily: "inherit", background: "#f9fafb" }}
-            />
-            <button
-              onClick={send}
-              disabled={!input.trim() || sending}
-              style={{ background: input.trim() ? GOLD : "#e5e7eb", color: input.trim() ? "#fff" : "#9ca3af", border: "none", borderRadius: 10, padding: "0 16px", fontSize: 13, fontWeight: 600, cursor: input.trim() ? "pointer" : "default", transition: "background 0.15s" }}
-            >
-              ↑
-            </button>
+          <div style={{ padding: "10px 20px 12px", borderTop: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", gap: 6 }}>
+            {/* Pièces jointes en attente */}
+            {pending.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {pending.map((a, k) => (
+                  <span key={k} style={{ display: "flex", alignItems: "center", gap: 6, background: "#F7F0E6", border: `1px solid ${GOLD}44`, borderRadius: 8, padding: "4px 8px", fontSize: 11, color: DARK }}>
+                    📎 <span style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+                    <span style={{ color: "#9ca3af" }}>{humanSize(a.size)}</span>
+                    <button onClick={() => setPending(p => p.filter((_, j) => j !== k))} style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {attachErr && <span style={{ fontSize: 11, color: "#dc2626" }}>{attachErr}</span>}
+            <div style={{ display: "flex", gap: 8 }}>
+              <input ref={fileRef} type="file" multiple onChange={onPickFiles} style={{ display: "none" }} />
+              <button onClick={() => fileRef.current?.click()} title="Joindre des fichiers (max 20 Mo)"
+                style={{ flexShrink: 0, width: 40, height: 40, border: `1px solid ${BORDER}`, borderRadius: 10, background: "#f9fafb", cursor: "pointer", fontSize: 16, color: "#6b7280" }}>📎</button>
+              <input
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
+                placeholder={`Message à ${activeChannel.name}…`}
+                style={{ flex: 1, height: 40, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "0 14px", fontSize: 13, outline: "none", fontFamily: "inherit", background: "#f9fafb" }}
+              />
+              <button
+                onClick={send}
+                disabled={(!input.trim() && pending.length === 0) || sending}
+                style={{ background: (input.trim() || pending.length) ? GOLD : "#e5e7eb", color: (input.trim() || pending.length) ? "#fff" : "#9ca3af", border: "none", borderRadius: 10, padding: "0 16px", fontSize: 13, fontWeight: 600, cursor: (input.trim() || pending.length) ? "pointer" : "default", transition: "background 0.15s" }}
+              >
+                ↑
+              </button>
+            </div>
           </div>
         </div>
       ) : (

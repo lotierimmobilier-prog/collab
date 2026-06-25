@@ -62,7 +62,7 @@ function TasksBlock({ refreshKey }: { refreshKey: number }) {
   }, [refreshKey]);
 
   async function done(id: string) {
-    await fetch(`/api/tasks/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "done" }) });
+    await fetch(`/api/tasks/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "done" }) });
     setTasks(p => p.filter(t => t.id !== id));
   }
 
