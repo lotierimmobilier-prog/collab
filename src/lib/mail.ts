@@ -114,8 +114,28 @@ export function getPreset(email: string) {
   return domain ? IMAP_PRESETS[domain] : undefined;
 }
 
+// Signature de contenu d'un message : sert à dédoublonner les copies d'un même
+// email (re-synchronisé avec un uid différent → plusieurs lignes en base).
+function messageSignature(m: MailMessage): string {
+  const inReply = (m as { messageId?: string }).messageId;
+  if (inReply) return `mid:${inReply}`;
+  return `${m.from.email}|${new Date(m.date).getTime()}|${(m.subject || "").trim()}|${(m.bodyText || "").slice(0, 80)}`;
+}
+
+export function dedupeMessages(messages: MailMessage[]): MailMessage[] {
+  const seen = new Set<string>();
+  const out: MailMessage[] = [];
+  for (const m of messages) {
+    const sig = messageSignature(m);
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+    out.push(m);
+  }
+  return out;
+}
+
 export function threadFromMessages(messages: MailMessage[]): MailThread {
-  const sorted = [...messages].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const sorted = dedupeMessages([...messages].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
   const participants = [...new Set(sorted.flatMap(m => [m.from.email, ...m.to.map(t => t.email)]))];
   return {
     id: sorted[0]?.threadId ?? "",
