@@ -222,7 +222,9 @@ function AgentQuickConnect({ users, colorIndex, onSave, onCancel }: { users: Use
           port: 993, smtpPort: 587,
           username: email, password,
           color: ACCOUNT_COLORS[colorIndex % ACCOUNT_COLORS.length],
-          active: true, isShared: false, sharedUserIds: [],
+          // L'agent choisi devient le seul à accéder à cette boîte (cloisonnement) ;
+          // l'admin qui paramètre n'y a pas accès.
+          active: true, isShared: true, sharedUserIds: [selectedUser],
         });
       }
     } catch { setTestResult({ ok: false, error: "Erreur réseau" }); }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import nodemailer from "nodemailer";
+import { resolveAccountOwner } from "@/lib/mailOwner";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -56,12 +57,15 @@ export async function POST(req: NextRequest) {
   try {
     const info = await transport.sendMail(mailOptions);
 
-    // Sauvegarder le mail envoyé en base pour l'historique Auguste
+    // Sauvegarder le mail envoyé en base pour l'historique Auguste.
+    // Rattaché à l'agent de la boîte (cloisonnement), sinon à l'expéditeur.
     const toStr = Array.isArray(to) ? to.join(", ") : String(to);
+    const sentAccountId = accountId ?? "local";
+    const owner = (accountId ? await resolveAccountOwner(accountId) : null) ?? session.user.id;
     await prisma.emailMessage.create({
       data: {
         uid:        `sent-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        accountId:  accountId ?? "local",
+        accountId:  sentAccountId,
         folder:     "SENT",
         threadId:   inReplyTo ?? `thread-sent-${Date.now()}`,
         fromEmail:  fromEmail ?? username,
@@ -73,7 +77,7 @@ export async function POST(req: NextRequest) {
         date:       new Date(),
         labels:     ["sent"],
         read:       true,
-        ownerId:    session.user.id,
+        ownerId:    owner,
       },
     }).catch(() => {}); // silencieux si erreur (ex: table manquante)
 

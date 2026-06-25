@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/auth";
+import { resolveAccountOwner } from "@/lib/mailOwner";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { ImapFlow } = require("imapflow");
 
@@ -32,7 +34,7 @@ async function identifySender(email: string): Promise<{ senderType: string; send
 
 // Synchronise un dossier IMAP donné, page par page
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function syncFolder(client: any, folder: string, accountId: string, since: Date, page: number) {
+async function syncFolder(client: any, folder: string, accountId: string, since: Date, page: number, ownerId: string) {
   const messages: Array<Record<string, unknown>> = [];
   let total = 0;
   let totalPages = 0;
@@ -94,8 +96,9 @@ async function syncFolder(client: any, folder: string, accountId: string, since:
                 threadId, labels,
                 senderType: identity.senderType,
                 senderId: identity.senderId,
+                ownerId,
               },
-              update: { read: !isUnread, starred: isStarred, senderType: identity.senderType, senderId: identity.senderId },
+              update: { read: !isUnread, starred: isStarred, senderType: identity.senderType, senderId: identity.senderId, ownerId },
             });
           } catch { /* ignore contrainte unique */ }
         }
@@ -137,6 +140,9 @@ async function detectSentFolder(client: any): Promise<string | null> {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ ok: false, error: "Non authentifié" }, { status: 401 });
+
   const body = await req.json();
   let { host, port, ssl, username, password } = body;
   const { accountId, page = 1, syncSent = true } = body;
@@ -151,6 +157,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Paramètres incomplets" }, { status: 400 });
   }
 
+  // Le contenu synchronisé est rattaché à l'agent de la boîte (cloisonnement) ;
+  // pour un compte local non géré en base, à l'utilisateur courant.
+  const ownerId = (accountId ? await resolveAccountOwner(accountId) : null) ?? session.user.id;
+
   const since = new Date();
   since.setMonth(since.getMonth() - MONTHS_BACK);
 
@@ -160,14 +170,14 @@ export async function POST(req: NextRequest) {
     await client.connect();
 
     // Sync INBOX
-    const inbox = await syncFolder(client, "INBOX", accountId, since, page);
+    const inbox = await syncFolder(client, "INBOX", accountId, since, page, ownerId);
 
     // Sync Envoyés (uniquement page 1 pour ne pas alourdir)
     let sentCount = 0;
     if (syncSent && page === 1) {
       const sentFolder = await detectSentFolder(client);
       if (sentFolder) {
-        const sent = await syncFolder(client, sentFolder, accountId, since, 1);
+        const sent = await syncFolder(client, sentFolder, accountId, since, 1, ownerId);
         sentCount = sent.messages.length;
       }
     }
