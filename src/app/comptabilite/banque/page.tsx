@@ -5,7 +5,7 @@ import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
 import { SERVICES, serviceMeta, ACCOUNT_KINDS, accountKindMeta, fmtEuro } from "@/lib/comptabilite";
 
-const GOLD = "#B8966A"; const DARK = "#1C1A17"; const BORDER = "#E6E1D9";
+const GOLD = "#B8966A"; const GOLD_BG = "#F7F0E6"; const DARK = "#1C1A17"; const BORDER = "#E6E1D9";
 
 interface Account { id: string; name: string; kind: string; openingBalance: number; threshold: number | null }
 interface Txn { id: string; accountId: string; date: string; label: string; amount: number; service: string | null; recurring: boolean; source: string }
@@ -41,7 +41,7 @@ export default function ComptaBanquePage() {
           <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
             <div style={{ maxWidth: 1040, margin: "0 auto" }}>
               <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
-                {([["tresorerie", "💰 Trésorerie"], ["operations", "📑 Opérations"], ["import", "⤓ Importer un relevé"]] as const).map(([id, label]) => (
+                {([["tresorerie", "Trésorerie"], ["operations", "Opérations"], ["import", "Importer un relevé"]] as const).map(([id, label]) => (
                   <button key={id} onClick={() => setTab(id)}
                     style={{ border: `1px solid ${tab === id ? GOLD : BORDER}`, background: tab === id ? "#F7F0E6" : "#fff", color: tab === id ? GOLD : "#6b7280", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{label}</button>
                 ))}
@@ -69,10 +69,10 @@ function TresorerieTab({ accounts, reloadAccounts }: { accounts: Account[]; relo
   return (
     <div>
       {summary?.alerts && summary.alerts.length > 0 && (
-        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", marginBottom: 4 }}>⚠ Alertes de seuil</div>
+        <div style={{ background: "#FBF7F0", border: `1px solid ${GOLD}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: DARK, marginBottom: 4 }}>Alertes de seuil</div>
           {summary.alerts.map(a => (
-            <div key={a.accountId} style={{ fontSize: 12, color: "#991B1B" }}>{a.name} : solde {fmtEuro(a.balance)} — sous le seuil de {fmtEuro(a.threshold)}</div>
+            <div key={a.accountId} style={{ fontSize: 12, color: "#6b7280" }}>{a.name} : solde <strong style={{ color: DARK }}>{fmtEuro(a.balance)}</strong> — sous le seuil de {fmtEuro(a.threshold)}</div>
           ))}
         </div>
       )}
@@ -102,7 +102,7 @@ function TresorerieTab({ accounts, reloadAccounts }: { accounts: Account[]; relo
                 <div style={{ fontSize: 14, fontWeight: 600, color: DARK }}>{t.name}</div>
                 <div style={{ fontSize: 11, color: "#9ca3af" }}>{km?.label}{t.threshold != null ? ` · seuil ${fmtEuro(t.threshold)}` : ""}</div>
               </div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: t.belowThreshold ? "#DC2626" : t.balance < 0 ? "#DC2626" : "#059669" }}>{fmtEuro(t.balance)}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: (t.belowThreshold || t.balance < 0) ? "#9B2C2C" : DARK }}>{fmtEuro(t.balance)}</div>
             </div>
           );
         })}
@@ -200,7 +200,7 @@ function OperationsTab({ accounts }: { accounts: Account[] }) {
           <option value="none">Non ventilé</option>
           {SERVICES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
-        <button onClick={classifyAll} disabled={classifying} style={{ background: "#FFFBEB", color: GOLD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{classifying ? "⏳ Ventilation…" : "✨ Ventiler avec Auguste"}</button>
+        <button onClick={classifyAll} disabled={classifying} style={{ background: GOLD_BG, color: GOLD, border: `1px solid ${GOLD}55`, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{classifying ? "Ventilation en cours…" : "Ventiler avec Auguste"}</button>
         <button onClick={() => setShowAdd(true)} style={{ marginLeft: "auto", background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Opération</button>
       </div>
 
@@ -214,9 +214,9 @@ function OperationsTab({ accounts }: { accounts: Account[] }) {
               <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderTop: i ? "1px solid #f3f4f6" : "none" }}>
                 <span style={{ fontSize: 11, color: "#9ca3af", width: 64, flexShrink: 0 }}>{new Date(t.date).toLocaleDateString("fr-FR")}</span>
                 <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: DARK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {t.label}{t.recurring && <span title="Récurrent" style={{ marginLeft: 6, fontSize: 10, color: GOLD }}>↻</span>}
+                  {t.label}{t.recurring && <span style={{ marginLeft: 8, fontSize: 9, fontWeight: 700, letterSpacing: "0.04em", color: GOLD, border: `1px solid ${GOLD}55`, borderRadius: 4, padding: "1px 5px", textTransform: "uppercase" }}>Récurrent</span>}
                 </span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: t.amount < 0 ? "#DC2626" : "#059669", width: 100, textAlign: "right", flexShrink: 0 }}>{fmtEuro(t.amount)}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: t.amount < 0 ? "#9B2C2C" : DARK, width: 100, textAlign: "right", flexShrink: 0 }}>{fmtEuro(t.amount)}</span>
                 <select value={t.service ?? ""} onChange={e => setService(t.id, e.target.value)}
                   style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, border: `1px solid ${sm ? sm.color + "66" : BORDER}`, color: sm?.color ?? "#9ca3af", background: sm ? sm.color + "12" : "#fff", borderRadius: 6, padding: "4px 6px", cursor: "pointer" }}>
                   <option value="">— ventiler —</option>
@@ -301,10 +301,10 @@ function ImportTab({ accounts, onDone }: { accounts: Account[]; onDone: () => vo
           <input ref={fileRef} type="file" accept=".pdf,.ofx,.qif" onChange={onFile} style={{ display: "none" }} />
           <button onClick={() => fileRef.current?.click()} disabled={busy || !accountId}
             style={{ width: "100%", background: accountId ? GOLD : "#e5e7eb", color: accountId ? "#fff" : "#9ca3af", border: "none", borderRadius: 10, padding: "14px 0", fontSize: 14, fontWeight: 600, cursor: accountId ? "pointer" : "default" }}>
-            {busy ? "⏳ Traitement…" : "⤓ Choisir un relevé (PDF, OFX ou QIF)"}
+            {busy ? "Traitement en cours…" : "Choisir un relevé (PDF, OFX ou QIF)"}
           </button>
         </div>
-        {msg && <div style={{ marginTop: 12, fontSize: 12.5, color: msg.startsWith("✓") ? "#059669" : "#374151" }}>{msg}</div>}
+        {msg && <div style={{ marginTop: 12, fontSize: 12.5, color: msg.startsWith("✓") ? GOLD : "#374151" }}>{msg}</div>}
         <div style={{ marginTop: 14, fontSize: 11.5, color: "#9ca3af", lineHeight: 1.6 }}>
           • <strong>PDF</strong> : Auguste lit le relevé et extrait les opérations.<br />
           • <strong>OFX / QIF</strong> : import direct depuis l&apos;export de votre banque.<br />

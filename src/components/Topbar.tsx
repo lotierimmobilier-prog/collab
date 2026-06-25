@@ -186,6 +186,17 @@ export default function Topbar({ title }: { title: string }) {
 
 const NEWS = [
   {
+    version: "v1.6",
+    title: "Direction & comptabilité",
+    items: [
+      "Module Direction : flotte auto, locaux, cartes professionnelles, assurances",
+      "Fiche véhicule : documents (assurance, carte grise, permis), suivi km, sinistres",
+      "Module Comptabilité : relevés bancaires, ventilation par service, trésorerie",
+      "Présentation épurée aux couleurs de l'agence",
+      "Logo Lotier en favicon",
+    ],
+  },
+  {
     version: "v1.5",
     title: "Tableau de bord & annuaire",
     items: [

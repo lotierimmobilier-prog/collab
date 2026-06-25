@@ -613,6 +613,10 @@ model Vehicle {
   endDate        DateTime? // fin de leasing / location
   controleTechnique DateTime?
   monthlyCost    Float?
+  currentKm      Int?      // dernier kilométrage connu
+  documents      Json?     // { assurance, carteGrise, permis } : fichiers base64
+  kmReadings     Json?     // relevés [{ date, km }]
+  sinistres      Json?     // [{ id, date, type, declared, description }]
   note           String?
   createdById    String?
   createdAt      DateTime  @default(now())

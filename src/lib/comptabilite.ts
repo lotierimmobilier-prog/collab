@@ -2,11 +2,12 @@
 
 export type Service = "vente" | "gestion" | "syndic" | "agence";
 
+// Palette sobre, identité agence : déclinaison de bruns/or + charbon.
 export const SERVICES: { id: Service; label: string; color: string }[] = [
-  { id: "vente",   label: "Vente",   color: "#DC2626" },
-  { id: "gestion", label: "Gestion", color: "#2563EB" },
-  { id: "syndic",  label: "Syndic",  color: "#7C3AED" },
-  { id: "agence",  label: "Agence",  color: "#B8966A" },
+  { id: "vente",   label: "Vente",   color: "#1C1A17" },
+  { id: "gestion", label: "Gestion", color: "#B8966A" },
+  { id: "syndic",  label: "Syndic",  color: "#8A6D44" },
+  { id: "agence",  label: "Agence",  color: "#A0907A" },
 ];
 
 export const SERVICE_IDS = SERVICES.map(s => s.id);
@@ -16,9 +17,9 @@ export const serviceMeta = (id?: string | null) => SERVICES.find(s => s.id === i
 // les fonds mandants ne se mélangent jamais.
 export type AccountKind = "gestion" | "syndic" | "agence";
 export const ACCOUNT_KINDS: { id: AccountKind; label: string; color: string }[] = [
-  { id: "gestion", label: "Gestion (fonds mandants)", color: "#2563EB" },
-  { id: "syndic",  label: "Syndic (fonds mandants)",  color: "#7C3AED" },
-  { id: "agence",  label: "Agence",                   color: "#B8966A" },
+  { id: "gestion", label: "Gestion (fonds mandants)", color: "#B8966A" },
+  { id: "syndic",  label: "Syndic (fonds mandants)",  color: "#8A6D44" },
+  { id: "agence",  label: "Agence",                   color: "#1C1A17" },
 ];
 export const accountKindMeta = (id?: string | null) => ACCOUNT_KINDS.find(k => k.id === id);
 
