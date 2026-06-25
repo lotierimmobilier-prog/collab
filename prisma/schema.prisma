@@ -100,6 +100,7 @@ model Task {
   dueDate      DateTime?
   tags         String[]
   project      String?
+  recurrence   String?    // null | 7d | 15d | 30d | trimestre | semestre | annee
   createdById  String?
   completedAt   DateTime?
   completedById String?

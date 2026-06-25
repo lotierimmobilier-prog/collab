@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Task, Priority, Status, PRIORITY_STYLES, COLUMNS } from "@/lib/tasks";
+import { Task, Priority, Status, PRIORITY_STYLES, COLUMNS, RECURRENCES } from "@/lib/tasks";
 
 const AVATAR_COLORS = ["#F7F0E6", "#dcfce7", "#dbeafe", "#fce7f3", "#fef3c7", "#ede9fe"];
 
@@ -28,6 +28,7 @@ export default function NewTaskModal({ onClose, onAdd, families = [] }: {
   const [members, setMembers]   = useState<Member[]>([]);
   const [assignee, setAssignee] = useState<Member | null>(null);
   const [dueDate, setDueDate]   = useState("");
+  const [recurrence, setRecurrence] = useState("");
   const [project, setProject]   = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags]         = useState<string[]>([]);
@@ -68,6 +69,7 @@ export default function NewTaskModal({ onClose, onAdd, families = [] }: {
           assigneeId: assignee?.id ?? null,
           assigneeName: assignee?.name ?? null,
           dueDate: dueDate || null,
+          recurrence: recurrence || null,
           tags: tags.length ? tags : [],
           project: project || null,
           familyId: familyId || null,
@@ -156,6 +158,7 @@ export default function NewTaskModal({ onClose, onAdd, families = [] }: {
               </select>
             </div>
             <div><FL>Échéance</FL><input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={inp} /></div>
+            <div><FL>Récurrence</FL><select value={recurrence} onChange={e => setRecurrence(e.target.value)} style={inp}>{RECURRENCES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}</select></div>
           </div>
 
           <div>

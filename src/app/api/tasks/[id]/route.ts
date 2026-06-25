@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { nextRecurrenceDate } from "@/lib/tasks";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -29,9 +30,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ...(body.dueDate    !== undefined && { dueDate: body.dueDate ? new Date(body.dueDate) : null }),
       ...(body.tags       !== undefined && { tags: body.tags }),
       ...(body.project    !== undefined && { project: body.project }),
+      ...(body.recurrence !== undefined && { recurrence: body.recurrence || null }),
       ...completion,
     },
   });
+
+  // Tâche récurrente terminée → on régénère une occurrence « à faire »,
+  // échéance décalée du délai de récurrence.
+  if (body.status === "done" && task.recurrence) {
+    const next = nextRecurrenceDate(task.recurrence);
+    if (next) {
+      await prisma.task.create({
+        data: {
+          title: task.title, description: task.description, status: "todo",
+          priority: task.priority, assigneeId: task.assigneeId, assigneeName: task.assigneeName,
+          familyId: task.familyId, groupId: task.groupId, tags: task.tags, project: task.project,
+          recurrence: task.recurrence, dueDate: next, createdById: task.createdById ?? session.user.id,
+        },
+      }).catch(() => { /* la colonne recurrence n'existe peut-être pas encore */ });
+    }
+  }
+
   return NextResponse.json({
     ...task,
     dueDate: task.dueDate?.toISOString().split("T")[0] ?? undefined,
