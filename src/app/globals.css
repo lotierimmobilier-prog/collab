@@ -46,6 +46,11 @@ body {
     grid-template-columns: 1fr !important;
   }
 
+  /* Masquer un élément sur petit écran (ex: libellés des accès rapides) */
+  .hide-sm {
+    display: none !important;
+  }
+
   /* Popups plein écran sur mobile */
   .modal-popup {
     width: 100% !important;

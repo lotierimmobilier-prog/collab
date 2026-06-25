@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { resolveAccountOwners } from "@/lib/mailOwner";
 
 // GET — récupérer les emails persistés en BDD
 export async function GET(req: NextRequest) {
@@ -8,15 +9,28 @@ export async function GET(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const folder    = searchParams.get("folder")    || "INBOX";
+  const folderParam = searchParams.get("folder");      // absent ou "all" = tous les dossiers
   const accountId = searchParams.get("accountId") || undefined;
   const limit     = parseInt(searchParams.get("limit") || "100");
 
   const since = new Date();
   since.setMonth(since.getMonth() - 6);
 
-  const where: Record<string, unknown> = { folder, date: { gte: since } };
+  const where: Record<string, unknown> = { date: { gte: since } };
+  if (folderParam && folderParam !== "all") where.folder = folderParam;
   if (accountId) where.accountId = accountId;
+
+  // Cloisonnement mail : chacun ne voit que ses propres mails. L'admin paramètre
+  // les boîtes mais n'accède PAS à leur contenu (il faut être l'agent assigné).
+  // Visible si : compte dont je suis l'agent (sharedUserIds) OU message qui m'est
+  // rattaché (ownerId).
+  const uid = session.user.id;
+  const configs = await prisma.mailAccountConfig.findMany({
+    where: { sharedUserIds: { has: uid } },
+    select: { id: true },
+  });
+  const allowed = configs.map(c => c.id);
+  where.OR = [{ accountId: { in: allowed } }, { ownerId: uid }];
 
   const messages = await prisma.emailMessage.findMany({
     where,
@@ -34,6 +48,11 @@ export async function POST(req: NextRequest) {
 
   const { messages } = await req.json();
   if (!Array.isArray(messages)) return NextResponse.json({ error: "messages requis" }, { status: 400 });
+
+  // Propriétaire de chaque message = agent de la boîte (config), sinon
+  // l'utilisateur courant (comptes Gmail/local côté client).
+  const ownerByAccount = await resolveAccountOwners(messages.map((m: { accountId?: string }) => m.accountId || ""));
+  const ownerFor = (accId?: string) => (accId && ownerByAccount.get(accId)) || session.user.id;
 
   let saved = 0;
   for (const m of messages) {
@@ -59,6 +78,7 @@ export async function POST(req: NextRequest) {
           labels:     m.labels || ["inbox"],
           senderType: m.senderType,
           senderId:   m.senderId,
+          ownerId:    ownerFor(m.accountId),
         },
         update: {
           read:    m.status === "read",
@@ -66,6 +86,7 @@ export async function POST(req: NextRequest) {
           labels:  m.labels || ["inbox"],
           bodyText: m.bodyText || undefined,
           bodyHtml: m.body    || undefined,
+          ownerId:  ownerFor(m.accountId),
         },
       });
       saved++;

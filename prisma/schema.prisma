@@ -16,6 +16,7 @@ model User {
   roleId          String
   active          Boolean   @default(true)
   accessOverrides Json?
+  phone           String?
   createdAt       DateTime  @default(now())
   lastLogin       DateTime?
   avatar          String?
@@ -99,9 +100,14 @@ model Task {
   dueDate      DateTime?
   tags         String[]
   project      String?
+  createdById  String?
+  completedAt   DateTime?
+  completedById String?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
+  @@index([assigneeId])
+  @@index([createdById])
   @@map("tasks")
 }
 
@@ -223,6 +229,21 @@ model Setting {
   @@map("settings")
 }
 
+// ── Journal des demandes à Auguste (audit admin) ─────────────
+model AugusteLog {
+  id        String   @id @default(cuid())
+  userId    String
+  userName  String
+  question  String
+  reply     String?
+  tools     String[] @default([])
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId])
+  @@map("auguste_logs")
+}
+
 // ── Annonces ─────────────────────────────────────────────────
 
 model Announcement {
@@ -284,9 +305,11 @@ model EmailMessage {
   labels      String[] @default([])
   senderType  String?  // "user"|"owner"|"tenant"|"unknown"
   senderId    String?
+  ownerId     String?  // utilisateur agence ayant synchronisé/envoyé ce message (cloisonnement)
   createdAt   DateTime @default(now())
 
   @@unique([uid, accountId, folder])
+  @@index([ownerId])
   @@map("email_messages")
 }
 
@@ -529,4 +552,27 @@ model DepotGarantie {
   updatedAt    DateTime @updatedAt
 
   @@map("depots_garantie")
+}
+
+/// Annuaire unifié : tout contact (interne ou externe) avec son type/label.
+/// Carnet d'adresses central, relié aux mails / tâches / agenda.
+model Contact {
+  id            String   @id @default(cuid())
+  type          String   @default("autre") // fournisseur|proprietaire|locataire|direction|commercial|tutelle|autre
+  prenom        String?
+  nom           String?
+  raisonSociale String?
+  email         String?
+  phone         String?
+  note          String?
+  /// Lien optionnel vers l'entité métier d'origine
+  sourceType    String?  // owner|tenant|supplier|user
+  sourceId      String?
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([email])
+  @@index([type])
+  @@map("contacts")
 }

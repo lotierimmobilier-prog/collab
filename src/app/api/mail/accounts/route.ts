@@ -36,6 +36,15 @@ export async function POST(req: NextRequest) {
 
   if (!email || !host) return NextResponse.json({ error: "Email et hôte requis" }, { status: 400 });
 
+  // Agents ayant accès à la boîte. Si ce n'est PAS un admin qui crée la boîte,
+  // c'est sa propre boîte → il en devient l'agent. Un admin paramètre pour un
+  // agent : il renseigne sharedUserIds et ne s'ajoute pas lui-même (il n'a pas
+  // accès au contenu).
+  const agents: string[] = Array.isArray(sharedUserIds) ? [...sharedUserIds] : [];
+  if (session.user.roleId !== "admin" && !agents.includes(session.user.id)) {
+    agents.push(session.user.id);
+  }
+
   const account = await prisma.mailAccountConfig.create({
     data: {
       label:         label || email,
@@ -53,7 +62,7 @@ export async function POST(req: NextRequest) {
       color:         color || "#B8966A",
       active:        true,
       isShared:      isShared ?? false,
-      sharedUserIds: sharedUserIds || [],
+      sharedUserIds: agents,
       createdBy:     session.user.id,
     },
   });

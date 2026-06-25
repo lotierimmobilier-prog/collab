@@ -84,11 +84,22 @@ export default function TaskBoard() {
 
   async function updateTaskStatus(id: string, status: Status) {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, status } : t));
-    await fetch(`/api/tasks/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
+    try {
+      const r = await fetch(`/api/tasks/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (r.ok) {
+        const updated = await r.json();
+        setTasks(prev => prev.map(t => t.id === id
+          ? { ...t, status, completedAt: updated.completedAt ?? undefined, completedById: updated.completedById ?? undefined }
+          : t));
+        setSelectedTask(p => p && p.id === id
+          ? { ...p, status, completedAt: updated.completedAt ?? undefined, completedById: updated.completedById ?? undefined }
+          : p);
+      }
+    } catch { /* l'optimiste reste affiché ; resynchro au prochain chargement */ }
   }
 
   function handleDragStart(id: string) { setDragId(id); }
@@ -248,7 +259,12 @@ export default function TaskBoard() {
                       onMouseEnter={e => (e.currentTarget.style.background = "#fafafa")}
                       onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                     >
-                      <span style={{ width: 16, height: 16, borderRadius: "50%", border: task.status === "done" ? "none" : "1.5px solid #d1d5db", background: task.status === "done" ? "#10b981" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff", flexShrink: 0 }}>{task.status === "done" ? "✓" : ""}</span>
+                      <button
+                        onClick={e => { e.stopPropagation(); updateTaskStatus(task.id, task.status === "done" ? "todo" : "done"); }}
+                        title={task.status === "done" ? "Marquer à refaire" : "Marquer comme terminée"}
+                        style={{ width: 18, height: 18, borderRadius: "50%", border: task.status === "done" ? "none" : "1.5px solid #d1d5db", background: task.status === "done" ? "#10b981" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", flexShrink: 0, cursor: "pointer", padding: 0 }}>
+                        {task.status === "done" ? "✓" : ""}
+                      </button>
                       <span style={{ fontSize: 13, flex: 1, textDecoration: task.status === "done" ? "line-through" : "none", color: task.status === "done" ? "#9ca3af" : "#111827" }}>{task.title}</span>
                       <span style={{ background: PRIORITY_STYLES[task.priority].bg, color: PRIORITY_STYLES[task.priority].text, borderRadius: 6, padding: "2px 7px", fontSize: 11 }}>{PRIORITY_STYLES[task.priority].label}</span>
                       {task.assigneeInitials && <div style={{ width: 26, height: 26, borderRadius: "50%", background: task.assigneeColor, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 600, color: "#374151" }}>{task.assigneeInitials}</div>}

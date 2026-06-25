@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/auth";
+import { resolveAccountOwner } from "@/lib/mailOwner";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { ImapFlow } = require("imapflow");
 
@@ -32,7 +34,7 @@ async function identifySender(email: string): Promise<{ senderType: string; send
 
 // Synchronise un dossier IMAP donné, page par page
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function syncFolder(client: any, folder: string, accountId: string, since: Date, page: number) {
+async function syncFolder(client: any, folder: string, accountId: string, since: Date, page: number, ownerId: string) {
   const messages: Array<Record<string, unknown>> = [];
   let total = 0;
   let totalPages = 0;
@@ -49,8 +51,10 @@ async function syncFolder(client: any, folder: string, accountId: string, since:
 
       if (pageUids.length > 0) {
         const isSent = folder !== "INBOX";
+        // Dossier stocké normalisé (l'IMAP peut nommer les Envoyés différemment)
+        const sFolder = isSent ? "SENT" : "INBOX";
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        for await (const msg of (client as any).fetch(pageUids.join(","), { uid: true, flags: true, envelope: true }, { uid: true }) as AsyncIterable<any>) {
+        for await (const msg of (client as any).fetch(pageUids.join(","), { uid: true, flags: true, envelope: true, headers: ["list-unsubscribe", "precedence"] }, { uid: true }) as AsyncIterable<any>) {
           const env       = msg.envelope ?? {};
           const flags     = msg.flags ?? new Set();
           const isUnread  = !flags.has("\\Seen");
@@ -61,14 +65,25 @@ async function syncFolder(client: any, folder: string, accountId: string, since:
 
           const threadId = env.messageId
             ? env.messageId.replace(/[<>]/g, "").replace(/[^a-zA-Z0-9@._-]/g, "_")
-            : `${accountId}-${folder}-${msg.uid}`;
+            : `${accountId}-${sFolder}-${msg.uid}`;
+
+          // Détection newsletter / publicité : en-tête List-Unsubscribe (signal
+          // standard) ou Precedence: bulk, ou mots-clés dans l'objet/expéditeur.
+          const hdrs    = (msg.headers ? msg.headers.toString() : "").toLowerCase();
+          const subjLc  = (env.subject ?? "").toLowerCase();
+          const fromLc  = fromEmail.toLowerCase();
+          const isPub   = !isSent && (
+            hdrs.includes("list-unsubscribe") ||
+            hdrs.includes("precedence: bulk") ||
+            /désinscri|desinscri|se d[ée]sabonner|unsubscribe|newsletter|no[-_]?reply|nepasrepondre|ne-pas-repondre/.test(`${subjLc} ${fromLc}`)
+          );
 
           const identity = await identifySender(fromEmail);
-          const labels   = isSent ? ["sent"] : ["inbox", ...(isStarred ? ["starred"] : [])];
+          const labels   = isSent ? ["sent"] : isPub ? ["pub"] : ["inbox", ...(isStarred ? ["starred"] : [])];
 
           messages.push({
-            id: `${accountId}-${folder}-${msg.uid}`,
-            uid: msg.uid, threadId, accountId, folder,
+            id: `${accountId}-${sFolder}-${msg.uid}`,
+            uid: msg.uid, threadId, accountId, folder: sFolder,
             from: { name: env.from?.[0]?.name ?? fromEmail, email: fromEmail },
             to: (env.to ?? []).map((a: { name?: string; address?: string }) => ({ name: a.name ?? a.address ?? "", email: a.address ?? "" })),
             subject: env.subject ?? "(Sans objet)",
@@ -82,11 +97,11 @@ async function syncFolder(client: any, folder: string, accountId: string, since:
 
           try {
             await prisma.emailMessage.upsert({
-              where: { uid_accountId_folder: { uid: String(msg.uid), accountId, folder } },
+              where: { uid_accountId_folder: { uid: String(msg.uid), accountId, folder: sFolder } },
               create: {
                 uid: String(msg.uid),
                 messageId: env.messageId?.replace(/[<>]/g, ""),
-                folder, accountId, fromEmail,
+                folder: sFolder, accountId, fromEmail,
                 fromName: env.from?.[0]?.name,
                 toEmail: (env.to ?? []).map((a: { address?: string }) => a.address).filter(Boolean).join(", "),
                 subject: env.subject ?? "(Sans objet)",
@@ -94,8 +109,9 @@ async function syncFolder(client: any, folder: string, accountId: string, since:
                 threadId, labels,
                 senderType: identity.senderType,
                 senderId: identity.senderId,
+                ownerId,
               },
-              update: { read: !isUnread, starred: isStarred, senderType: identity.senderType, senderId: identity.senderId },
+              update: { read: !isUnread, starred: isStarred, senderType: identity.senderType, senderId: identity.senderId, ownerId },
             });
           } catch { /* ignore contrainte unique */ }
         }
@@ -137,6 +153,9 @@ async function detectSentFolder(client: any): Promise<string | null> {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ ok: false, error: "Non authentifié" }, { status: 401 });
+
   const body = await req.json();
   let { host, port, ssl, username, password } = body;
   const { accountId, page = 1, syncSent = true } = body;
@@ -151,6 +170,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Paramètres incomplets" }, { status: 400 });
   }
 
+  // Le contenu synchronisé est rattaché à l'agent de la boîte (cloisonnement) ;
+  // pour un compte local non géré en base, à l'utilisateur courant.
+  const ownerId = (accountId ? await resolveAccountOwner(accountId) : null) ?? session.user.id;
+
   const since = new Date();
   since.setMonth(since.getMonth() - MONTHS_BACK);
 
@@ -160,15 +183,19 @@ export async function POST(req: NextRequest) {
     await client.connect();
 
     // Sync INBOX
-    const inbox = await syncFolder(client, "INBOX", accountId, since, page);
+    const inbox = await syncFolder(client, "INBOX", accountId, since, page, ownerId);
 
-    // Sync Envoyés (uniquement page 1 pour ne pas alourdir)
+    // Sync Envoyés — historique complet (6 mois) lors de la synchro page 1
     let sentCount = 0;
     if (syncSent && page === 1) {
       const sentFolder = await detectSentFolder(client);
       if (sentFolder) {
-        const sent = await syncFolder(client, sentFolder, accountId, since, 1);
-        sentCount = sent.messages.length;
+        const first = await syncFolder(client, sentFolder, accountId, since, 1, ownerId);
+        sentCount = first.messages.length;
+        for (let p = 2; p <= first.totalPages; p++) {
+          const more = await syncFolder(client, sentFolder, accountId, since, p, ownerId);
+          sentCount += more.messages.length;
+        }
       }
     }
 

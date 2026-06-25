@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { MODELS, augusteJson, normalizeError } from "@/lib/auguste";
+import { historicalHandlers } from "@/lib/mailRouting";
 
 /**
  * Classement automatique « à la réception ».
@@ -41,6 +42,7 @@ export async function POST(req: NextRequest) {
     for (const m of recent) {
       const key = m.threadId || m.id;
       if (m.labels.includes("trash")) continue;
+      if (m.labels.includes("pub")) continue;
       if (m.labels.some(l => l.startsWith("type:"))) continue;
       if (!byThread.has(key)) byThread.set(key, m);
     }
@@ -58,10 +60,15 @@ export async function POST(req: NextRequest) {
     const memories = await prisma.mailLabelMemory.findMany({ where: { fromEmail: { in: emails } } });
     const memByEmail = new Map(memories.map(m => [m.fromEmail.toLowerCase(), m]));
 
+    // Traitant historique réel (qui a déjà été assigné / a déjà répondu)
+    const handlerByEmail = await historicalHandlers(emails, userIds);
+
     const list = todo.map((m, i) => {
       const mem = memByEmail.get(m.fromEmail.toLowerCase());
-      const memHint = mem ? ` [déjà vu: ${mem.labelIds.join(",")}${mem.assignedToId ? ` → ${mem.assignedToId}` : ""}]` : "";
-      return `#${i} De: ${m.fromName ?? m.fromEmail} <${m.fromEmail}> (${m.senderType ?? "inconnu"})${memHint}\nObjet: ${m.subject}\nExtrait: ${(m.bodyText || "").slice(0, 220).replace(/\s+/g, " ")}`;
+      const handler = handlerByEmail.get(m.fromEmail.toLowerCase());
+      const memHint = mem ? ` [déjà vu: ${mem.labelIds.join(",")}]` : "";
+      const histHint = handler ? ` [historique → à traiter par ${handler.userId} (${handler.reason})]` : "";
+      return `#${i} De: ${m.fromName ?? m.fromEmail} <${m.fromEmail}> (${m.senderType ?? "inconnu"})${memHint}${histHint}\nObjet: ${m.subject}\nExtrait: ${(m.bodyText || "").slice(0, 220).replace(/\s+/g, " ")}`;
     }).join("\n---\n");
 
     const prompt = `Classe chacun de ces ${todo.length} emails entrants.
@@ -78,7 +85,8 @@ Règles de priorité :
 - haute : urgence, impayé, litige, préavis/départ, sinistre, délai légal, mise en demeure
 - basse : newsletter, publicité, accusé de réception, simple information sans action
 - normale : tout le reste
-Si un expéditeur est marqué « déjà vu », réutilise son classement sauf indication contraire dans le contenu.`;
+Si un expéditeur est marqué « déjà vu », réutilise son classement sauf indication contraire dans le contenu.
+Si un expéditeur porte une mention « historique → à traiter par <id> », assigne-le à CET agent (c'est lui qui suit ce contact), sauf si le contenu impose clairement un autre service.`;
 
     const arr = await augusteJson<Array<{ i: number; label?: string; assigneeId?: string | null; priority?: string }>>({
       model: MODELS.fast,
@@ -96,7 +104,11 @@ Si un expéditeur est marqué « déjà vu », réutilise son classement sauf in
 
       const label = (r.label || "autre").toLowerCase();
       const priority = PRIORITIES.has((r.priority || "").toLowerCase()) ? (r.priority as string).toLowerCase() : "normale";
-      const assigneeId = r.assigneeId && userIds.has(r.assigneeId) ? r.assigneeId : null;
+      // L'historique réel prime : si on connaît le traitant habituel, on l'impose ;
+      // sinon on retombe sur la proposition du modèle (si l'agent existe).
+      const histHandler = handlerByEmail.get(m.fromEmail.toLowerCase());
+      const modelAssignee = r.assigneeId && userIds.has(r.assigneeId) ? r.assigneeId : null;
+      const assigneeId = histHandler?.userId ?? modelAssignee;
 
       // Labels à poser (on retire d'abord les anciens type:/priority:)
       const newTags = [`type:${label}`, `priority:${priority}`];

@@ -39,8 +39,61 @@ export default function Auguste() {
   const [loading, setLoading]   = useState(false);
   const [action, setAction]     = useState<string | null>(null);
   const [dots, setDots]         = useState(".");
+  const [logoUrl, setLogoUrl]   = useState("");
+  const [pos, setPos]           = useState<{ x: number; y: number } | null>(null); // coin haut-gauche de la bulle
+  const [vp, setVp]             = useState<{ w: number; h: number }>({ w: 1200, h: 800 });
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLInputElement>(null);
+  const drag      = useRef<{ ox: number; oy: number; dx: number; dy: number; moved: boolean } | null>(null);
+
+  // Avatar configuré côté admin (photo d'un assistant réel)
+  useEffect(() => {
+    fetch("/api/auguste-config").then(r => r.json()).then(d => setLogoUrl(d.logoUrl || "")).catch(() => {});
+  }, []);
+
+  // Position initiale (coin bas-droit) + restauration depuis localStorage
+  useEffect(() => {
+    setVp({ w: window.innerWidth, h: window.innerHeight });
+    const saved = localStorage.getItem("collab_auguste_pos");
+    if (saved) { try { setPos(JSON.parse(saved)); return; } catch { /* défaut */ } }
+    setPos({ x: window.innerWidth - 80, y: window.innerHeight - 80 });
+  }, []);
+
+  // Garde la bulle dans l'écran au redimensionnement
+  useEffect(() => {
+    function onResize() {
+      setVp({ w: window.innerWidth, h: window.innerHeight });
+      setPos(p => p ? { x: Math.min(p.x, window.innerWidth - 64), y: Math.min(p.y, window.innerHeight - 64) } : p);
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (!pos) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    drag.current = { ox: pos.x, oy: pos.y, dx: e.clientX - pos.x, dy: e.clientY - pos.y, moved: false };
+  }
+  function onPointerMove(e: React.PointerEvent) {
+    const d = drag.current;
+    if (!d) return;
+    const nx = clamp(e.clientX - d.dx, 8, window.innerWidth - 64);
+    const ny = clamp(e.clientY - d.dy, 8, window.innerHeight - 64);
+    if (Math.hypot(nx - d.ox, ny - d.oy) > 4) d.moved = true;
+    setPos({ x: nx, y: ny });
+  }
+  function onPointerUp() {
+    const d = drag.current;
+    drag.current = null;
+    if (!d) return;
+    if (d.moved) {
+      setPos(p => { if (p) localStorage.setItem("collab_auguste_pos", JSON.stringify(p)); return p; });
+    } else {
+      setOpen(o => !o); // simple clic = ouvrir/fermer
+    }
+  }
 
   useEffect(() => {
     if (!loading) { setDots("."); return; }
@@ -109,31 +162,46 @@ export default function Auguste() {
 
   if (!session?.user) return null;
 
+  // Position du panneau de chat, ancrée sur la bulle, en restant dans l'écran
+  const panelW = 390, panelH = 580;
+  const bx = pos?.x ?? (vp.w - 80);
+  const by = pos?.y ?? (vp.h - 80);
+  const panelLeft = clamp(bx + 56 - panelW, 8, Math.max(8, vp.w - panelW - 8));
+  let panelTop = by - panelH - 8;                         // au-dessus de la bulle si possible
+  if (panelTop < 8) panelTop = by + 64;                   // sinon en-dessous
+  panelTop = clamp(panelTop, 8, Math.max(8, vp.h - panelH - 8));
+
   return (
     <>
-      {/* Bulle flottante */}
+      {/* Bulle flottante — déplaçable librement (drag), clic pour ouvrir */}
       <button
-        onClick={() => setOpen(o => !o)}
-        title="Auguste — Assistant IA"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        title="Auguste — glissez pour déplacer, cliquez pour ouvrir"
         style={{
-          position: "fixed", bottom: 24, right: 24, zIndex: 999,
+          position: "fixed",
+          ...(pos ? { left: pos.x, top: pos.y } : { right: 24, bottom: 24 }),
+          zIndex: 999,
           width: 56, height: 56, borderRadius: "50%",
-          background: open ? DARK : GOLD,
-          border: "none", cursor: "pointer",
+          background: open ? DARK : (logoUrl ? "#fff" : GOLD),
+          border: "none", cursor: "grab",
           boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: open ? 24 : 22,
-          transition: "all 0.2s",
+          fontSize: open ? 24 : 22, padding: 0, overflow: "hidden",
+          touchAction: "none", transition: "background 0.2s",
         }}
-        onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.1)"; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}
       >
-        <span style={{ color: "#fff" }}>{open ? "×" : "✦"}</span>
+        {open
+          ? <span style={{ color: "#fff" }}>×</span>
+          : logoUrl
+            ? <img src={logoUrl} alt="Auguste" style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none" }} />
+            : <span style={{ color: "#fff" }}>✦</span>}
       </button>
 
       {/* Badge "en action" sur la bulle */}
       {loading && !open && (
-        <div style={{ position: "fixed", bottom: 68, right: 18, zIndex: 1000, background: GOLD, borderRadius: 10, padding: "2px 8px", fontSize: 10, color: "#fff", fontWeight: 600 }}>
+        <div style={{ position: "fixed", ...(pos ? { left: pos.x + 6, top: pos.y - 18 } : { right: 18, bottom: 68 }), zIndex: 1000, background: GOLD, borderRadius: 10, padding: "2px 8px", fontSize: 10, color: "#fff", fontWeight: 600 }}>
           {dots}
         </div>
       )}
@@ -141,15 +209,18 @@ export default function Auguste() {
       {/* Panel de chat */}
       {open && (
         <div style={{
-          position: "fixed", bottom: 90, right: 24, zIndex: 998,
-          width: 390, height: 580, background: "#fff",
+          position: "fixed", left: panelLeft, top: panelTop, zIndex: 998,
+          width: panelW, height: panelH, maxWidth: "calc(100vw - 16px)", maxHeight: "calc(100vh - 16px)",
+          background: "#fff",
           borderRadius: 16, boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
           border: `1px solid ${BORDER}`,
           display: "flex", flexDirection: "column", overflow: "hidden",
         }}>
           {/* Header */}
           <div style={{ padding: "14px 16px", background: DARK, display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 38, height: 38, borderRadius: "50%", background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>✦</div>
+            <div style={{ width: 38, height: 38, borderRadius: "50%", background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0, overflow: "hidden" }}>
+              {logoUrl ? <img src={logoUrl} alt="Auguste" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "✦"}
+            </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 15, color: "#fff" }}>Auguste</div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>

@@ -2,13 +2,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   MailAccount, MailMessage, MailThread, MailLabel,
-  DEFAULT_LABELS, threadFromMessages,
+  DEFAULT_LABELS, SYSTEM_LABELS, threadFromMessages,
 } from "@/lib/mail";
 import {
   loadGmailConfigs, loadGmailToken, isGmailTokenValid,
   fetchGmailMessages, saveGmailToken,
   requestGmailToken, GmailConfig,
 } from "@/lib/googleGmail";
+import { useIsMobile } from "@/lib/useIsMobile";
 import AccountConfigPanel from "./AccountConfigPanel";
 import LabelManager from "./LabelManager";
 import ThreadList from "./ThreadList";
@@ -45,13 +46,14 @@ export default function MailBoard() {
   const [showImapConfig, setShowImapConfig]     = useState(false);
   const [showGmailConnect, setShowGmailConnect] = useState(false);
   const [showLabels, setShowLabels]             = useState(false);
-  const [labelsOpen, setLabelsOpen]             = useState(true);
+  const [labelsOpen, setLabelsOpen]             = useState(false);
   const [showCompose, setShowCompose]           = useState(false);
+  const [forwardData, setForwardData]           = useState<{ to: string; cc?: string; subject: string; body: string; accountId: string } | null>(null);
   const [aiKey, setAiKey]                       = useState("");
   const [syncing, setSyncing]                   = useState<string | null>(null);
   const [syncStatus, setSyncStatus]             = useState("");
   const [loadingBody, setLoadingBody]           = useState(false);
-  const [users, setUsers]                       = useState<{ id: string; prenom: string; nom: string }[]>([]);
+  const [users, setUsers]                       = useState<{ id: string; prenom: string; nom: string; email?: string }[]>([]);
   const [nextSyncIn, setNextSyncIn]             = useState(SYNC_INTERVAL / 1000);
 
   // Pagination
@@ -59,6 +61,10 @@ export default function MailBoard() {
 
   // Tri de la liste : par date (défaut) ou par priorité (boîte priorisée)
   const [sortMode, setSortMode] = useState<"date" | "priority">("date");
+
+  // Responsive : sur mobile la sidebar devient un tiroir coulissant
+  const isMobile = useIsMobile();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Ref pour accéder aux comptes dans le timer sans stale closure
   const accountsRef    = useRef<MailAccount[]>([]);
@@ -107,14 +113,20 @@ export default function MailBoard() {
       });
 
     const l = localStorage.getItem(LABELS_KEY);
-    if (l) setLabels(JSON.parse(l));
+    if (l) {
+      // Les libellés système (dont « Publicité ») viennent toujours du code
+      // (ordre + nouveautés garantis) ; on ne garde du cache que les perso.
+      const stored = JSON.parse(l) as MailLabel[];
+      const custom = stored.filter(x => !x.system);
+      setLabels([...SYSTEM_LABELS, ...custom]);
+    }
     const k = localStorage.getItem(AI_KEY_STORE);
     if (k) setAiKey(k);
-    fetch("/api/users").then(r => r.json()).then((us: { id: string; prenom: string; nom: string; active: boolean }[]) => setUsers(us.filter(u => u.active))).catch(() => {});
+    fetch("/api/users").then(r => r.json()).then((us: { id: string; prenom: string; nom: string; email?: string; active: boolean }[]) => setUsers(us.filter(u => u.active))).catch(() => {});
     setGmailConfigs(loadGmailConfigs());
 
     // Charger les emails persistés en BDD au démarrage
-    fetch("/api/mail/messages?limit=500")
+    fetch("/api/mail/messages?limit=1500")
       .then(r => r.json())
       .then(d => {
         if (d.ok && d.messages?.length) {
@@ -273,6 +285,20 @@ export default function MailBoard() {
     setSyncStatus(`✓ Téléchargement complet : ${totalPages} page(s) chargée(s)`);
     setTimeout(() => setSyncStatus(""), 5000);
   }, [syncImap]);
+
+  /* ── Synchro forcée à l'ouverture de la messagerie (une fois) ── */
+  const didInitialSync = useRef(false);
+  useEffect(() => {
+    if (didInitialSync.current) return;
+    if (accounts.length === 0 && gmailConfigs.length === 0) return;
+    didInitialSync.current = true;
+    (async () => {
+      setNextSyncIn(SYNC_INTERVAL / 1000);
+      for (const cfg of gmailConfigRef.current) await syncGmail(cfg.accountId);
+      for (const a of accountsRef.current.filter(x => x.active)) await syncImap(a, 1);
+      await autoClassifyRef.current(true);
+    })();
+  }, [accounts, gmailConfigs, syncGmail, syncImap]);
 
   /* ── Sync toutes les 5 minutes ──────────────────────────── */
   useEffect(() => {
@@ -528,9 +554,15 @@ export default function MailBoard() {
   const fmtCountdown = (s: number) => s < 60 ? `${s}s` : `${Math.ceil(s / 60)}min`;
 
   return (
-    <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden", height: "100%" }}>
-      {/* SIDEBAR */}
-      <div style={{ width: 224, flexShrink: 0, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", overflowY: "scroll" }}>
+    <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden", height: "100%", position: "relative" }}>
+      {/* Fond sombre derrière le tiroir (mobile) */}
+      {isMobile && sidebarOpen && (
+        <div onClick={() => setSidebarOpen(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 55 }} />
+      )}
+      {/* SIDEBAR — tiroir coulissant sur mobile */}
+      <div style={isMobile
+        ? { position: "absolute", top: 0, bottom: 0, left: 0, width: 270, zIndex: 60, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", overflowY: "auto", transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)", transition: "transform 0.25s ease", boxShadow: sidebarOpen ? "0 0 40px rgba(0,0,0,0.3)" : "none" }
+        : { width: 224, flexShrink: 0, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", overflowY: "scroll" }}>
         <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
           <button onClick={() => setShowCompose(true)} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             ✏ Nouveau message
@@ -557,7 +589,7 @@ export default function MailBoard() {
         {/* Labels */}
         <NavLabel>Boîte</NavLabel>
         {systemLabels.map(l => (
-          <NavItem key={l.id} active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); clearSearch(); setListPage(1); }}>
+          <NavItem key={l.id} active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); clearSearch(); setListPage(1); setSidebarOpen(false); }}>
             <span style={{ fontSize: 14 }}>{labelIcon(l.id)}</span>
             <span style={{ flex: 1 }}>{l.name}</span>
             {unread(l.id) > 0 && <Badge>{unread(l.id)}</Badge>}
@@ -572,7 +604,7 @@ export default function MailBoard() {
           <button onClick={() => setShowLabels(true)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 16, lineHeight: 1 }}>+</button>
         </div>
         {labelsOpen && customLabels.map(l => (
-          <NavItem key={l.id} active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); clearSearch(); setListPage(1); }}>
+          <NavItem key={l.id} active={activeLabel === l.id} onClick={() => { setActiveLabel(l.id); setSelectedThread(null); clearSearch(); setListPage(1); setSidebarOpen(false); }}>
             <span style={{ width: 10, height: 10, borderRadius: "50%", background: l.color, flexShrink: 0 }} />
             <span style={{ flex: 1, fontSize: 12 }}>{l.name}</span>
           </NavItem>
@@ -663,6 +695,13 @@ export default function MailBoard() {
 
       {/* MAIN */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        {/* Barre mobile : ouvre le tiroir des dossiers/comptes */}
+        {isMobile && (
+          <div style={{ flexShrink: 0, background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "6px 10px", display: "flex", alignItems: "center", gap: 8 }}>
+            <button onClick={() => setSidebarOpen(true)} style={{ background: "#F7F0E6", border: "1px solid #E8D9C0", borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 600, color: "#B8966A", cursor: "pointer" }}>☰ Dossiers</button>
+            <button onClick={() => setShowCompose(true)} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✏ Nouveau</button>
+          </div>
+        )}
         {/* Bandeau statut sync / recherche */}
         {(syncStatus || (search && searchResults !== null)) && (
           <div style={{ background: syncing ? "#eff6ff" : syncStatus.startsWith("Erreur") ? "#fef2f2" : search ? "#F7F0E6" : "#f0fdf4", borderBottom: "1px solid #e5e7eb", padding: "7px 16px", fontSize: 12, color: syncing ? "#1e40af" : syncStatus.startsWith("Erreur") ? "#991b1b" : search ? "#92400e" : "#166534", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -734,6 +773,11 @@ export default function MailBoard() {
       </div>
 
       {showCompose && <ComposeModal accounts={accounts} gmailConfigs={gmailConfigs} labels={customLabels} onClose={() => setShowCompose(false)} onSend={msg => { addMessage(msg); setShowCompose(false); }} />}
+      {forwardData && <ComposeModal accounts={accounts} gmailConfigs={gmailConfigs} labels={customLabels}
+        replyTo={{ to: forwardData.to, subject: forwardData.subject, accountId: forwardData.accountId }}
+        initialBody={forwardData.body}
+        initialCc={forwardData.cc}
+        onClose={() => setForwardData(null)} onSend={msg => { addMessage(msg); setForwardData(null); }} />}
       {showImapConfig && <AccountConfigPanel accounts={accounts} onSave={async (newList) => {
         // Détecter les comptes ajoutés (pas de dbId)
         const updatedList: MailAccount[] = [];
@@ -780,6 +824,7 @@ export default function MailBoard() {
               users={users}
               onClose={() => setSelectedThread(null)}
               onReply={msg => { addMessage(msg); setSelectedThread(prev => prev ? { ...prev, messages: [...prev.messages, msg] } : null); }}
+              onForward={data => setForwardData(data)}
               onApplyLabel={id => applyLabel(selectedThread.id, id)}
               onRemoveLabel={id => removeLabel(selectedThread.id, id)}
               onStar={() => toggleStar(selectedThread.id)}
@@ -811,7 +856,7 @@ function NavItem({ active, onClick, children }: { active: boolean; onClick: () =
 function Badge({ children }: { children: React.ReactNode }) {
   return <span style={{ background: "#B8966A", color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 10 }}>{children}</span>;
 }
-function labelIcon(id: string) { return { inbox: "📥", sent: "📤", drafts: "📝", starred: "⭐", trash: "🗑" }[id] ?? "📧"; }
+function labelIcon(id: string) { return { inbox: "📥", sent: "📤", drafts: "📝", starred: "⭐", pub: "📣", trash: "🗑" }[id] ?? "📧"; }
 function GIcon() {
   return (
     <svg width={14} height={14} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
@@ -823,10 +868,12 @@ function GIcon() {
   );
 }
 
-function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo }: {
+function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo, initialBody, initialCc }: {
   accounts: MailAccount[]; gmailConfigs: GmailConfig[];
   labels: MailLabel[]; onClose: () => void; onSend: (m: MailMessage) => void;
   replyTo?: { to: string; subject: string; inReplyTo?: string; accountId?: string };
+  initialBody?: string;
+  initialCc?: string;
 }) {
   const allAccounts = [
     ...gmailConfigs.map(c => ({ id: c.accountId, dbId: undefined as string|undefined, label: `${c.email}`, email: c.email, name: c.name ?? c.email, smtpHost: "", smtpPort: 587, smtpSsl: true, username: c.email, password: "", signature: "", color: "#4285f4" })),
@@ -836,14 +883,26 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
   const firstId = replyTo?.accountId ?? allAccounts[0]?.id ?? "";
   const [accountId, setAccountId] = useState(firstId);
   const [to, setTo]               = useState(replyTo?.to ?? "");
-  const [cc, setCc]               = useState("");
+  const [cc, setCc]               = useState(initialCc ?? "");
   const [subject, setSubject]     = useState(replyTo?.subject ?? "");
-  const [body, setBody]           = useState("");
-  const [showCc, setShowCc]       = useState(false);
+  const [body, setBody]           = useState(initialBody ?? "");
+  const [showCc, setShowCc]       = useState(!!initialCc);
   const [showSig, setShowSig]     = useState(false);
   const [sending, setSending]     = useState(false);
   const [error, setError]         = useState("");
   const [selLabels, setSelLabels] = useState(["sent"]);
+  const [size, setSize]           = useState<"normal" | "large" | "full">("normal");
+  const isMobile = useIsMobile();
+
+  // Dimensions de la fenêtre selon l'état d'agrandissement (plein écran d'office sur mobile)
+  const frame: React.CSSProperties = isMobile
+    ? { top: 8, left: 8, right: 8, bottom: 8, width: "auto", maxHeight: "none" }
+    : size === "full"
+    ? { top: 16, left: 16, right: 16, bottom: 16, width: "auto", maxHeight: "none" }
+    : size === "large"
+    ? { top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(900px, 94vw)", height: "90vh", maxHeight: "none" }
+    // Fenêtre centrée à l'écran (plus claire), avec fond assombri derrière.
+    : { top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 620, maxHeight: "85vh" };
 
   const acct = allAccounts.find(a => a.id === accountId);
   const sig   = acct?.signature ?? "";
@@ -929,13 +988,15 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 40 }} />
-      <div style={{ position: "fixed", bottom: 24, right: 24, width: 580, background: "#fff", borderRadius: 14, zIndex: 50, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", maxHeight: "85vh", overflow: "hidden" }}>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 80 }} />
+      <div style={{ position: "fixed", ...frame, background: "#fff", borderRadius: size === "full" ? 12 : 14, zIndex: 81, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Header */}
         <div style={{ background: "#1f2937", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
           <span style={{ color: "#fff", fontWeight: 600, fontSize: 13 }}>✉ Nouveau message</span>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <button onClick={() => setShowSig(s => !s)} title="Gérer la signature" style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: "#d1d5db", fontSize: 11 }}>✍ Signature</button>
+            <button onClick={() => setSize(s => s === "large" ? "normal" : "large")} title={size === "large" ? "Réduire" : "Agrandir"} style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: "#d1d5db", fontSize: 13, lineHeight: 1 }}>{size === "large" ? "❏" : "⤢"}</button>
+            <button onClick={() => setSize(s => s === "full" ? "normal" : "full")} title={size === "full" ? "Quitter le plein écran" : "Plein écran"} style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: "#d1d5db", fontSize: 13, lineHeight: 1 }}>{size === "full" ? "🗗" : "⛶"}</button>
             <button onClick={onClose} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: 20, cursor: "pointer", lineHeight: 1 }}>×</button>
           </div>
         </div>
