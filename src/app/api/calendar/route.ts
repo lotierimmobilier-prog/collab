@@ -11,12 +11,23 @@ export async function GET(req: NextRequest) {
   const from = searchParams.get("from");
   const to   = searchParams.get("to");
 
-  const events = await prisma.calendarEvent.findMany({
+  const all = await prisma.calendarEvent.findMany({
     where: {
       ...(from && { start: { gte: new Date(from) } }),
       ...(to   && { end:   { lte: new Date(to)   } }),
     },
     orderBy: { start: "asc" },
+  });
+
+  // Cloisonnement : chacun ne voit que les événements qu'il a créés ou auxquels
+  // il participe ; admin voit tout.
+  const isAdmin = session.user.roleId === "admin";
+  const uid = session.user.id;
+  const myEmail = (session.user.email || "").toLowerCase();
+  const events = isAdmin ? all : all.filter(e => {
+    if (e.createdBy === uid) return true;
+    const att = Array.isArray(e.attendees) ? (e.attendees as Array<{ type?: string; id?: string; email?: string }>) : [];
+    return att.some(a => (a.type === "user" && a.id === uid) || (!!a.email && a.email.toLowerCase() === myEmail));
   });
 
   return NextResponse.json(events.map(e => ({
