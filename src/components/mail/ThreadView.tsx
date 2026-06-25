@@ -428,14 +428,19 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
     });
   }
 
+  const reSubject = () => /^re\s*:/i.test(thread.subject) ? thread.subject : `Re: ${thread.subject}`;
+
+  // ── Répondre : à l'expéditeur, corps vide (l'historique reste visible au-dessus) ──
+  function reply() {
+    if (!onForward) { setShowReply(true); return; }
+    onForward({ to: lastMsg.from.email, subject: reSubject(), body: "", accountId: thread.accountId });
+  }
+
   // ── Répondre à tous : expéditeur en destinataire + autres (To/Cc d'origine) en copie ──
   function replyAll() {
     const myEmail = (account?.email || "").toLowerCase();
     const fromEmail = lastMsg.from.email;
-    const others = [
-      ...(lastMsg.to || []),
-      ...(lastMsg.cc || []),
-    ]
+    const others = [...(lastMsg.to || []), ...(lastMsg.cc || [])]
       .map(r => r.email)
       .filter(Boolean)
       .filter(e => {
@@ -443,14 +448,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
         return le !== myEmail && le !== fromEmail.toLowerCase();
       });
     const cc = [...new Set(others)].join(", ");
-    const quote = `\n\n\nLe ${new Date(lastMsg.date).toLocaleString("fr-FR")}, ${lastMsg.from.name || fromEmail} a écrit :\n${(lastMsg.bodyText || (lastMsg.body || "").replace(/<[^>]+>/g, "")).trim()}`;
-    onForward?.({
-      to: fromEmail,
-      cc,
-      subject: /^re\s*:/i.test(thread.subject) ? thread.subject : `Re: ${thread.subject}`,
-      body: quote,
-      accountId: thread.accountId,
-    });
+    onForward?.({ to: fromEmail, cc, subject: reSubject(), body: "", accountId: thread.accountId });
   }
 
   const badge = senderInfo ? SENDER_BADGE[senderInfo.senderType] ?? SENDER_BADGE.unknown : null;
@@ -670,9 +668,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
         <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: "0.04em", marginRight: 4 }}>✦ Auguste</span>
 
         <AiBtn loading={aiLoading === "summarize"} onClick={summarize}       icon="📝" label="Résumer" />
-        <AiBtn loading={aiLoading === "draft"}     onClick={draftReply}      icon="✍" label="Répondre" />
-        {onForward && <AiBtn loading={false} onClick={replyAll} icon="↩↩" label="Répondre à tous" />}
-        {onForward && <AiBtn loading={false} onClick={() => forward("")} icon="↪" label="Transférer" />}
+        <AiBtn loading={aiLoading === "draft"}     onClick={draftReply}      icon="✍" label="Brouillon IA" />
         <AiBtn loading={aiLoading === "task"}      onClick={suggestTask}     icon="✅" label="Créer une tâche" />
         <AiBtn loading={aiLoading === "rdv"}       onClick={detectRdv}       icon="📅" label="Valider un RDV" />
         <AiBtn loading={aiLoading === "full"}      onClick={runFullAnalysis} icon="🔍" label="Analyse complète" />
@@ -991,17 +987,25 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
         </div>
       </div>
 
-      {/* Boutons répondre (bas, quand le panneau réponse est fermé) */}
+      {/* Actions mail (bas, style Gmail) — quand le panneau réponse est fermé */}
       {!showReply && (
-        <div style={{ borderTop: "1px solid #e5e7eb", padding: "12px 20px", background: "#fff", display: "flex", gap: 8, flexShrink: 0 }}>
-          <button onClick={() => setShowReply(true)}
-            style={{ background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer", color: GOLD, fontWeight: 500 }}>
+        <div style={{ borderTop: "1px solid #e5e7eb", padding: "12px 20px", background: "#fff", display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+          <button onClick={reply}
+            style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>
             ↩ Répondre
           </button>
-          <button onClick={draftReply} disabled={aiLoading === "draft"}
-            style={{ background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 14px", fontSize: 12, cursor: "pointer", color: GOLD, opacity: aiLoading === "draft" ? 0.6 : 1 }}>
-            {aiLoading === "draft" ? "✦ Rédaction…" : "✦ Réponse IA"}
-          </button>
+          {onForward && (
+            <button onClick={replyAll}
+              style={{ background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer", color: GOLD, fontWeight: 500 }}>
+              ↩↩ Répondre à tous
+            </button>
+          )}
+          {onForward && (
+            <button onClick={() => forward("")}
+              style={{ background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer", color: GOLD, fontWeight: 500 }}>
+              ↪ Transférer
+            </button>
+          )}
         </div>
       )}
 
