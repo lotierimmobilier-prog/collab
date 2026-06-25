@@ -31,6 +31,10 @@ const nav: NavItem[] = [
   { id: "reseaux",   label: "Réseaux sociaux",      icon: "⌘",  href: "/reseaux-sociaux",   group: "Agence" },
 ];
 
+const directionNav = [
+  { id: "direction", label: "Gestion d'entreprise", icon: "🏛", href: "/direction" },
+];
+
 const adminNav = [
   { id: "admin-users",     label: "Utilisateurs",   icon: "○", href: "/admin/utilisateurs" },
   { id: "admin-roles",     label: "Rôles & droits", icon: "◫", href: "/admin/roles" },
@@ -54,6 +58,7 @@ const MOBILE_NAV = [
 export default function Sidebar({ active }: { active: string }) {
   const { data: session } = useSession();
   const isAdmin = session?.user?.roleId === "admin";
+  const isDirection = ["admin", "direction", "dirigeant"].includes(session?.user?.roleId ?? "");
   const bp = useBreakpoint();
   const [collapsed, setCollapsed]   = useState(false);
   const [mounted, setMounted]       = useState(false);
@@ -103,6 +108,15 @@ export default function Sidebar({ active }: { active: string }) {
                   ))}
                 </div>
               ))}
+
+              {isDirection && (
+                <>
+                  <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: LABEL_COLOR, padding: "10px 20px 4px", fontWeight: 600 }}>Direction</div>
+                  {directionNav.map(item => (
+                    <MobileMenuItem key={item.id} item={item as NavItem} active={active} onClose={() => setMobileOpen(false)} />
+                  ))}
+                </>
+              )}
 
               {isAdmin && (
                 <>
@@ -221,6 +235,14 @@ export default function Sidebar({ active }: { active: string }) {
             </div>
           );
         })}
+
+        {isDirection && (
+          <>
+            {!isCollapsed && <NavLabel>Direction</NavLabel>}
+            {isCollapsed && <div style={{ height: 8 }} />}
+            {directionNav.map(item => <NavItemRow key={item.id} item={item as NavItem} active={active} collapsed={isCollapsed} />)}
+          </>
+        )}
 
         {isAdmin && (
           <>
