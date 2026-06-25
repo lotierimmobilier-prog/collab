@@ -35,6 +35,7 @@ const nav: NavItem[] = [
 const directionNav = [
   { id: "direction", label: "Gestion d'entreprise", icon: "🏛", href: "/direction" },
   { id: "comptabilite", label: "Comptabilité", icon: "💶", href: "/comptabilite/banque" },
+  { id: "ics", label: "Connecteur ICS", icon: "⇄", href: "/ics" },
 ];
 
 const adminNav = [

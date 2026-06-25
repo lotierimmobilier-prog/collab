@@ -736,3 +736,24 @@ model TxnMemory {
 
   @@map("txn_memory")
 }
+
+/// Connecteur ICS (MyICS / Spirit). Configuration unique (id = "default").
+/// Le mot de passe est stocké chiffré (AES-256-GCM). Jamais en clair.
+model IcsConfig {
+  id          String    @id @default("default")
+  authBaseUrl String    @default("https://auth.ics.fr/auth")
+  realm       String    @default("Production")
+  clientId    String    @default("myics-customer")
+  portalUrl   String    @default("https://my.ics.fr")
+  apiBaseUrl  String?   // base de l'API Spirit, renseignée depuis le HAR
+  username    String?
+  passwordEnc String?   // mot de passe chiffré (format iv:tag:cipher en base64)
+  enabled     Boolean   @default(false)
+  lastTestAt  DateTime?
+  lastTestOk  Boolean   @default(false)
+  lastError   String?
+  updatedById String?
+  updatedAt   DateTime  @updatedAt @default(now())
+
+  @@map("ics_config")
+}
