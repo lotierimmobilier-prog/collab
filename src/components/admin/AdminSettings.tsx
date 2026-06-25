@@ -8,7 +8,7 @@ const BORDER  = "#E6E1D9";
 
 interface Settings {
   smtp_host: string; smtp_port: string; smtp_user: string; smtp_pass: string;
-  smtp_from: string; notif_enabled: string;
+  smtp_from: string; notif_enabled: string; auguste_logo_url: string;
 }
 
 export default function AdminSettings() {
@@ -30,7 +30,35 @@ export default function AdminSettings() {
     smtp_user: "collab@lotier-immobilier.com", smtp_pass: "",
     smtp_from: "Collab Lotier <collab@lotier-immobilier.com>",
     notif_enabled: "true",
+    auguste_logo_url: "",
   });
+  const [logoErr, setLogoErr] = useState("");
+
+  // Charge une image, la redimensionne (max 128px) et la stocke en data URL compacte
+  function onLogoFile(file: File) {
+    setLogoErr("");
+    if (!file.type.startsWith("image/")) { setLogoErr("Fichier image attendu (PNG, JPG…)"); return; }
+    if (file.size > 4 * 1024 * 1024) { setLogoErr("Image trop lourde (max 4 Mo)"); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onload = () => {
+        const max = 128;
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { setLogoErr("Impossible de traiter l'image"); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        set("auguste_logo_url", canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.onerror = () => setLogoErr("Image illisible");
+      img.src = reader.result as string;
+    };
+    reader.onerror = () => setLogoErr("Lecture du fichier impossible");
+    reader.readAsDataURL(file);
+  }
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
   const [testing, setTesting] = useState(false);
@@ -117,6 +145,42 @@ export default function AdminSettings() {
           <strong>Gmail :</strong> utilisez un <em>App Password</em> (Compte Google → Sécurité → Mots de passe des applications).<br />
           Le mail de notification est <strong>collab@lotier-immobilier.com</strong>.
         </div>
+      </Section>
+
+      {/* Avatar d'Auguste */}
+      <Section title="✦ Auguste — Avatar / logo">
+        <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 0, marginBottom: 14 }}>
+          Remplacez l'icône par défaut par la photo d'un assistant réel. Importez une image (redimensionnée automatiquement) ou collez l'URL d'une image.
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: settings.auguste_logo_url ? "#fff" : GOLD, border: `1px solid ${BORDER}`, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            {settings.auguste_logo_url
+              ? <img src={settings.auguste_logo_url} alt="Aperçu Auguste" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              : <span style={{ color: "#fff", fontSize: 26 }}>✦</span>}
+          </div>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <label style={{ background: "#f3f4f6", color: "#374151", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>
+                📷 Importer une photo
+                <input type="file" accept="image/*" onChange={e => e.target.files?.[0] && onLogoFile(e.target.files[0])} style={{ display: "none" }} />
+              </label>
+              {settings.auguste_logo_url && (
+                <button onClick={() => set("auguste_logo_url", "")} style={{ background: "none", color: "#dc2626", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>
+                  Retirer
+                </button>
+              )}
+            </div>
+            <input value={settings.auguste_logo_url.startsWith("data:") ? "" : settings.auguste_logo_url}
+              onChange={e => set("auguste_logo_url", e.target.value)}
+              placeholder="…ou collez une URL d'image (https://…)"
+              style={inp} />
+            {settings.auguste_logo_url.startsWith("data:") && (
+              <span style={{ fontSize: 11, color: "#9ca3af" }}>Image importée (intégrée). Cliquez « Retirer » pour saisir une URL à la place.</span>
+            )}
+            {logoErr && <span style={{ fontSize: 12, color: "#dc2626" }}>{logoErr}</span>}
+          </div>
+        </div>
+        <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 12 }}>N'oubliez pas d'<strong>Enregistrer</strong> pour appliquer.</div>
       </Section>
 
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>

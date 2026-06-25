@@ -844,6 +844,14 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
   const [sending, setSending]     = useState(false);
   const [error, setError]         = useState("");
   const [selLabels, setSelLabels] = useState(["sent"]);
+  const [size, setSize]           = useState<"normal" | "large" | "full">("normal");
+
+  // Dimensions de la fenêtre selon l'état d'agrandissement
+  const frame: React.CSSProperties = size === "full"
+    ? { top: 16, left: 16, right: 16, bottom: 16, width: "auto", maxHeight: "none" }
+    : size === "large"
+    ? { bottom: 24, right: 24, width: "min(900px, 94vw)", height: "90vh", maxHeight: "none" }
+    : { bottom: 24, right: 24, width: 580, maxHeight: "85vh" };
 
   const acct = allAccounts.find(a => a.id === accountId);
   const sig   = acct?.signature ?? "";
@@ -930,12 +938,14 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 40 }} />
-      <div style={{ position: "fixed", bottom: 24, right: 24, width: 580, background: "#fff", borderRadius: 14, zIndex: 50, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", maxHeight: "85vh", overflow: "hidden" }}>
+      <div style={{ position: "fixed", ...frame, background: "#fff", borderRadius: size === "full" ? 12 : 14, zIndex: 50, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Header */}
         <div style={{ background: "#1f2937", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
           <span style={{ color: "#fff", fontWeight: 600, fontSize: 13 }}>✉ Nouveau message</span>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <button onClick={() => setShowSig(s => !s)} title="Gérer la signature" style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: "#d1d5db", fontSize: 11 }}>✍ Signature</button>
+            <button onClick={() => setSize(s => s === "large" ? "normal" : "large")} title={size === "large" ? "Réduire" : "Agrandir"} style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: "#d1d5db", fontSize: 13, lineHeight: 1 }}>{size === "large" ? "❏" : "⤢"}</button>
+            <button onClick={() => setSize(s => s === "full" ? "normal" : "full")} title={size === "full" ? "Quitter le plein écran" : "Plein écran"} style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: "#d1d5db", fontSize: 13, lineHeight: 1 }}>{size === "full" ? "🗗" : "⛶"}</button>
             <button onClick={onClose} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: 20, cursor: "pointer", lineHeight: 1 }}>×</button>
           </div>
         </div>
