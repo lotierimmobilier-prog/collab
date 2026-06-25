@@ -597,3 +597,79 @@ model PerformanceEntry {
   @@index([date])
   @@map("performance_entries")
 }
+
+// ── Gestion d'entreprise (Direction) ─────────────────────────
+
+/// Flotte automobile de l'entreprise.
+model Vehicle {
+  id             String    @id @default(cuid())
+  label          String    // marque + modèle, ex. « Peugeot 208 »
+  immatriculation String?
+  holdType       String    @default("propriete") // propriete | leasing | location
+  assignedToId   String?
+  assignedName   String?
+  insurer        String?
+  startDate      DateTime?
+  endDate        DateTime? // fin de leasing / location
+  controleTechnique DateTime?
+  monthlyCost    Float?
+  note           String?
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("vehicles")
+}
+
+/// Locaux loués par l'entreprise (baux commerciaux, bureaux, parkings…).
+model Premise {
+  id          String    @id @default(cuid())
+  label       String    // nom / désignation du local
+  address     String?
+  bailleur    String?
+  startDate   DateTime?
+  endDate     DateTime?
+  rentMonthly Float?
+  charges     Float?
+  note        String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("premises")
+}
+
+/// Cartes professionnelles (agents commerciaux et direction).
+model ProCard {
+  id          String    @id @default(cuid())
+  userId      String?
+  holderName  String    // titulaire de la carte
+  cardNumber  String?
+  cardType    String?   // transaction | gestion | both
+  issuedBy    String?   // CCI émettrice
+  startDate   DateTime?
+  expiryDate  DateTime?
+  note        String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("pro_cards")
+}
+
+/// Contrats d'assurance de l'entreprise.
+model InsurancePolicy {
+  id            String    @id @default(cuid())
+  type          String    @default("rc") // rc | rcpro | bureaux | autre
+  insurer       String?
+  policyNumber  String?
+  startDate     DateTime?
+  endDate       DateTime?
+  premiumAmount Float?
+  note          String?
+  createdById   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("insurance_policies")
+}
