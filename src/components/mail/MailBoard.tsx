@@ -894,8 +894,9 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
     : size === "full"
     ? { top: 16, left: 16, right: 16, bottom: 16, width: "auto", maxHeight: "none" }
     : size === "large"
-    ? { bottom: 24, right: 24, width: "min(900px, 94vw)", height: "90vh", maxHeight: "none" }
-    : { bottom: 24, right: 24, width: 580, maxHeight: "85vh" };
+    ? { top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(900px, 94vw)", height: "90vh", maxHeight: "none" }
+    // Fenêtre centrée à l'écran (plus claire), avec fond assombri derrière.
+    : { top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 620, maxHeight: "85vh" };
 
   const acct = allAccounts.find(a => a.id === accountId);
   const sig   = acct?.signature ?? "";
@@ -981,7 +982,7 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 40 }} />
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 40 }} />
       <div style={{ position: "fixed", ...frame, background: "#fff", borderRadius: size === "full" ? 12 : 14, zIndex: 50, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Header */}
         <div style={{ background: "#1f2937", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>

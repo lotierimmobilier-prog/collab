@@ -230,15 +230,27 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
     finally { setAiLoading(null); }
   }
 
+  // Convertit un texte (avec sauts de ligne) en HTML pour l'éditeur riche
+  function toHtml(txt: string): string {
+    return `<div style="font-family:sans-serif;font-size:14px;line-height:1.6">${(txt || "").replace(/\n/g, "<br/>")}</div>`;
+  }
+
   async function draftReply() {
-    setAiLoading("draft"); setShowReply(true);
+    setAiLoading("draft");
     try {
       const r = await fetch("/api/mail/ai", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "draft_reply", messages: thread.messages, threadSubject: thread.subject, senderEmail: lastMsg?.from?.email, length: aiLength }),
       });
       const d = await r.json();
-      setReplyBody(d.reply ?? "");
+      const draft = d.reply ?? "";
+      // Ouvre la fenêtre de rédaction centrée (éditeur riche + signature),
+      // pré-remplie avec le brouillon généré par Auguste.
+      if (onForward) {
+        onForward({ to: lastMsg.from.email, subject: reSubject(), body: toHtml(draft), accountId: thread.accountId });
+      } else {
+        setReplyBody(draft); setShowReply(true);
+      }
     } catch { /* silencieux */ }
     finally { setAiLoading(null); }
   }
@@ -423,12 +435,12 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
     onForward?.({
       to,
       subject: /^tr\s*:/i.test(thread.subject) ? thread.subject : `Tr: ${thread.subject}`,
-      body: buildForwardBody(),
+      body: toHtml(buildForwardBody()),
       accountId: thread.accountId,
     });
   }
 
-  const reSubject = () => /^re\s*:/i.test(thread.subject) ? thread.subject : `Re: ${thread.subject}`;
+  function reSubject() { return /^re\s*:/i.test(thread.subject) ? thread.subject : `Re: ${thread.subject}`; }
 
   // ── Répondre : à l'expéditeur, corps vide (l'historique reste visible au-dessus) ──
   function reply() {
