@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   MailAccount, MailMessage, MailThread, MailLabel,
-  DEFAULT_LABELS, threadFromMessages,
+  DEFAULT_LABELS, SYSTEM_LABELS, threadFromMessages,
 } from "@/lib/mail";
 import {
   loadGmailConfigs, loadGmailToken, isGmailTokenValid,
@@ -113,7 +113,13 @@ export default function MailBoard() {
       });
 
     const l = localStorage.getItem(LABELS_KEY);
-    if (l) setLabels(JSON.parse(l));
+    if (l) {
+      // Les libellés système (dont « Publicité ») viennent toujours du code
+      // (ordre + nouveautés garantis) ; on ne garde du cache que les perso.
+      const stored = JSON.parse(l) as MailLabel[];
+      const custom = stored.filter(x => !x.system);
+      setLabels([...SYSTEM_LABELS, ...custom]);
+    }
     const k = localStorage.getItem(AI_KEY_STORE);
     if (k) setAiKey(k);
     fetch("/api/users").then(r => r.json()).then((us: { id: string; prenom: string; nom: string; email?: string; active: boolean }[]) => setUsers(us.filter(u => u.active))).catch(() => {});
@@ -850,7 +856,7 @@ function NavItem({ active, onClick, children }: { active: boolean; onClick: () =
 function Badge({ children }: { children: React.ReactNode }) {
   return <span style={{ background: "#B8966A", color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 10 }}>{children}</span>;
 }
-function labelIcon(id: string) { return { inbox: "📥", sent: "📤", drafts: "📝", starred: "⭐", trash: "🗑" }[id] ?? "📧"; }
+function labelIcon(id: string) { return { inbox: "📥", sent: "📤", drafts: "📝", starred: "⭐", pub: "📣", trash: "🗑" }[id] ?? "📧"; }
 function GIcon() {
   return (
     <svg width={14} height={14} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>

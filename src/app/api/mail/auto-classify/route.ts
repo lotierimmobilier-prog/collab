@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
     for (const m of recent) {
       const key = m.threadId || m.id;
       if (m.labels.includes("trash")) continue;
+      if (m.labels.includes("pub")) continue;
       if (m.labels.some(l => l.startsWith("type:"))) continue;
       if (!byThread.has(key)) byThread.set(key, m);
     }

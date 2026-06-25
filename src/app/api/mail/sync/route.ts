@@ -52,7 +52,7 @@ async function syncFolder(client: any, folder: string, accountId: string, since:
       if (pageUids.length > 0) {
         const isSent = folder !== "INBOX";
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        for await (const msg of (client as any).fetch(pageUids.join(","), { uid: true, flags: true, envelope: true }, { uid: true }) as AsyncIterable<any>) {
+        for await (const msg of (client as any).fetch(pageUids.join(","), { uid: true, flags: true, envelope: true, headers: ["list-unsubscribe", "precedence"] }, { uid: true }) as AsyncIterable<any>) {
           const env       = msg.envelope ?? {};
           const flags     = msg.flags ?? new Set();
           const isUnread  = !flags.has("\\Seen");
@@ -65,8 +65,19 @@ async function syncFolder(client: any, folder: string, accountId: string, since:
             ? env.messageId.replace(/[<>]/g, "").replace(/[^a-zA-Z0-9@._-]/g, "_")
             : `${accountId}-${folder}-${msg.uid}`;
 
+          // Détection newsletter / publicité : en-tête List-Unsubscribe (signal
+          // standard) ou Precedence: bulk, ou mots-clés dans l'objet/expéditeur.
+          const hdrs    = (msg.headers ? msg.headers.toString() : "").toLowerCase();
+          const subjLc  = (env.subject ?? "").toLowerCase();
+          const fromLc  = fromEmail.toLowerCase();
+          const isPub   = !isSent && (
+            hdrs.includes("list-unsubscribe") ||
+            hdrs.includes("precedence: bulk") ||
+            /désinscri|desinscri|se d[ée]sabonner|unsubscribe|newsletter|no[-_]?reply|nepasrepondre|ne-pas-repondre/.test(`${subjLc} ${fromLc}`)
+          );
+
           const identity = await identifySender(fromEmail);
-          const labels   = isSent ? ["sent"] : ["inbox", ...(isStarred ? ["starred"] : [])];
+          const labels   = isSent ? ["sent"] : isPub ? ["pub"] : ["inbox", ...(isStarred ? ["starred"] : [])];
 
           messages.push({
             id: `${accountId}-${folder}-${msg.uid}`,

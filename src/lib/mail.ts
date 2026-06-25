@@ -83,6 +83,7 @@ export const SYSTEM_LABELS: MailLabel[] = [
   { id: "sent",    name: "Envoyés",            color: "#374151", system: true },
   { id: "drafts",  name: "Brouillons",         color: "#374151", system: true },
   { id: "starred", name: "Suivis",             color: "#f59e0b", system: true },
+  { id: "pub",     name: "Publicité",          color: "#9333ea", system: true },
   { id: "trash",   name: "Corbeille",          color: "#ef4444", system: true },
 ];
 
