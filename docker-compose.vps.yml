@@ -31,4 +31,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${HOME}/.docker/config.json:/config.json:ro   # auth GHCR pour images privées
-    command: --interval 180 --cleanup --label-enable
+    # Vérifie une nouvelle image toutes les 30 s (au lieu de 180) pour déployer
+    # plus vite après un push sur main. Voir docs/deploiement-rapide.md pour un
+    # déclenchement instantané (API HTTP de Watchtower depuis GitHub Actions).
+    command: --interval 30 --cleanup --label-enable

@@ -576,3 +576,23 @@ model Contact {
   @@index([type])
   @@map("contacts")
 }
+
+/// Performances commerciales : chaque entrée = une opération réalisée par un
+/// agent (vente, mandat de vente, mandat de location, mise en location).
+/// Saisie par l'administrateur ; alimente le classement du trimestre affiché
+/// sur le tableau de bord des commerciaux.
+model PerformanceEntry {
+  id          String   @id @default(cuid())
+  userId      String   // agent crédité de l'opération
+  type        String   // vente | mandat_vente | mandat_loc | mise_en_loc
+  label       String?  // bien / adresse / référence (optionnel)
+  amount      Float?   // montant ou honoraires (optionnel)
+  date        DateTime // date de l'opération (détermine le trimestre)
+  createdById String?  // admin qui a saisi
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([type])
+  @@index([date])
+  @@map("performance_entries")
+}
