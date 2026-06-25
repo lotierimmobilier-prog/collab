@@ -9,14 +9,15 @@ export async function GET(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const folder    = searchParams.get("folder")    || "INBOX";
+  const folderParam = searchParams.get("folder");      // absent ou "all" = tous les dossiers
   const accountId = searchParams.get("accountId") || undefined;
   const limit     = parseInt(searchParams.get("limit") || "100");
 
   const since = new Date();
   since.setMonth(since.getMonth() - 6);
 
-  const where: Record<string, unknown> = { folder, date: { gte: since } };
+  const where: Record<string, unknown> = { date: { gte: since } };
+  if (folderParam && folderParam !== "all") where.folder = folderParam;
   if (accountId) where.accountId = accountId;
 
   // Cloisonnement mail : chacun ne voit que ses propres mails. L'admin paramètre

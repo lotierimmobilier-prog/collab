@@ -126,7 +126,7 @@ export default function MailBoard() {
     setGmailConfigs(loadGmailConfigs());
 
     // Charger les emails persistés en BDD au démarrage
-    fetch("/api/mail/messages?limit=500")
+    fetch("/api/mail/messages?limit=1500")
       .then(r => r.json())
       .then(d => {
         if (d.ok && d.messages?.length) {
