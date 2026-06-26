@@ -388,6 +388,30 @@ model ServiceOrder {
   @@map("service_orders")
 }
 
+/// Demande d'assistance locataire/copropriétaire : lien envoyé par l'agence,
+/// le déclarant décrit le sinistre et joint des photos depuis son téléphone.
+/// Sert de point d'entrée à un ordre de service.
+model AssistanceRequest {
+  id           String   @id @default(cuid())
+  token        String   @unique          // jeton du lien public
+  role         String   @default("locataire") // locataire | coproprietaire
+  contactName  String?
+  contactPhone String?
+  contactEmail String?
+  address      String?
+  description  String?
+  photos       Json?                      // [{id,name,mime,size,data}]
+  status       String   @default("nouvelle") // nouvelle | soumise | ods_cree | cloturee
+  odsId        String?
+  createdById  String?
+  submittedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status])
+  @@map("assistance_requests")
+}
+
 // ── Gestion locative ─────────────────────────────────────────
 
 model Owner {

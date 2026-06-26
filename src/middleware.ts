@@ -3,8 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 // ── Routes publiques (pas d'auth requise) ────────────────────────
 const PUBLIC_PATHS = [
   "/api/auth",
+  "/api/public",       // endpoints publics (assistance locataire par lien)
   "/login",
   "/candidature",
+  "/declaration",      // page publique d'assistance locataire (/declaration/<token>)
   "/_next",
   "/logo.png",
   "/favicon.ico",
