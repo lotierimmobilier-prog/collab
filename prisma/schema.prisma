@@ -364,6 +364,20 @@ model ServiceOrder {
   status      String    @default("brouillon")  // brouillon, envoyé, accepté, en_cours, terminé, annulé
   notes       String?
   createdBy   String
+  // ── Détail d'intervention ──
+  interventionType String?               // Plomberie, Serrurerie, Fuite, Électricité…
+  onSiteName       String?               // contact sur place (nom)
+  onSitePhone      String?
+  onSiteRole       String?               // locataire | coproprietaire | proprietaire | gardien | autre
+  keyAtAgency      Boolean  @default(false) // si pas loué : clé à l'agence
+  accessInfo       String?               // digicode, étage, bâtiment, instructions
+  urgency          String?               // normal | urgent
+  quoteRequired    Boolean  @default(false) // devis obligatoire avant intervention
+  agentName        String?               // agent référent (coordonnées agence)
+  agentPhone       String?
+  // ── Suivi d'envoi ──
+  sentAt      DateTime?
+  sentTo      String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

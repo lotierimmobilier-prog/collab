@@ -383,32 +383,52 @@ function ODSModal({ task, onClose, onSave }: { task: Task; onClose: () => void; 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [f, setF] = useState({
     supplierId:  "",
+    interventionType: "",
     title:       task.title,
     description: task.description ?? "",
     address:     "",
     deadline:    task.dueDate ?? "",
     amount:      "",
     notes:       "",
+    onSiteName:  "",
+    onSitePhone: "",
+    onSiteRole:  "locataire",
+    keyAtAgency: false,
+    accessInfo:  "",
+    urgency:     "normal",
+    quoteRequired: false,
   });
   const [saving, setSaving] = useState(false);
+  const [sendMsg, setSendMsg] = useState("");
 
   useEffect(() => {
     fetch("/api/fournisseurs").then(r => r.json()).then(d => { if (Array.isArray(d)) setSuppliers(d.filter((s: Supplier & { active: boolean }) => s.active)); }).catch(() => {});
   }, []);
 
-  function set(k: string, v: string) { setF(p => ({ ...p, [k]: v })); }
+  function set(k: string, v: string | boolean) { setF(p => ({ ...p, [k]: v })); }
 
-  async function submit() {
+  async function submit(andSend: boolean) {
     if (!f.supplierId || !f.title.trim()) return;
-    setSaving(true);
+    setSaving(true); setSendMsg("");
     try {
       const r = await fetch("/api/ods", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...f, taskId: task.id }),
       });
-      if (r.ok) onSave(await r.json());
-    } finally { setSaving(false); }
+      if (!r.ok) { setSendMsg("Échec de la création."); return; }
+      const created = await r.json();
+      if (andSend) {
+        setSendMsg("Envoi au fournisseur…");
+        const s = await fetch(`/api/ods/${created.id}/send`, { method: "POST" });
+        const d = await s.json();
+        if (!s.ok) { setSendMsg(d.error || "ODS créé, mais envoi échoué."); onSave(created); return; }
+        onSave(d.order ?? created);
+      } else {
+        onSave(created);
+      }
+    } catch { setSendMsg("Erreur réseau."); }
+    finally { setSaving(false); }
   }
 
   const selectedSupplier = suppliers.find(s => s.id === f.supplierId);
@@ -444,21 +464,62 @@ function ODSModal({ task, onClose, onSave }: { task: Task; onClose: () => void; 
               {selectedSupplier.email && <span style={{ marginLeft: 8 }}>✉️ {selectedSupplier.email}</span>}
             </div>
           )}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FLabel label="Type d'intervention"><input value={f.interventionType} onChange={e => set("interventionType", e.target.value)} placeholder="Plomberie, Serrurerie…" style={inp} /></FLabel>
+            <FLabel label="Urgence">
+              <select value={f.urgency} onChange={e => set("urgency", e.target.value)} style={{ ...inp, cursor: "pointer" }}>
+                <option value="normal">Normale</option>
+                <option value="urgent">Urgente</option>
+              </select>
+            </FLabel>
+          </div>
           <FLabel label="Objet *"><input value={f.title} onChange={e => set("title", e.target.value)} style={inp} /></FLabel>
-          <FLabel label="Détail / instructions"><textarea value={f.description} onChange={e => set("description", e.target.value)} rows={3} style={{ ...inp, height: "auto", padding: "8px 10px", resize: "none" }} /></FLabel>
-          <FLabel label="Adresse d'intervention"><input value={f.address} onChange={e => set("address", e.target.value)} style={inp} /></FLabel>
+          <FLabel label="Détail / description du problème"><textarea value={f.description} onChange={e => set("description", e.target.value)} rows={3} style={{ ...inp, height: "auto", padding: "8px 10px", resize: "none" }} /></FLabel>
+          <FLabel label="Lieu / adresse d'intervention"><input value={f.address} onChange={e => set("address", e.target.value)} style={inp} /></FLabel>
+
+          {/* Contact sur place */}
+          <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>Contact sur place</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              <input value={f.onSiteName} onChange={e => set("onSiteName", e.target.value)} placeholder="Nom" style={inp} />
+              <input value={f.onSitePhone} onChange={e => set("onSitePhone", e.target.value)} placeholder="Téléphone" style={inp} />
+              <select value={f.onSiteRole} onChange={e => set("onSiteRole", e.target.value)} style={{ ...inp, cursor: "pointer" }}>
+                <option value="locataire">Locataire</option>
+                <option value="coproprietaire">Copropriétaire</option>
+                <option value="proprietaire">Propriétaire</option>
+                <option value="gardien">Gardien</option>
+                <option value="autre">Autre</option>
+              </select>
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#374151", cursor: "pointer" }}>
+              <input type="checkbox" checked={f.keyAtAgency} onChange={e => set("keyAtAgency", e.target.checked)} />
+              Logement non loué — clés à retirer à l'agence
+            </label>
+            <input value={f.accessInfo} onChange={e => set("accessInfo", e.target.value)} placeholder="Infos d'accès : digicode, étage, bâtiment…" style={inp} />
+          </div>
+
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <FLabel label="Délai souhaité"><input type="date" value={f.deadline} onChange={e => set("deadline", e.target.value)} style={inp} /></FLabel>
-            <FLabel label="Montant estimé (€)"><input type="number" value={f.amount} onChange={e => set("amount", e.target.value)} style={inp} min="0" step="0.01" /></FLabel>
+            <FLabel label="Montant / plafond (€)"><input type="number" value={f.amount} onChange={e => set("amount", e.target.value)} style={inp} min="0" step="0.01" /></FLabel>
           </div>
-          <FLabel label="Notes internes"><textarea value={f.notes} onChange={e => set("notes", e.target.value)} rows={2} style={{ ...inp, height: "auto", padding: "8px 10px", resize: "none" }} /></FLabel>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#374151", cursor: "pointer" }}>
+            <input type="checkbox" checked={f.quoteRequired} onChange={e => set("quoteRequired", e.target.checked)} />
+            Demander un devis avant intervention
+          </label>
+          <FLabel label="Notes internes (non envoyées)"><textarea value={f.notes} onChange={e => set("notes", e.target.value)} rows={2} style={{ ...inp, height: "auto", padding: "8px 10px", resize: "none" }} /></FLabel>
+          {sendMsg && <div style={{ fontSize: 12, color: sendMsg.startsWith("Échec") || sendMsg.startsWith("Erreur") || sendMsg.includes("échoué") ? "#dc2626" : "#059669" }}>{sendMsg}</div>}
         </div>
 
-        <div style={{ padding: "14px 20px", borderTop: "1px solid #e5e7eb", display: "flex", gap: 10, justifyContent: "flex-end" }}>
+        <div style={{ padding: "14px 20px", borderTop: "1px solid #e5e7eb", display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
           <button onClick={onClose} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>Annuler</button>
-          <button onClick={submit} disabled={!f.supplierId || !f.title.trim() || saving}
-            style={{ background: !f.supplierId || !f.title.trim() ? "#e5e7eb" : GOLD, color: !f.supplierId || !f.title.trim() ? "#9ca3af" : "#fff", border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
-            {saving ? "Création…" : "Émettre l'ODS"}
+          <button onClick={() => submit(false)} disabled={!f.supplierId || !f.title.trim() || saving}
+            style={{ background: "#fff", border: `1px solid ${GOLD}`, color: GOLD, borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
+            {saving ? "…" : "Enregistrer (brouillon)"}
+          </button>
+          <button onClick={() => submit(true)} disabled={!f.supplierId || !f.title.trim() || saving || !selectedSupplier?.email}
+            title={!selectedSupplier?.email ? "Le fournisseur n'a pas d'email" : "Créer et envoyer l'ODS par email au fournisseur"}
+            style={{ background: !f.supplierId || !f.title.trim() || !selectedSupplier?.email ? "#e5e7eb" : GOLD, color: !f.supplierId || !f.title.trim() || !selectedSupplier?.email ? "#9ca3af" : "#fff", border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
+            {saving ? "Envoi…" : "✉️ Émettre et envoyer"}
           </button>
         </div>
       </div>

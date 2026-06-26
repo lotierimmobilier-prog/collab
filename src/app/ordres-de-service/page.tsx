@@ -16,7 +16,7 @@ const ODS_STATUS: Record<string, { label: string; color: string }> = {
 interface ODS {
   id: string; ref: string; supplierId: string; title: string; description?: string;
   address?: string; deadline?: string; amount?: number; status: string; notes?: string;
-  createdAt: string;
+  createdAt: string; sentAt?: string | null;
   supplier?: { name: string; type: string; phone?: string; email?: string };
 }
 
@@ -37,6 +37,21 @@ export default function ODSPage() {
   async function updateStatus(id: string, status: string) {
     const r = await fetch(`/api/ods/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
     if (r.ok) setOrders(p => p.map(o => o.id === id ? { ...o, status } : o));
+  }
+
+  const [sending, setSending] = useState<string | null>(null);
+  async function sendToSupplier(o: ODS) {
+    if (!o.supplier?.email) { alert("Ce fournisseur n'a pas d'adresse email."); return; }
+    if (!confirm(`Envoyer l'ordre de service ${o.ref} par email à ${o.supplier.name} (${o.supplier.email}) ?`)) return;
+    setSending(o.id);
+    try {
+      const r = await fetch(`/api/ods/${o.id}/send`, { method: "POST" });
+      const d = await r.json();
+      if (!r.ok) { alert(d.error || "Envoi échoué."); return; }
+      setOrders(p => p.map(x => x.id === o.id ? { ...x, ...d.order } : x));
+      alert(`Ordre de service envoyé à ${d.sentTo}.`);
+    } catch { alert("Erreur réseau."); }
+    finally { setSending(null); }
   }
 
   const filtered = filterStatus === "all" ? orders : orders.filter(o => o.status === filterStatus);
@@ -94,9 +109,16 @@ export default function ODSPage() {
                       </div>
                       {o.description && <div style={{ fontSize: 12, color: "#6b7280", marginTop: 6, lineHeight: 1.4 }}>{o.description}</div>}
                     </div>
-                    <select value={o.status} onChange={e => updateStatus(o.id, e.target.value)} style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "5px 8px", fontSize: 12, background: "#f9fafb", outline: "none", cursor: "pointer", flexShrink: 0 }}>
-                      {Object.entries(ODS_STATUS).map(([v, s]) => <option key={v} value={v}>{s.label}</option>)}
-                    </select>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end", flexShrink: 0 }}>
+                      <select value={o.status} onChange={e => updateStatus(o.id, e.target.value)} style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "5px 8px", fontSize: 12, background: "#f9fafb", outline: "none", cursor: "pointer" }}>
+                        {Object.entries(ODS_STATUS).map(([v, s]) => <option key={v} value={v}>{s.label}</option>)}
+                      </select>
+                      <button onClick={() => sendToSupplier(o)} disabled={sending === o.id || !o.supplier?.email}
+                        title={!o.supplier?.email ? "Le fournisseur n'a pas d'email" : "Envoyer l'ODS par email au fournisseur"}
+                        style={{ border: `1px solid ${GOLD}`, color: o.supplier?.email ? GOLD : "#9ca3af", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: o.supplier?.email ? "pointer" : "default", whiteSpace: "nowrap" }}>
+                        {sending === o.id ? "Envoi…" : o.sentAt ? "↻ Renvoyer" : "✉️ Envoyer"}
+                      </button>
+                    </div>
                   </div>
                 );
               })}
