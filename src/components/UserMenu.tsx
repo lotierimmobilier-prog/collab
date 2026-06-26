@@ -24,6 +24,26 @@ export default function UserMenu() {
   const [pwdMsg, setPwdMsg] = useState("");
   const [savingPwd, setSavingPwd] = useState(false);
 
+  // Vidage du cache (conseillé chaque semaine pour récupérer la dernière version)
+  const [clearing, setClearing] = useState(false);
+  async function clearCache() {
+    if (!confirm("Vider le cache de l'application ?\n\nCela force le chargement de la dernière version (assets, service worker). Vous resterez connecté. Conseillé une fois par semaine.")) return;
+    setClearing(true);
+    try {
+      if (typeof caches !== "undefined") {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      try { sessionStorage.clear(); } catch { /* ignore */ }
+    } catch { /* best-effort */ }
+    // Rechargement forcé sur la dernière version.
+    window.location.reload();
+  }
+
   useEffect(() => {
     function handler(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setView("menu"); } }
     document.addEventListener("mousedown", handler);
@@ -84,6 +104,8 @@ export default function UserMenu() {
               <Row icon="📞" label="Mon numéro de téléphone" onClick={() => { setView("phone"); setPhoneMsg(""); }} />
               <Row icon="🔑" label="Changer mon mot de passe" onClick={() => { setView("password"); setPwdMsg(""); }} />
               <div style={{ height: 1, background: "#f3f4f6", margin: "6px 4px" }} />
+              <Row icon="🧹" label={clearing ? "Vidage en cours…" : "Vider le cache"} sub="Conseillé chaque semaine" onClick={() => { if (!clearing) clearCache(); }} />
+              <div style={{ height: 1, background: "#f3f4f6", margin: "6px 4px" }} />
               <Row icon="↩" label="Se déconnecter" danger onClick={() => signOut({ callbackUrl: "/login" })} />
             </div>
           )}
@@ -117,12 +139,16 @@ export default function UserMenu() {
   );
 }
 
-function Row({ icon, label, onClick, danger }: { icon: string; label: string; onClick: () => void; danger?: boolean }) {
+function Row({ icon, label, onClick, danger, sub }: { icon: string; label: string; onClick: () => void; danger?: boolean; sub?: string }) {
   return (
     <button onClick={onClick} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", borderRadius: 8, padding: "9px 10px", cursor: "pointer", fontSize: 13, color: danger ? "#dc2626" : "#374151", textAlign: "left" }}
       onMouseEnter={e => (e.currentTarget.style.background = "#f9fafb")}
       onMouseLeave={e => (e.currentTarget.style.background = "none")}>
-      <span style={{ fontSize: 15 }}>{icon}</span>{label}
+      <span style={{ fontSize: 15 }}>{icon}</span>
+      <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.3 }}>
+        <span>{label}</span>
+        {sub && <span style={{ fontSize: 11, color: "#9ca3af" }}>{sub}</span>}
+      </span>
     </button>
   );
 }
