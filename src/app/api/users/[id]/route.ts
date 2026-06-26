@@ -23,7 +23,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       data.passwordHash = await bcrypt.hash(password, 12);
     }
 
-    const user = await prisma.user.update({ where: { id }, data });
+    const user = await prisma.user.update({
+      where: { id }, data,
+      select: { id: true, prenom: true, nom: true, email: true, roleId: true, active: true },
+    });
     return NextResponse.json({ ...user, password: "••••••••" });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
