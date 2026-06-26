@@ -83,3 +83,28 @@ export async function gedFile(apiBase: string | null | undefined, token: string,
   const qs = new URLSearchParams({ token, emplacement, guid });
   return fetch(`${base({ apiBase })}/getFileByFTPServlet?${qs}`);
 }
+
+const norm = (s: string | null | undefined) =>
+  (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+export interface GedMatch { idArbo: number; nom: string; nomGed: string; type?: string }
+
+/**
+ * Recherche dans la gérance les dossiers (mandats/propriétaires) dont le nom
+ * correspond au terme. Les dossiers GED sont nommés « 00XX - NOM PROPRIÉTAIRE ».
+ */
+export async function gedSearchGerance(apiBase: string | null | undefined, token: string, query: string): Promise<GedMatch[]> {
+  const root = await gedRoot(apiBase, token);
+  const sons = ((root.payload as { sons?: Array<{ idArbo: number; nom: string; nomGed: string }> })?.sons) ?? [];
+  const gerance = sons.find(s => /gerance/i.test(s.nomGed) || /g[ée]rance/i.test(s.nom)) ?? sons[0];
+  if (!gerance) return [];
+
+  const r = await gedFolder(apiBase, token, gerance.idArbo, gerance.nomGed);
+  const list = ((r.payload as { sons?: Array<{ idArbo: number; nom: string; nomGed: string; type?: string; infos?: { nompr?: string; type?: string } }> })?.sons) ?? [];
+  const q = norm(query);
+  if (q.length < 2) return [];
+  return list
+    .filter(s => norm(s.infos?.nompr || s.nom).includes(q))
+    .slice(0, 40)
+    .map(s => ({ idArbo: s.idArbo, nom: s.infos?.nompr || s.nom, nomGed: s.nomGed, type: s.infos?.type || s.type }));
+}
