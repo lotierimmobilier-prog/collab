@@ -33,6 +33,11 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,                 // retire "X-Powered-By: Next.js"
   output: "standalone",                   // build autonome pour l'image Docker
 
+  // unpdf (extraction texte des PDF fournisseurs) embarque pdf.js et le charge
+  // par import dynamique : on le garde externe pour qu'il soit copié entier
+  // dans la sortie standalone (sinon pdf.js manque à l'exécution).
+  serverExternalPackages: ["unpdf"],
+
   async headers() {
     return [
       {
