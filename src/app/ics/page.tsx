@@ -60,6 +60,17 @@ export default function IcsPage() {
   const [creatingContacts, setCreatingContacts] = useState(false);
   const [ownerImporting, setOwnerImporting] = useState(false);
   const ownerFileRef = useRef<HTMLInputElement>(null);
+  const [syncingGestion, setSyncingGestion] = useState(false);
+
+  async function syncGestion() {
+    setSyncingGestion(true); setImportMsg("");
+    try {
+      const r = await fetch("/api/gestion/sync-ics", { method: "POST" });
+      const d = await r.json();
+      setImportMsg(r.ok ? (d.message || "Module Gestion synchronisé.") : (d.error || "Échec de la synchronisation."));
+    } catch { setImportMsg("Erreur réseau pendant la synchronisation Gestion."); }
+    finally { setSyncingGestion(false); }
+  }
 
   async function importOwners(file: File) {
     setOwnerImporting(true); setImportMsg("");
@@ -235,6 +246,12 @@ export default function IcsPage() {
                   <button onClick={createContacts} disabled={creatingContacts} style={btnGhost}
                     title="Créer dans l'annuaire les locataires et propriétaires de l'index ICS (sans doublon)">
                     {creatingContacts ? "Création…" : "Créer les contacts dans l'annuaire"}
+                  </button>
+                )}
+                {tenantTotal > 0 && allowed && (
+                  <button onClick={syncGestion} disabled={syncingGestion} style={btnGhost}
+                    title="Créer/mettre à jour les propriétaires, locataires, lots et baux du module Gestion depuis ICS (sans doublon)">
+                    {syncingGestion ? "Synchro…" : "Synchroniser le module Gestion"}
                   </button>
                 )}
                 {importMsg && <span style={{ fontSize: 12, color: importMsg.startsWith("Échec") || importMsg.startsWith("Erreur") ? RED : GREEN }}>{importMsg}</span>}
