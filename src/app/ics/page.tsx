@@ -238,8 +238,8 @@ export default function IcsPage() {
                             {t.nomProprietaire && <> · propriétaire : {[t.prenomProprietaire, t.nomProprietaire].filter(Boolean).join(" ")}</>}
                           </div>
                         </div>
-                        <a href={cfg?.portalUrl || "https://my.ics.fr"} target="_blank" rel="noopener noreferrer"
-                          title="Ouvrir le portail ICS" style={{ ...btnGhost, textDecoration: "none", fontSize: 12, padding: "7px 12px" }}>
+                        <a href="#ged-drive" onClick={() => document.getElementById("ged-drive")?.scrollIntoView({ behavior: "smooth" })}
+                          title="Ouvrir le Drive ICS (consultation des documents)" style={{ ...btnGhost, textDecoration: "none", fontSize: 12, padding: "7px 12px" }}>
                           Documents ICS →
                         </a>
                       </div>
@@ -250,7 +250,7 @@ export default function IcsPage() {
             </div>
 
             {/* Drive GED — consultation directe des documents */}
-            <GedDrive canEdit={allowed} />
+            <div id="ged-drive"><GedDrive canEdit={allowed} /></div>
 
             {/* Feuille de route */}
             <div style={{ background: GOLD_BG, borderRadius: 14, border: `1px solid ${GOLD}33`, padding: 18 }}>
