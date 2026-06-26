@@ -756,6 +756,18 @@ model ActivityLog {
   @@map("activity_logs")
 }
 
+/// Mémoire d'Auguste : termes techniques appris au fil des demandes (glossaire agence).
+model AugusteTerm {
+  id          String   @id @default(cuid())
+  term        String   @unique
+  definition  String?
+  occurrences Int      @default(1)
+  lastUsed    DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@map("auguste_terms")
+}
+
 /// Temps de présence quotidien par utilisateur (secondes actives).
 model UserPresence {
   id       String   @id @default(cuid())
