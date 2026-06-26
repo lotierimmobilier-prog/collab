@@ -27,3 +27,13 @@ CREATE TABLE IF NOT EXISTS user_presence (
   UNIQUE ("userId", day)
 );
 CREATE INDEX IF NOT EXISTS user_presence_day_idx ON user_presence (day);
+
+-- Mémoire d'Auguste : glossaire des termes techniques appris.
+CREATE TABLE IF NOT EXISTS auguste_terms (
+  id          TEXT PRIMARY KEY,
+  term        TEXT NOT NULL UNIQUE,
+  definition  TEXT,
+  occurrences INTEGER NOT NULL DEFAULT 1,
+  "lastUsed"  TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now()
+);

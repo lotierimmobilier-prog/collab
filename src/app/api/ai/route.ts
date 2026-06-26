@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
+import { canAccessIcsGed } from "@/lib/ics";
+import { getValidGedToken } from "@/lib/ics-ged-auth";
+import { gedFindDocuments } from "@/lib/ics-ged";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -156,6 +159,29 @@ const TOOLS: Anthropic.Tool[] = [
         from:   { type: "string", description: "Filtrer par adresse/expéditeur (optionnel)." },
         limit:  { type: "number", description: "Nombre max de résultats (défaut 15)." },
       },
+    },
+  },
+  {
+    name: "recherche_documents_ics",
+    description: "Recherche dans la GED ICS les documents d'un propriétaire ou locataire (quittances, baux, avis d'échéance, mandats, factures…). Donne le nom du tiers. Réservé à la direction et à la gestion locative.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        nom: { type: "string", description: "Nom du propriétaire ou du locataire à rechercher (ex. « TOUCHET », « Dupont »)." },
+      },
+      required: ["nom"],
+    },
+  },
+  {
+    name: "noter_terme",
+    description: "Mémorise un terme technique/métier et sa signification, pour s'en souvenir lors des prochaines demandes. À utiliser quand l'utilisateur explique un terme propre à l'agence ou au métier (ex. un sigle, une référence interne, un raccourci de langage).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        terme:       { type: "string", description: "Le terme ou sigle à mémoriser." },
+        signification: { type: "string", description: "Sa signification / définition / contexte d'usage." },
+      },
+      required: ["terme", "signification"],
     },
   },
 ];
@@ -503,6 +529,37 @@ async function executeTool(
       };
     }
 
+    case "recherche_documents_ics": {
+      if (!canAccessIcsGed(userRole)) return { error: "Accès aux documents ICS réservé à la direction et à la gestion locative." };
+      const nom = (input.nom as string | undefined)?.trim();
+      if (!nom) return { error: "Précisez le nom du propriétaire ou locataire." };
+      const tk = await getValidGedToken();
+      if (!tk.token) return { error: tk.error ?? "Accès GED indisponible." };
+      const { folders, docs } = await gedFindDocuments(tk.apiBase, tk.token, nom, 25);
+      return {
+        instructions: "Présente chaque document sous forme de lien Markdown cliquable [nom du document](lien). Les liens ouvrent le PDF directement. Si aucun document, propose d'ouvrir le dossier dans le Drive ICS.",
+        dossiers: folders.map(f => f.nom),
+        documents: docs.map(d => ({
+          nom: d.nom,
+          dossier: d.dossier,
+          lien: `/api/ics/ged/file?emplacement=${encodeURIComponent(d.emplacement)}&guid=${encodeURIComponent(d.guid)}&name=${encodeURIComponent(d.nom)}`,
+        })),
+      };
+    }
+
+    case "noter_terme": {
+      const terme = (input.terme as string | undefined)?.trim();
+      const signification = (input.signification as string | undefined)?.trim();
+      if (!terme || !signification) return { error: "Terme et signification requis." };
+      const key = terme.toLowerCase();
+      await prisma.augusteTerm.upsert({
+        where: { term: key },
+        create: { term: key, definition: signification },
+        update: { definition: signification, occurrences: { increment: 1 }, lastUsed: new Date() },
+      });
+      return { ok: true, message: `Terme « ${terme} » mémorisé.` };
+    }
+
     default:
       return { error: `Outil inconnu: ${name}` };
   }
@@ -522,6 +579,15 @@ export async function POST(req: NextRequest) {
   const userRole = session.user.roleId ?? "user";
   const todayStr = today || new Date().toISOString().split("T")[0];
 
+  // Mémoire d'Auguste : glossaire des termes techniques appris.
+  const terms = await prisma.augusteTerm.findMany({ orderBy: { lastUsed: "desc" }, take: 60, select: { term: true, definition: true } });
+  const glossaire = terms.length
+    ? `\n\n══ MÉMOIRE — TERMES TECHNIQUES DE L'AGENCE ══\nTu as appris et mémorisé ces termes ; utilise-les pour comprendre les demandes :\n${terms.map((t: { term: string; definition: string | null }) => `- ${t.term} : ${t.definition}`).join("\n")}\nQuand l'utilisateur t'explique un NOUVEAU terme/sigle métier, appelle noter_terme pour t'en souvenir durablement.`
+    : `\n\nQuand l'utilisateur t'explique un terme/sigle métier propre à l'agence, appelle l'outil noter_terme pour le mémoriser durablement.`;
+  const gedCap = canAccessIcsGed(userRole)
+    ? "\n- Documents ICS (GED) : retrouver les documents d'un propriétaire/locataire (quittances, baux, mandats…) via recherche_documents_ics"
+    : "";
+
   const SYSTEM = `Tu es Auguste, l'assistant IA de l'agence immobilière Lotier Immobilier.
 Tu aides les collaborateurs à gérer leur travail quotidien depuis la plateforme Collab.
 
@@ -533,7 +599,7 @@ Tu as accès aux données réelles et peux agir directement sur le logiciel :
 - Agenda / RDV : lire, créer, modifier
 - Messagerie interne : lire, envoyer
 - Utilisateurs : consulter la liste
-- Notifications : consulter
+- Notifications : consulter${gedCap}
 
 ══ RÈGLES DE CRÉATION (TRÈS IMPORTANTES) ══
 
@@ -569,7 +635,7 @@ Confirme toujours clairement ce qui a été fait, par exemple :
 ══ TON ET STYLE ══
 - Réponds en français, concis et professionnel
 - Utilise du markdown (gras **texte**, listes)
-- Pour les questions légales : base-toi sur la loi française, indique si ta connaissance est limitée à août 2025`;
+- Pour les questions légales : base-toi sur la loi française, indique si ta connaissance est limitée à août 2025${glossaire}`;
 
   const sideEffects: SideEffect[] = [];
   const toolsUsed: string[] = [];

@@ -108,3 +108,33 @@ export async function gedSearchGerance(apiBase: string | null | undefined, token
     .slice(0, 40)
     .map(s => ({ idArbo: s.idArbo, nom: s.infos?.nompr || s.nom, nomGed: s.nomGed, type: s.infos?.type || s.type }));
 }
+
+export interface GedFoundDoc { nom: string; emplacement: string; guid: string; extension?: string; dossier: string }
+
+/**
+ * Recherche un tiers par nom puis explore ses dossiers pour remonter les
+ * documents (exploration bornée). Pour Auguste et l'accès direct par fiche.
+ */
+export async function gedFindDocuments(apiBase: string | null | undefined, token: string, name: string, maxDocs = 25): Promise<{ folders: GedMatch[]; docs: GedFoundDoc[] }> {
+  const folders = await gedSearchGerance(apiBase, token, name);
+  const docs: GedFoundDoc[] = [];
+  let calls = 0;
+
+  async function walk(id: number, nomGed: string, path: string, depth: number) {
+    if (docs.length >= maxDocs || calls >= 30 || depth > 4) return;
+    calls++;
+    const r = await gedFolder(apiBase, token, id, nomGed);
+    const pl = (r.payload ?? {}) as { sons?: Array<{ idArbo: number; nom: string; nomGed: string; infos?: { nompr?: string } }>; docs?: Array<{ nom: string; emplacement: string; guid: string; extension?: string }> };
+    for (const d of pl.docs ?? []) {
+      docs.push({ nom: d.nom, emplacement: d.emplacement, guid: d.guid, extension: d.extension, dossier: path });
+      if (docs.length >= maxDocs) return;
+    }
+    for (const s of pl.sons ?? []) {
+      if (docs.length >= maxDocs || calls >= 30) break;
+      await walk(s.idArbo, s.nomGed, `${path}/${s.infos?.nompr || s.nom}`, depth + 1);
+    }
+  }
+
+  for (const m of folders.slice(0, 2)) await walk(m.idArbo, m.nomGed, m.nom, 0);
+  return { folders, docs };
+}
