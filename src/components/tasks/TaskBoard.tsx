@@ -6,6 +6,7 @@ import TaskCard from "./TaskCard";
 import TaskDetail from "./TaskDetail";
 import NewTaskModal from "./NewTaskModal";
 import TaskFamilyManager from "./TaskFamilyManager";
+import AugusteAnalysisModal from "./AugusteAnalysisModal";
 
 interface Group  { id: string; name: string; }
 interface Team   { id: string; name: string; color: string; icon?: string; }
@@ -24,6 +25,7 @@ export default function TaskBoard() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [showNew, setShowNew]       = useState(false);
   const [showFamilyMgr, setShowFamilyMgr] = useState(false);
+  const [showAnalyse, setShowAnalyse]     = useState(false);
   const [activeTeam, setActiveTeam]       = useState<string>("all"); // "all" ou teamId
   const [filterFamily, setFilterFamily]   = useState<string>("all");
   const [filterGroup, setFilterGroup]     = useState<string>("all");
@@ -218,6 +220,13 @@ export default function TaskBoard() {
           </button>
         )}
 
+        {isAdmin && (
+          <button onClick={() => setShowAnalyse(true)} title="Auguste analyse l'activité et propose des tâches à attribuer"
+            style={{ background: "#F7F0E6", color: "#B8966A", border: "1px solid #B8966A55", borderRadius: 8, padding: "7px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+            ✦ Analyse Auguste
+          </button>
+        )}
+
         <button onClick={() => setShowNew(true)} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
           + Nouvelle tâche
         </button>
@@ -359,6 +368,7 @@ export default function TaskBoard() {
 
       {showNew && <NewTaskModal onClose={() => setShowNew(false)} onAdd={addTask} families={families} />}
       {showFamilyMgr && <TaskFamilyManager onClose={() => { setShowFamilyMgr(false); fetchTasks(); }} isAdmin={isAdmin} />}
+      {showAnalyse && <AugusteAnalysisModal onClose={() => setShowAnalyse(false)} onCreated={fetchTasks} />}
     </div>
   );
 }
