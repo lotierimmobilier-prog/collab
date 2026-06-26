@@ -72,6 +72,25 @@ export default function UsersAdmin() {
     setUsers(prev => prev.filter(u => u.id !== id));
   }
 
+  // Applique les migrations à la demande (répare un schéma de base incomplet).
+  const [migrating, setMigrating] = useState(false);
+  async function runMigrate() {
+    setMigrating(true);
+    try {
+      const r = await fetch("/api/admin/migrate", { method: "POST" });
+      const d = await r.json();
+      const cols = d?.report?.columns ?? {};
+      const lignes = Object.entries(cols).map(([k, v]) => `${v ? "✓" : "✗"} ${k}`).join("\n");
+      alert(
+        (d.ok ? "✅ Base à jour." : "⚠️ Migrations exécutées, vérifiez ci-dessous.") +
+        `\n\nInstructions appliquées : ${d?.report?.applied ?? "?"}\n${lignes}` +
+        (d?.report?.error ? `\n\nErreur : ${d.report.error}` : "")
+      );
+      await fetchUsers();
+    } catch (e) { alert("Échec : " + String(e)); }
+    finally { setMigrating(false); }
+  }
+
   // « Prendre la main » : ouvre le logiciel avec la vue de l'utilisateur.
   async function impersonate(user: User) {
     if (!confirm(`Prendre la main sur le compte de ${user.prenom} ${user.nom} ?\nVous verrez le logiciel comme cet utilisateur. Un bandeau rouge vous permettra de revenir.`)) return;
@@ -110,6 +129,9 @@ export default function UsersAdmin() {
 
         <div style={{ flex: 1 }} />
 
+        <button onClick={runMigrate} disabled={migrating} style={{ ...btnSecondary, display: "inline-flex", alignItems: "center", gap: 6 }} title="Applique les migrations manquantes (répare les colonnes/tables récentes)">
+          {migrating ? "Mise à jour…" : "🛠 Mettre à jour la base"}
+        </button>
         <a href="/admin/roles" style={{ ...btnSecondary, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}>
           ⚙ Gérer les rôles
         </a>
