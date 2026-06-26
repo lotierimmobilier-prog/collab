@@ -535,11 +535,43 @@ async function executeTool(
       if (!nom) return { error: "Précisez le nom du propriétaire ou locataire." };
       const tk = await getValidGedToken();
       if (!tk.token) return { error: tk.error ?? "Accès GED indisponible." };
-      const { folders, docs } = await gedFindDocuments(tk.apiBase, tk.token, nom, 25);
+
+      // La GED est rangée par PROPRIÉTAIRE. On consulte d'abord l'index Locataires
+      // pour résoudre un locataire → son propriétaire (et son bien).
+      const terms = nom.split(/\s+/).filter(t => t.length >= 2).slice(0, 4);
+      const orConds = terms.flatMap(t => [
+        { nomLocataire: { contains: t, mode: "insensitive" as const } },
+        { prenomLocataire: { contains: t, mode: "insensitive" as const } },
+        { nomProprietaire: { contains: t, mode: "insensitive" as const } },
+        { prenomProprietaire: { contains: t, mode: "insensitive" as const } },
+      ]);
+      const matches = orConds.length
+        ? await prisma.icsTenant.findMany({ where: { OR: orConds }, take: 15,
+            select: { nomLocataire: true, prenomLocataire: true, nomProprietaire: true, prenomProprietaire: true, adresseImmeuble: true } })
+        : [];
+
+      const ownerNames = [...new Set(matches.map((m: { nomProprietaire: string | null }) => m.nomProprietaire).filter(Boolean) as string[])];
+      const searchNames = ownerNames.length ? ownerNames.slice(0, 3) : [nom];
+
+      const allFolders: { nom: string }[] = [];
+      const allDocs: { nom: string; emplacement: string; guid: string; dossier: string }[] = [];
+      const seen = new Set<string>();
+      for (const sn of searchNames) {
+        const { folders, docs } = await gedFindDocuments(tk.apiBase, tk.token, sn, 25);
+        allFolders.push(...folders);
+        for (const d of docs) { if (!seen.has(d.guid)) { seen.add(d.guid); allDocs.push(d); } }
+        if (allDocs.length >= 30) break;
+      }
+
       return {
-        instructions: "Présente chaque document sous forme de lien Markdown cliquable [nom du document](lien). Les liens ouvrent le PDF directement. Si aucun document, propose d'ouvrir le dossier dans le Drive ICS.",
-        dossiers: folders.map(f => f.nom),
-        documents: docs.map(d => ({
+        instructions: "Présente chaque document sous forme de lien Markdown cliquable [nom du document](lien) — le lien ouvre le PDF. Si le tiers recherché est un locataire, précise qu'il s'agit du dossier de son propriétaire (la GED est organisée par propriétaire). Si rien n'est trouvé, propose d'ouvrir le Drive ICS.",
+        contexte: matches.slice(0, 5).map((m: { prenomLocataire: string | null; nomLocataire: string | null; prenomProprietaire: string | null; nomProprietaire: string | null; adresseImmeuble: string | null }) => ({
+          locataire: `${m.prenomLocataire ?? ""} ${m.nomLocataire ?? ""}`.trim(),
+          proprietaire: `${m.prenomProprietaire ?? ""} ${m.nomProprietaire ?? ""}`.trim(),
+          bien: m.adresseImmeuble,
+        })),
+        dossiers: [...new Set(allFolders.map(f => f.nom))],
+        documents: allDocs.slice(0, 30).map(d => ({
           nom: d.nom,
           dossier: d.dossier,
           lien: `/api/ics/ged/file?emplacement=${encodeURIComponent(d.emplacement)}&guid=${encodeURIComponent(d.guid)}&name=${encodeURIComponent(d.nom)}`,
