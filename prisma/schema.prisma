@@ -375,6 +375,8 @@ model ServiceOrder {
   quoteRequired    Boolean  @default(false) // devis obligatoire avant intervention
   agentName        String?               // agent référent (coordonnées agence)
   agentPhone       String?
+  // ── Pièces jointes (photos du sinistre, plans…) : [{id,name,mime,size,data}] ──
+  attachments Json?
   // ── Suivi d'envoi ──
   sentAt      DateTime?
   sentTo      String?

@@ -45,9 +45,21 @@ export async function POST(req: NextRequest) {
   const {
     taskId, supplierId, title, description, address, deadline, amount, notes,
     interventionType, onSiteName, onSitePhone, onSiteRole, keyAtAgency, accessInfo,
-    urgency, quoteRequired, agentName, agentPhone,
+    urgency, quoteRequired, agentName, agentPhone, attachments,
   } = body;
   if (!supplierId || !title?.trim()) return NextResponse.json({ error: "Fournisseur et titre requis" }, { status: 400 });
+
+  // Pièces jointes (photos…) : [{id,name,mime,size,data}], plafonné.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const atts = Array.isArray(attachments)
+    ? (attachments as any[]).filter(a => a && a.data && a.name).slice(0, 20).map(a => ({
+        id: String(a.id ?? Math.random().toString(36).slice(2)),
+        name: String(a.name).slice(0, 200),
+        mime: String(a.mime ?? "application/octet-stream"),
+        size: Number(a.size) || 0,
+        data: String(a.data),
+      }))
+    : [];
 
   const ref   = await nextRef();
   const order = await prisma.serviceOrder.create({
@@ -73,6 +85,7 @@ export async function POST(req: NextRequest) {
       quoteRequired: !!quoteRequired,
       agentName:   agentName || null,
       agentPhone:  agentPhone || null,
+      attachments: atts.length ? atts : undefined,
     },
     include: { supplier: { select: { id: true, name: true, type: true, phone: true, email: true } } },
   });
