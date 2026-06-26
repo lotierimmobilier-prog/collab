@@ -11,6 +11,19 @@ declare module "next-auth" {
       nom: string;
       roleId: string;
       accessOverrides?: unknown;
+      impersonatorId?: string | null;   // admin qui a « pris la main », le cas échéant
+      impersonatorName?: string | null;
     };
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    id?: string;
+    prenom?: unknown;
+    nom?: unknown;
+    roleId?: unknown;
+    impersonatorId?: string | null;
+    impersonatorName?: string | null;
   }
 }

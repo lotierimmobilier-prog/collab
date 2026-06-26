@@ -2,26 +2,40 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
-// GET /api/users — liste tous les utilisateurs
+// GET /api/users — liste tous les utilisateurs.
+// Résilient : si une colonne récente manque encore en base (migration non
+// appliquée), on retombe sur une sélection minimale plutôt que de renvoyer 500.
 export async function GET() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fmt = (u: any) => ({
+    ...u,
+    createdAt: u.createdAt ? new Date(u.createdAt).toLocaleDateString("fr-FR") : null,
+    lastLogin: u.lastLogin ? new Date(u.lastLogin).toLocaleDateString("fr-FR") : undefined,
+    accessOverrides: u.accessOverrides ?? undefined,
+    password: "••••••••", // jamais exposé
+  });
+
   try {
     const users = await prisma.user.findMany({
       orderBy: { createdAt: "desc" },
       select: {
         id: true, prenom: true, nom: true, email: true,
         roleId: true, active: true, accessOverrides: true, gedAccess: true,
-        createdAt: true, lastLogin: true, avatar: true,
+        createdAt: true, lastLogin: true, avatar: true, parrainId: true,
       },
     });
-    return NextResponse.json(users.map((u: typeof users[number]) => ({
-      ...u,
-      createdAt: u.createdAt.toLocaleDateString("fr-FR"),
-      lastLogin: u.lastLogin?.toLocaleDateString("fr-FR"),
-      accessOverrides: u.accessOverrides ?? undefined,
-      password: "••••••••", // jamais exposé
-    })));
+    return NextResponse.json(users.map(fmt));
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    // Repli : colonnes de base uniquement (compatibilité bases non migrées).
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows: any[] = await prisma.$queryRaw`
+        SELECT id, prenom, nom, email, "roleId", active, "createdAt", "lastLogin"
+        FROM users ORDER BY "createdAt" DESC`;
+      return NextResponse.json(rows.map(fmt));
+    } catch (e2) {
+      return NextResponse.json({ error: String(e), fallbackError: String(e2) }, { status: 500 });
+    }
   }
 }
 

@@ -1,9 +1,13 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { User, Role, ModuleAccess, Right, DEFAULT_ROLES, getInitials, avatarColor, MODULES, RIGHTS, getRightStyle } from "@/lib/admin";
 import UserModal from "./UserModal";
 
 export default function UsersAdmin() {
+  const { data: session, update } = useSession();
+  const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [roles] = useState<Role[]>(DEFAULT_ROLES);
   const [editing, setEditing] = useState<User | null | "new">(null);
@@ -64,6 +68,14 @@ export default function UsersAdmin() {
     if (!confirm("Supprimer cet utilisateur définitivement ?")) return;
     await fetch(`/api/users/${id}`, { method: "DELETE" });
     setUsers(prev => prev.filter(u => u.id !== id));
+  }
+
+  // « Prendre la main » : ouvre le logiciel avec la vue de l'utilisateur.
+  async function impersonate(user: User) {
+    if (!confirm(`Prendre la main sur le compte de ${user.prenom} ${user.nom} ?\nVous verrez le logiciel comme cet utilisateur. Un bandeau rouge vous permettra de revenir.`)) return;
+    await update({ impersonate: user.id });
+    router.push("/");
+    router.refresh();
   }
 
   const roleOf = (roleId: string) => roles.find(r => r.id === roleId);
@@ -128,7 +140,7 @@ export default function UsersAdmin() {
         ) : (
           <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", overflow: "hidden" }}>
             {/* Header */}
-            <div style={{ display: "grid", gridTemplateColumns: "2.5fr 2fr 1.2fr 1fr 100px 80px", padding: "10px 16px", borderBottom: "1px solid #f3f4f6", fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "2.3fr 1.8fr 1.1fr 0.9fr 100px 120px", padding: "10px 16px", borderBottom: "1px solid #f3f4f6", fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", gap: 12 }}>
               <span>Utilisateur</span><span>Email</span><span>Rôle</span><span>Accès modules</span><span>Statut</span><span>Actions</span>
             </div>
 
@@ -137,7 +149,7 @@ export default function UsersAdmin() {
               const ac = avatarColor(user.id);
               const accessCount = role?.modules.filter(m => m.right !== "aucun").length ?? 0;
               return (
-                <div key={user.id} style={{ display: "grid", gridTemplateColumns: "2.5fr 2fr 1.2fr 1fr 100px 80px", padding: "12px 16px", gap: 12, alignItems: "center", borderBottom: i < filtered.length - 1 ? "1px solid #f9fafb" : "none" }}>
+                <div key={user.id} style={{ display: "grid", gridTemplateColumns: "2.3fr 1.8fr 1.1fr 0.9fr 100px 120px", padding: "12px 16px", gap: 12, alignItems: "center", borderBottom: i < filtered.length - 1 ? "1px solid #f9fafb" : "none" }}>
 
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div style={{ width: 36, height: 36, borderRadius: "50%", background: ac.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: ac.text, flexShrink: 0 }}>
@@ -175,6 +187,9 @@ export default function UsersAdmin() {
                   </div>
 
                   <div style={{ display: "flex", gap: 5 }}>
+                    {session?.user?.id !== user.id && (
+                      <button onClick={() => impersonate(user)} title="Prendre la main (voir le logiciel en tant que cet utilisateur)" style={{ background: "#F7F0E6", border: "1px solid #B8966A", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#B8966A" }}>👤→</button>
+                    )}
                     <button onClick={() => setEditing(user)} title="Modifier" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#374151" }}>✏</button>
                     <button onClick={() => setEditingAccess(user)} title="Gérer les accès" style={{ background: user.accessOverrides?.length ? "#F7F0E6" : "none", border: `1px solid ${user.accessOverrides?.length ? "#B8966A" : "#e5e7eb"}`, borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: user.accessOverrides?.length ? "#B8966A" : "#374151" }}>🔐</button>
                     <button onClick={() => setShowPassword(showPassword === user.id ? null : user.id)} title="Voir le mot de passe" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#374151" }}>🔑</button>

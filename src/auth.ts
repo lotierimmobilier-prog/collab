@@ -83,12 +83,40 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
 
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
         token.prenom = (user as Record<string, unknown>).prenom;
         token.nom = (user as Record<string, unknown>).nom;
         token.roleId = (user as Record<string, unknown>).roleId;
+      }
+
+      // « Prendre la main » sur un utilisateur (impersonation) — réservé admin.
+      if (trigger === "update" && session && typeof session === "object") {
+        const imp = (session as Record<string, unknown>).impersonate;
+        if (imp === null) {
+          // Retour à l'administration : on restaure l'identité d'origine.
+          if (token.impersonatorId) {
+            const admin = await prisma.user.findUnique({ where: { id: token.impersonatorId as string } });
+            if (admin) {
+              token.id = admin.id; token.prenom = admin.prenom; token.nom = admin.nom;
+              token.roleId = admin.roleId; token.name = `${admin.prenom} ${admin.nom}`;
+            }
+            token.impersonatorId = undefined;
+            token.impersonatorName = undefined;
+          }
+        } else if (typeof imp === "string" && imp) {
+          // Démarrage : uniquement si l'utilisateur effectif est admin et n'impersonne pas déjà.
+          if (token.roleId === "admin" && !token.impersonatorId) {
+            const target = await prisma.user.findUnique({ where: { id: imp } });
+            if (target && target.id !== token.id) {
+              token.impersonatorId = token.id;
+              token.impersonatorName = token.name ?? `${token.prenom} ${token.nom}`;
+              token.id = target.id; token.prenom = target.prenom; token.nom = target.nom;
+              token.roleId = target.roleId; token.name = `${target.prenom} ${target.nom}`;
+            }
+          }
+        }
       }
       return token;
     },
@@ -97,6 +125,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.user.prenom = token.prenom as string;
       session.user.nom = token.nom as string;
       session.user.roleId = token.roleId as string;
+      session.user.impersonatorId = (token.impersonatorId as string) ?? null;
+      session.user.impersonatorName = (token.impersonatorName as string) ?? null;
       return session;
     },
   },

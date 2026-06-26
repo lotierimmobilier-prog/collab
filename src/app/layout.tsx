@@ -3,6 +3,7 @@ import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 import Auguste from "@/components/Auguste";
 import ActivityTracker from "@/components/ActivityTracker";
+import ImpersonationBanner from "@/components/ImpersonationBanner";
 
 export const metadata: Metadata = {
   title: "Collab — Gestion d'agence",
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="fr">
       <body>
         <SessionProvider>
+          <ImpersonationBanner />
           {children}
           <Auguste />
           <ActivityTracker />
