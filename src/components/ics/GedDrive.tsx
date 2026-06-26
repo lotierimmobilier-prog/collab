@@ -25,6 +25,9 @@ export default function GedDrive({ canEdit }: { canEdit: boolean }) {
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(false);
   const [browseErr, setBrowseErr] = useState("");
+  const [searchQ, setSearchQ] = useState("");
+  const [searchHits, setSearchHits] = useState<Folder[] | null>(null);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     fetch("/api/ics/ged").then(r => r.json()).then(d => {
@@ -52,6 +55,29 @@ export default function GedDrive({ canEdit }: { canEdit: boolean }) {
   }
   function goCrumb(i: number) {
     const c = crumbs[i]; setCrumbs(cs => cs.slice(0, i + 1)); browse(c.id, c.nomGed);
+  }
+
+  // Recherche d'un mandat / propriétaire par nom.
+  useEffect(() => {
+    if (!cfg?.lastTestOk) return;
+    const q = searchQ.trim();
+    if (q.length < 2) { setSearchHits(null); return; }
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/ics/ged/search?q=${encodeURIComponent(q)}`);
+        const d = await r.json();
+        setSearchHits(r.ok ? (d.folders ?? []) : []);
+      } catch { setSearchHits([]); }
+      finally { setSearching(false); }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [searchQ, cfg?.lastTestOk]);
+
+  function jumpTo(f: Folder) {
+    setSearchQ(""); setSearchHits(null);
+    setCrumbs([{ id: null, nomGed: "", nom: "Racine" }, { id: f.idArbo, nomGed: f.nomGed, nom: f.nom }]);
+    browse(f.idArbo, f.nomGed);
   }
 
   async function save() {
@@ -112,6 +138,27 @@ export default function GedDrive({ canEdit }: { canEdit: boolean }) {
 
       {cfg?.lastTestOk ? (
         <>
+          {/* Recherche d'un mandat / propriétaire */}
+          <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Rechercher un propriétaire / mandat par nom…"
+            style={{ ...inp, marginBottom: 10 }} />
+          {searchHits !== null && (
+            <div style={{ marginBottom: 12, border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden" }}>
+              <div style={{ padding: "6px 11px", background: "#FAFAF8", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>
+                {searching ? "Recherche…" : `${searchHits.length} résultat(s)`}
+              </div>
+              <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                {searchHits.map(f => (
+                  <button key={`s${f.idArbo}`} onClick={() => jumpTo(f)} style={{ ...rowBtn, border: "none", borderBottom: "1px solid #f3f4f6", borderRadius: 0 }}>
+                    <span style={{ fontSize: 15 }}>📁</span>
+                    <span style={{ flex: 1, textAlign: "left", color: DARK, fontWeight: 500 }}>{f.nom}</span>
+                    <span style={{ color: "#cbd5e1" }}>›</span>
+                  </button>
+                ))}
+                {!searching && searchHits.length === 0 && <div style={{ padding: 12, fontSize: 12, color: "#9ca3af", textAlign: "center" }}>Aucun mandat trouvé.</div>}
+              </div>
+            </div>
+          )}
+
           {/* Fil d'Ariane */}
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center", fontSize: 12.5, marginBottom: 10 }}>
             {crumbs.map((c, i) => (
