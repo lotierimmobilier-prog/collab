@@ -66,6 +66,8 @@ export default function Sidebar({ active }: { active: string }) {
   const [collapsed, setCollapsed]   = useState(false);
   const [mounted, setMounted]       = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const directionActive = ["direction", "comptabilite", "ics"].includes(active);
+  const [directionOpen, setDirectionOpen] = useState(true);
 
   useEffect(() => {
     setMounted(true);
@@ -240,11 +242,26 @@ export default function Sidebar({ active }: { active: string }) {
         })}
 
         {isDirection && (
-          <>
-            {!isCollapsed && <NavLabel>Direction</NavLabel>}
-            {isCollapsed && <div style={{ height: 8 }} />}
-            {directionNav.map(item => <NavItemRow key={item.id} item={item as NavItem} active={active} collapsed={isCollapsed} />)}
-          </>
+          isCollapsed ? (
+            <>
+              <div style={{ height: 8 }} />
+              {directionNav.map(item => <NavItemRow key={item.id} item={item as NavItem} active={active} collapsed={isCollapsed} />)}
+            </>
+          ) : (
+            <div style={{ marginTop: 4 }}>
+              <button onClick={() => setDirectionOpen(o => !o)}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "7px 20px", background: "none", border: "none", cursor: "pointer",
+                  borderLeft: directionActive ? `2px solid ${GOLD}` : "2px solid transparent",
+                  color: directionActive ? GOLD : ITEM_COLOR, fontWeight: 600, fontSize: 13 }}>
+                <span style={{ fontSize: 14, width: 16, textAlign: "center", color: directionActive ? GOLD : "#A09880" }}>🏛</span>
+                <span style={{ flex: 1, textAlign: "left" }}>Direction</span>
+                <span style={{ fontSize: 10, color: LABEL_COLOR, transition: "transform 0.15s", transform: directionOpen ? "rotate(90deg)" : "none" }}>▸</span>
+              </button>
+              {directionOpen && directionNav.map(item => (
+                <NavItemRow key={item.id} item={item as NavItem} active={active} collapsed={false} indent />
+              ))}
+            </div>
+          )
         )}
 
         {isAdmin && (
