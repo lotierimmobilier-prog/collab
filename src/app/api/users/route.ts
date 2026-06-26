@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { saveUser } from "@/lib/user-write";
 
 // GET /api/users — liste tous les utilisateurs.
 // Résilient : si une colonne récente manque encore en base (migration non
@@ -58,18 +59,7 @@ export async function POST(req: NextRequest) {
     if (parrainId) data.parrainId = parrainId;
 
     const sel = { id: true, prenom: true, nom: true, email: true, roleId: true, active: true };
-    let user;
-    try {
-      user = await prisma.user.create({ data, select: sel });
-    } catch (err) {
-      // Résilience : si une colonne récente manque encore en base (migration
-      // pas encore appliquée), on retire la colonne fautive et on réessaie.
-      const m = String(err).match(/column `?(\w+)`? of relation/i) || String(err).match(/column "?(\w+)"? .* does not exist/i);
-      if (m && (m[1] in data)) {
-        delete data[m[1]];
-        user = await prisma.user.create({ data, select: sel });
-      } else { throw err; }
-    }
+    const user = await saveUser(() => prisma.user.create({ data, select: sel }), data);
     return NextResponse.json({ ...user, password: "••••••••" }, { status: 201 });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
