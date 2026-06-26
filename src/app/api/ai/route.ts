@@ -563,6 +563,22 @@ async function executeTool(
         if (allDocs.length >= 30) break;
       }
 
+      // Si la demande vise un LOCATAIRE précis, ne garder que SES documents
+      // (dossier au nom du locataire), pas tout le mandat du propriétaire.
+      const norm = (s: string | null | undefined) => (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+      const qn = terms.map(t => norm(t));
+      const tenantNames = matches
+        .filter((m: { nomLocataire: string | null; prenomLocataire: string | null }) => {
+          const ln = norm(`${m.prenomLocataire ?? ""} ${m.nomLocataire ?? ""}`);
+          return qn.some(t => ln.includes(t));
+        })
+        .map((m: { nomLocataire: string | null }) => norm(m.nomLocataire)).filter(Boolean);
+      let docs = allDocs;
+      if (tenantNames.length) {
+        const filtered = allDocs.filter(d => tenantNames.some((tn: string) => norm(d.dossier).includes(tn)));
+        if (filtered.length) docs = filtered;
+      }
+
       return {
         instructions: "Présente chaque document sous forme de lien Markdown cliquable [nom du document](lien) — le lien ouvre le PDF. Si le tiers recherché est un locataire, précise qu'il s'agit du dossier de son propriétaire (la GED est organisée par propriétaire). Si rien n'est trouvé, propose d'ouvrir le Drive ICS.",
         contexte: matches.slice(0, 5).map((m: { prenomLocataire: string | null; nomLocataire: string | null; prenomProprietaire: string | null; nomProprietaire: string | null; adresseImmeuble: string | null }) => ({
@@ -571,7 +587,7 @@ async function executeTool(
           bien: m.adresseImmeuble,
         })),
         dossiers: [...new Set(allFolders.map(f => f.nom))],
-        documents: allDocs.slice(0, 30).map(d => ({
+        documents: docs.slice(0, 30).map(d => ({
           nom: d.nom,
           dossier: d.dossier,
           lien: `/api/ics/ged/file?emplacement=${encodeURIComponent(d.emplacement)}&guid=${encodeURIComponent(d.guid)}&name=${encodeURIComponent(d.nom)}`,
