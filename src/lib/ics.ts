@@ -204,9 +204,13 @@ export async function icsLoginAuthCode(cfg: IcsConfigData, username: string, pas
       html = await res.text();
       break;
     }
-    const m = /<form\s[^>]*action="([^"]+)"/i.exec(html);
-    if (!m) return { ok: false, error: "Page de connexion ICS non reconnue (le formulaire a changé ou une étape supplémentaire est requise)." };
-    const action = new URL(m[1].replace(/&amp;/g, "&"), pageUrl).toString();
+    // La page Keycloak peut contenir plusieurs formulaires (login, « redémarrer
+    // la connexion », sélecteur de langue…). On cible celui qui poste les
+    // identifiants : action vers /login-actions/authenticate.
+    const forms = [...html.matchAll(/<form\s[^>]*action="([^"]+)"/gi)].map(f => f[1].replace(/&amp;/g, "&"));
+    const loginAction = forms.find(a => /login-actions\/authenticate/i.test(a)) ?? forms[0];
+    if (!loginAction) return { ok: false, error: "Page de connexion ICS non reconnue (formulaire de connexion introuvable)." };
+    const action = new URL(loginAction, pageUrl).toString();
 
     // 2. Envoi des identifiants (avec Origin/Referer, comme un navigateur).
     const post: Response = await fetch(action, {
@@ -220,10 +224,10 @@ export async function icsLoginAuthCode(cfg: IcsConfigData, username: string, pas
     parseSetCookies(post, jar);
     const loc = post.headers.get("location");
     if (!loc) {
-      // Pas de redirection → Keycloak a réaffiché le formulaire avec un message d'erreur.
+      // Pas de redirection → Keycloak a réaffiché le formulaire avec un message.
       const errHtml = await post.text().catch(() => "");
-      const kc = /<span[^>]*kc-feedback-text[^>]*>([^<]+)<\/span>|id="input-error"[^>]*>([^<]+)</i.exec(errHtml);
-      const detail = (kc?.[1] || kc?.[2] || "").trim();
+      const kc = /kc-feedback-text[^>]*>([^<]+)<|id="input-error[^"]*"[^>]*>\s*([^<]+)|class="(?:alert|message)[^"]*"[^>]*>\s*(?:<[^>]+>\s*)*([^<]{3,})/i.exec(errHtml);
+      const detail = (kc?.[1] || kc?.[2] || kc?.[3] || "").replace(/\s+/g, " ").trim();
       return { ok: false, error: detail
         ? `ICS a refusé la connexion : « ${detail} ».`
         : `ICS n'a pas validé la connexion (HTTP ${post.status}). Identifiants à revérifier.` };
