@@ -33,6 +33,9 @@ export default function GedDrive({ canEdit }: { canEdit: boolean }) {
     fetch("/api/ics/ged").then(r => r.json()).then(d => {
       if (d.ged) { setCfg(d.ged); setSociete(d.ged.societe ?? "LOTIER"); setEmail(d.ged.email ?? ""); setShowCreds(!d.ged.hasPassword); }
     }).catch(() => {});
+    // Pré-recherche via l'URL (?recherche=Nom), depuis les fiches annuaire/gestion.
+    const q = new URLSearchParams(window.location.search).get("recherche");
+    if (q) { setSearchQ(q); setTimeout(() => document.getElementById("ged-drive")?.scrollIntoView({ behavior: "smooth" }), 500); }
   }, []);
 
   const browse = useCallback(async (id: number | null, nomGed: string) => {
