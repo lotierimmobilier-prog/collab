@@ -24,53 +24,58 @@ export async function POST() {
   const date = (v: string | null) => { const d = v ? new Date(v) : null; return d && !isNaN(d.getTime()) ? d : new Date(); };
 
   let owners = 0, lots = 0, tnts = 0, baux = 0;
+  const errors: string[] = [];
 
   for (const t of tenants) {
-    // 1. Propriétaire (par idMandat)
-    let ownerId: string | undefined;
-    if (t.idMandat) {
-      const o = await prisma.owner.upsert({
-        where: { icsMandat: t.idMandat },
-        update: { prenom: t.prenomProprietaire ?? "", nom: t.nomProprietaire ?? "—" },
-        create: { icsMandat: t.idMandat, prenom: t.prenomProprietaire ?? "", nom: t.nomProprietaire ?? "—" },
+    try {
+      // 1. Propriétaire (par idMandat)
+      let ownerId: string | undefined;
+      if (t.idMandat) {
+        const o = await prisma.owner.upsert({
+          where: { icsMandat: t.idMandat },
+          update: { prenom: t.prenomProprietaire ?? "", nom: t.nomProprietaire ?? "—" },
+          create: { icsMandat: t.idMandat, prenom: t.prenomProprietaire ?? "", nom: t.nomProprietaire ?? "—" },
+        });
+        ownerId = o.id; owners++;
+      }
+
+      // 2. Lot (par idLot)
+      let lotId: string | undefined;
+      if (t.idLot) {
+        const l = await prisma.lot.upsert({
+          where: { icsLot: t.idLot },
+          update: { address: t.adresseImmeuble ?? t.nomImmeuble ?? "—", label: t.nomImmeuble, ownerId },
+          create: { icsLot: t.idLot, reference: `ICS-${t.idLot}`, address: t.adresseImmeuble ?? t.nomImmeuble ?? "—", label: t.nomImmeuble, ownerId, status: "occupied" },
+        });
+        lotId = l.id; lots++;
+      }
+      if (!lotId) continue; // un bail nécessite un lot
+
+      // 3. Locataire (par idBail)
+      const tn = await prisma.tenant.upsert({
+        where: { icsBail: t.idBail },
+        update: { prenom: t.prenomLocataire ?? "", nom: t.nomLocataire ?? "—", email: t.email, mobile: t.mobile, phone: t.telephone },
+        create: { icsBail: t.idBail, prenom: t.prenomLocataire ?? "", nom: t.nomLocataire ?? "—", email: t.email, mobile: t.mobile, phone: t.telephone },
       });
-      ownerId = o.id; owners++;
-    }
+      tnts++;
 
-    // 2. Lot (par idLot)
-    let lotId: string | undefined;
-    if (t.idLot) {
-      const l = await prisma.lot.upsert({
-        where: { icsLot: t.idLot },
-        update: { address: t.adresseImmeuble ?? t.nomImmeuble ?? "—", label: t.nomImmeuble, ownerId },
-        create: { icsLot: t.idLot, reference: `ICS-${t.idLot}`, address: t.adresseImmeuble ?? t.nomImmeuble ?? "—", label: t.nomImmeuble, ownerId, status: "occupied" },
+      // 4. Bail (par idBail)
+      const b = await prisma.bail.upsert({
+        where: { icsBail: t.idBail },
+        update: { lotId, monthlyRent: num(t.loyer), startDate: date(t.dateEffet) },
+        create: { icsBail: t.idBail, reference: `ICS-${t.idBail}`, lotId, monthlyRent: num(t.loyer), startDate: date(t.dateEffet), status: "active", createdBy: userId },
       });
-      lotId = l.id; lots++;
+      baux++;
+
+      // 5. Lien bail ↔ locataire
+      await prisma.bailTenant.upsert({
+        where: { bailId_tenantId: { bailId: b.id, tenantId: tn.id } },
+        update: {},
+        create: { bailId: b.id, tenantId: tn.id },
+      });
+    } catch (e) {
+      if (errors.length < 6) errors.push(`bail ${t.idBail} : ${(e as Error).message}`);
     }
-    if (!lotId) continue; // un bail nécessite un lot
-
-    // 3. Locataire (par idBail)
-    const tn = await prisma.tenant.upsert({
-      where: { icsBail: t.idBail },
-      update: { prenom: t.prenomLocataire ?? "", nom: t.nomLocataire ?? "—", email: t.email, mobile: t.mobile, phone: t.telephone },
-      create: { icsBail: t.idBail, prenom: t.prenomLocataire ?? "", nom: t.nomLocataire ?? "—", email: t.email, mobile: t.mobile, phone: t.telephone },
-    });
-    tnts++;
-
-    // 4. Bail (par idBail)
-    const b = await prisma.bail.upsert({
-      where: { icsBail: t.idBail },
-      update: { lotId, monthlyRent: num(t.loyer), startDate: date(t.dateEffet) },
-      create: { icsBail: t.idBail, reference: `ICS-${t.idBail}`, lotId, monthlyRent: num(t.loyer), startDate: date(t.dateEffet), status: "active", createdBy: userId },
-    });
-    baux++;
-
-    // 5. Lien bail ↔ locataire
-    await prisma.bailTenant.upsert({
-      where: { bailId_tenantId: { bailId: b.id, tenantId: tn.id } },
-      update: {},
-      create: { bailId: b.id, tenantId: tn.id },
-    });
   }
 
   const [totOwners, totLots, totTenants, totBaux] = await Promise.all([
@@ -78,9 +83,11 @@ export async function POST() {
   ]);
 
   return NextResponse.json({
-    ok: true,
+    ok: errors.length === 0,
     traite: tenants.length,
-    message: `Synchronisation terminée : ${owners} propriétaire(s), ${lots} lot(s), ${tnts} locataire(s), ${baux} bail/baux traités. ` +
-             `Module Gestion : ${totOwners} propriétaires, ${totLots} lots, ${totTenants} locataires, ${totBaux} baux.`,
+    errors,
+    message: `Synchronisation : ${owners} propriétaire(s), ${lots} lot(s), ${tnts} locataire(s), ${baux} bail/baux traités.` +
+             (errors.length ? ` ⚠️ ${errors.length} erreur(s) : ${errors[0]}` : "") +
+             ` Module Gestion : ${totOwners} propriétaires, ${totLots} lots, ${totTenants} locataires, ${totBaux} baux.`,
   });
 }
