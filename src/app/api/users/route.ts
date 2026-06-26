@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { saveUser } from "@/lib/user-write";
+import { saveUser, healUsers } from "@/lib/user-write";
 
 // GET /api/users — liste tous les utilisateurs.
 // Résilient : si une colonne récente manque encore en base (migration non
@@ -17,14 +17,18 @@ export async function GET() {
   });
 
   try {
-    const users = await prisma.user.findMany({
+    // healUsers ajoute à la volée toute colonne récente manquante (gedAccess,
+    // parrainId, avatar…) afin que la sélection complète aboutisse et renvoie
+    // bien le parrain enregistré.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const users = await healUsers<any[]>(() => prisma.user.findMany({
       orderBy: { createdAt: "desc" },
       select: {
         id: true, prenom: true, nom: true, email: true,
         roleId: true, active: true, accessOverrides: true, gedAccess: true,
         createdAt: true, lastLogin: true, avatar: true, parrainId: true,
       },
-    });
+    }));
     return NextResponse.json(users.map(fmt));
   } catch (e) {
     // Repli : colonnes de base uniquement (compatibilité bases non migrées).
