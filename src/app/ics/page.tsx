@@ -62,6 +62,31 @@ export default function IcsPage() {
   const ownerFileRef = useRef<HTMLInputElement>(null);
   const [syncingGestion, setSyncingGestion] = useState(false);
 
+  // Import des fournisseurs (PDF ICS)
+  const fournFileRef = useRef<HTMLInputElement>(null);
+  const [fournImporting, setFournImporting] = useState(false);
+  const [fournScope, setFournScope] = useState<"gestion" | "syndic">("gestion");
+  const [fournMsg, setFournMsg] = useState("");
+
+  async function importFournisseurs(file: File) {
+    setFournImporting(true); setFournMsg("Lecture du PDF…");
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result).split(",")[1] || "");
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+      const r = await fetch("/api/ics/fournisseurs/import", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: base64, scope: fournScope, createContacts: true }),
+      });
+      const d = await r.json();
+      setFournMsg(r.ok ? (d.message || "Import terminé.") : (d.error || "Échec de l'import."));
+    } catch { setFournMsg("Erreur réseau pendant l'import."); }
+    finally { setFournImporting(false); }
+  }
+
   async function syncGestion() {
     setSyncingGestion(true); setImportMsg("");
     try {
@@ -284,6 +309,30 @@ export default function IcsPage() {
                 </>
               )}
             </div>
+
+            {/* Import des fournisseurs (PDF ICS) */}
+            {allowed && (
+              <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, padding: 18 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: DARK, marginBottom: 8 }}>Fournisseurs ICS</div>
+                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 12px", lineHeight: 1.5 }}>
+                  Importez la « Liste des fournisseurs » exportée d'ICS (PDF) — gestion ou syndic. Les fournisseurs
+                  sont créés/mis à jour dans le module Gestion (réutilisables dans les ordres de service) et ajoutés
+                  à l'annuaire. Lecture automatique du PDF (numéro, métier, coordonnées, IBAN, mode de règlement).
+                </p>
+                <input ref={fournFileRef} type="file" accept=".pdf" style={{ display: "none" }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) importFournisseurs(f); e.target.value = ""; }} />
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                  <select value={fournScope} onChange={e => setFournScope(e.target.value as "gestion" | "syndic")} style={{ ...inp, width: "auto", background: "#fff" }}>
+                    <option value="gestion">Gestion locative</option>
+                    <option value="syndic">Syndic</option>
+                  </select>
+                  <button onClick={() => fournFileRef.current?.click()} disabled={fournImporting} style={btnPrimary}>
+                    {fournImporting ? "Import en cours…" : "Importer le PDF fournisseurs"}
+                  </button>
+                  {fournMsg && <span style={{ fontSize: 12, color: fournMsg.startsWith("Échec") || fournMsg.startsWith("Erreur") ? RED : GREEN }}>{fournMsg}</span>}
+                </div>
+              </div>
+            )}
 
             {/* Drive GED — consultation directe des documents */}
             <div id="ged-drive"><GedDrive canEdit={allowed} /></div>
