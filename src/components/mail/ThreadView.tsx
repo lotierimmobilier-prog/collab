@@ -65,6 +65,23 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
   const [senderInfo, setSenderInfo]         = useState<SenderInfo | null>(null);
   const [taskModal, setTaskModal]           = useState<AiTask | null>(null);
   const [rdvModal, setRdvModal]             = useState<AiRdv | null>(null);
+  const [assigneeRank, setAssigneeRank]     = useState<string[]>([]);
+
+  // Charge le classement des responsables (historique) à l'ouverture d'une tâche.
+  useEffect(() => {
+    if (!taskModal || assigneeRank.length) return;
+    fetch("/api/tasks/assignee-rank").then(r => r.json()).then(d => setAssigneeRank(d.ranked ?? [])).catch(() => {});
+  }, [taskModal, assigneeRank.length]);
+
+  // Utilisateurs ordonnés : suggéré par l'IA d'abord, puis les plus sollicités, puis le reste.
+  const orderedAssignees = (() => {
+    const ai = taskModal?.assigneeId;
+    const order = [...(ai ? [ai] : []), ...assigneeRank];
+    const ranked = order.map(id => users.find(u => u.id === id)).filter(Boolean) as typeof users;
+    const rest = users.filter(u => !order.includes(u.id)).sort((a, b) => `${a.nom}`.localeCompare(`${b.nom}`));
+    const seen = new Set<string>();
+    return [...ranked, ...rest].filter(u => (seen.has(u.id) ? false : (seen.add(u.id), true)));
+  })();
   const [taskSaving, setTaskSaving]         = useState(false);
   const [rdvSaving, setRdvSaving]           = useState(false);
   const [actionResult, setActionResult]     = useState<{ ok: boolean; msg: string } | null>(null);
@@ -1137,8 +1154,19 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
               </select>
             </Field>
             <Field label="Assigné à">
-              <input value={taskModal.assigneeName || ""} onChange={e => setTaskModal(t => t ? { ...t, assigneeName: e.target.value } : t)}
-                placeholder="Nom du responsable" style={inputStyle} />
+              <select value={taskModal.assigneeId || ""}
+                onChange={e => {
+                  const u = users.find(x => x.id === e.target.value);
+                  setTaskModal(t => t ? { ...t, assigneeId: e.target.value || undefined, assigneeName: u ? `${u.prenom} ${u.nom}` : "" } : t);
+                }}
+                style={inputStyle}>
+                <option value="">— Non assigné —</option>
+                {orderedAssignees.map((u, i) => (
+                  <option key={u.id} value={u.id}>
+                    {u.prenom} {u.nom}{i === 0 && taskModal.assigneeId === u.id ? "  (suggéré)" : ""}
+                  </option>
+                ))}
+              </select>
             </Field>
           </div>
           {taskModal.dueDate && (
