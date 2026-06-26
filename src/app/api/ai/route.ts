@@ -8,6 +8,10 @@ import { gedFindDocuments } from "@/lib/ics-ged";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// Rôles disposant d'un accès complet aux données de l'agence via Auguste
+// (lecture transverse). Les autres rôles sont cloisonnés à leur propre espace.
+const FULL_ACCESS_ROLES = ["admin", "dirigeant", "direction", "gestionnaire"];
+
 // ── Outils disponibles pour Auguste ─────────────────────────
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -201,9 +205,11 @@ async function executeTool(
   sideEffects: SideEffect[],
   userRole: string = "user",
 ) {
-  // Cloisonnement d'Auguste : admin et direction voient tout ; un agent ne
-  // consulte que ses propres données.
-  const seeAll = userRole === "admin" || userRole === "direction";
+  // Cloisonnement d'Auguste : l'admin, la direction (dirigeant) et les
+  // gestionnaires consultent l'ensemble des données de l'agence ; tout autre
+  // collaborateur ne consulte QUE son propre espace (ses tâches, son agenda,
+  // sa messagerie…).
+  const seeAll = FULL_ACCESS_ROLES.includes(userRole);
   switch (name) {
 
     case "get_tasks": {
@@ -481,21 +487,22 @@ async function executeTool(
     }
 
     case "search_mail": {
-      // Cloisonnement strict : Auguste ne lit QUE la messagerie de l'utilisateur
-      // courant (comptes dont il est l'agent, ou messages qui lui sont rattachés),
-      // quel que soit son rôle.
-      const configs = await prisma.mailAccountConfig.findMany({ where: { sharedUserIds: { has: userId } }, select: { id: true } });
-      const allowed = configs.map(c => c.id);
+      // Cloisonnement : un collaborateur standard ne lit QUE sa propre
+      // messagerie (comptes dont il est l'agent, ou messages qui lui sont
+      // rattachés). L'admin, la direction et les gestionnaires peuvent
+      // rechercher dans l'ensemble des messageries de l'agence.
       const q = (input.query as string | undefined)?.trim();
       const from = (input.from as string | undefined)?.trim();
       const limit = Math.min(Number(input.limit) || 25, 60);
       // Recherche large : on remonte jusqu'à 24 mois.
       const since = new Date(); since.setMonth(since.getMonth() - 24);
 
-      const where: Record<string, unknown> = {
-        date: { gte: since },
-        OR: [{ accountId: { in: allowed } }, { ownerId: userId }],
-      };
+      const where: Record<string, unknown> = { date: { gte: since } };
+      if (!seeAll) {
+        const configs = await prisma.mailAccountConfig.findMany({ where: { sharedUserIds: { has: userId } }, select: { id: true } });
+        const allowed = configs.map(c => c.id);
+        where.OR = [{ accountId: { in: allowed } }, { ownerId: userId }];
+      }
       const and: Record<string, unknown>[] = [];
       if (q) {
         // Recherche large : chaque mot-clé peut matcher objet / expéditeur / corps / destinataire.
@@ -652,9 +659,15 @@ Date du jour : ${todayStr} — utilise cette date pour calculer les dates relati
 Tu as accès aux données réelles et peux agir directement sur le logiciel :
 - Tâches : lire, créer, modifier
 - Agenda / RDV : lire, créer, modifier
+- Messagerie email : rechercher (search_mail)
 - Messagerie interne : lire, envoyer
 - Utilisateurs : consulter la liste
 - Notifications : consulter${gedCap}
+
+══ PÉRIMÈTRE D'ACCÈS (CLOISONNEMENT) ══
+${FULL_ACCESS_ROLES.includes(userRole)
+  ? "Ce collaborateur fait partie de la direction / gestion : tu peux consulter l'ENSEMBLE des données de l'agence (tâches, agendas et messageries de tous les collaborateurs)."
+  : "Ce collaborateur a un accès cloisonné : tu ne consultes QUE son propre espace — SES tâches, SON agenda, SA messagerie. Ne prétends jamais accéder aux données d'un autre collaborateur ; si on te le demande, explique que seul l'administrateur, la direction ou un gestionnaire peut le faire."}
 
 ══ RÈGLES DE CRÉATION (TRÈS IMPORTANTES) ══
 
