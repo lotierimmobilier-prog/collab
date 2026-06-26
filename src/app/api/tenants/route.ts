@@ -9,10 +9,10 @@ export async function GET() {
   const tenants = await prisma.tenant.findMany({
     include: {
       baux: {
+        where: { bail: { status: "active" } },
         include: {
           bail: {
             include: { lot: { select: { reference: true, address: true, status: true } } },
-            where: { status: "active" },
           },
         },
       },
