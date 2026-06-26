@@ -7,6 +7,7 @@ const PUBLIC_PATHS = [
   "/login",
   "/candidature",
   "/declaration",      // page publique d'assistance locataire (/declaration/<token>)
+  "/intervention",     // portail fournisseur (/intervention/<token>)
   "/_next",
   "/logo.png",
   "/favicon.ico",

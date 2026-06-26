@@ -26,6 +26,7 @@ const FILES = [
   "migrations_fournisseurs.sql",
   "migrations_ods_detail.sql",
   "migrations_assistance.sql",
+  "migrations_ods_exchange.sql",
 ];
 
 export interface MigrationReport {
