@@ -333,11 +333,19 @@ model Supplier {
   siret     String?
   notes     String?
   active    Boolean  @default(true)
+  // ── Rapprochement ICS (import de l'export Fournisseurs) ──
+  icsNum    String?  @unique             // N° fournisseur ICS (ex. 40129695)
+  metier    String?                      // libellé métier ICS (plus précis que `type`)
+  iban      String?
+  modeReglement String?                  // Virement | Chèque | …
+  scope     String   @default("gestion") // gestion | syndic
+  contactId String?                      // fiche annuaire liée
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   orders    ServiceOrder[]
 
+  @@index([scope])
   @@map("suppliers")
 }
 
