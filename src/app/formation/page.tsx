@@ -738,16 +738,23 @@ function Affectation({ users, reload }: { users: AdminUser[]; reload: () => void
   const { update } = useSession();
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
   async function setParrain(userId: string, parrainId: string) {
-    setBusy(userId);
+    setBusy(userId); setErr(null); setSaved(null);
     try {
-      await fetch(`/api/users/${userId}`, {
+      const r = await fetch(`/api/users/${userId}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ parrainId: parrainId || null }),
       });
-      reload();
-    } finally { setBusy(null); }
+      if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || "Échec de l'enregistrement."); return; }
+      // Recharge et vérifie que le parrain est bien persisté en base.
+      await reload();
+      setSaved(userId);
+      setTimeout(() => setSaved(s => s === userId ? null : s), 2500);
+    } catch { setErr("Erreur réseau."); }
+    finally { setBusy(null); }
   }
 
   async function impersonate(u: AdminUser) {
@@ -759,8 +766,9 @@ function Affectation({ users, reload }: { users: AdminUser[]; reload: () => void
 
   return (
     <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, overflow: "hidden" }}>
-      <div style={{ padding: "12px 16px", background: GOLD_BG, borderBottom: `1px solid ${BORDER}`, fontSize: 13, fontWeight: 700, color: DARK }}>
-        Affectation des parrains
+      <div style={{ padding: "12px 16px", background: GOLD_BG, borderBottom: `1px solid ${BORDER}`, fontSize: 13, fontWeight: 700, color: DARK, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span>Affectation des parrains</span>
+        {err && <span style={{ fontSize: 12, fontWeight: 500, color: RED }}>{err}</span>}
       </div>
       <div style={{ padding: "8px 0" }}>
         {users.map(u => (
@@ -780,6 +788,7 @@ function Affectation({ users, reload }: { users: AdminUser[]; reload: () => void
                 <option key={p.id} value={p.id}>{p.prenom} {p.nom}</option>
               ))}
             </select>
+            <span style={{ fontSize: 12, color: GREEN, width: 70, fontWeight: 600 }}>{saved === u.id ? "✓ Enregistré" : busy === u.id ? "…" : ""}</span>
             <button onClick={() => impersonate(u)} title="Prendre la main (voir en tant que cet utilisateur)"
               style={{ ...btnGhost, padding: "6px 10px", fontSize: 12, whiteSpace: "nowrap" }}>
               👤→ Prendre la main
