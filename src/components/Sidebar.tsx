@@ -72,19 +72,29 @@ export default function Sidebar({ active }: { active: string }) {
   const [mounted, setMounted]       = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const directionActive = ["direction", "comptabilite", "ics"].includes(active);
+  const adminActive = active.startsWith("admin");
   const [directionOpen, setDirectionOpen] = useState(true);
+  const [adminOpen, setAdminOpen] = useState(true);
 
   useEffect(() => {
     setMounted(true);
-    if (bp === "tablet") { setCollapsed(true); return; }
-    const stored = localStorage.getItem("sidebar_collapsed");
-    if (stored === "true") setCollapsed(true);
+    if (bp !== "tablet" && localStorage.getItem("sidebar_collapsed") === "true") setCollapsed(true);
+    if (bp === "tablet") setCollapsed(true);
+    // Mémorisation des groupes repliables (par utilisateur, sur ce navigateur).
+    if (localStorage.getItem("sidebar_direction_open") === "false") setDirectionOpen(false);
+    if (localStorage.getItem("sidebar_admin_open") === "false") setAdminOpen(false);
   }, [bp]);
 
   function toggle() {
     const next = !collapsed;
     setCollapsed(next);
     localStorage.setItem("sidebar_collapsed", String(next));
+  }
+  function toggleDirection() {
+    setDirectionOpen(o => { localStorage.setItem("sidebar_direction_open", String(!o)); return !o; });
+  }
+  function toggleAdmin() {
+    setAdminOpen(o => { localStorage.setItem("sidebar_admin_open", String(!o)); return !o; });
   }
 
   /* ── MOBILE : bottom nav ───────────────────────────────────── */
@@ -254,14 +264,7 @@ export default function Sidebar({ active }: { active: string }) {
             </>
           ) : (
             <div style={{ marginTop: 4 }}>
-              <button onClick={() => setDirectionOpen(o => !o)}
-                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "7px 20px", background: "none", border: "none", cursor: "pointer",
-                  borderLeft: directionActive ? `2px solid ${GOLD}` : "2px solid transparent",
-                  color: directionActive ? GOLD : ITEM_COLOR, fontWeight: 600, fontSize: 13 }}>
-                <span style={{ fontSize: 14, width: 16, textAlign: "center", color: directionActive ? GOLD : "#A09880" }}>🏛</span>
-                <span style={{ flex: 1, textAlign: "left" }}>Direction</span>
-                <span style={{ fontSize: 10, color: LABEL_COLOR, transition: "transform 0.15s", transform: directionOpen ? "rotate(90deg)" : "none" }}>▸</span>
-              </button>
+              <GroupHeader icon="🏛" label="Direction" open={directionOpen} active={directionActive} onClick={toggleDirection} />
               {directionOpen && directionNav.map(item => (
                 <NavItemRow key={item.id} item={item as NavItem} active={active} collapsed={false} indent />
               ))}
@@ -270,11 +273,19 @@ export default function Sidebar({ active }: { active: string }) {
         )}
 
         {isAdmin && (
-          <>
-            {!isCollapsed && <NavLabel>Administration</NavLabel>}
-            {isCollapsed && <div style={{ height: 8 }} />}
-            {adminNav.map(item => <NavItemRow key={item.id} item={item as NavItem} active={active} collapsed={isCollapsed} />)}
-          </>
+          isCollapsed ? (
+            <>
+              <div style={{ height: 8 }} />
+              {adminNav.map(item => <NavItemRow key={item.id} item={item as NavItem} active={active} collapsed={isCollapsed} />)}
+            </>
+          ) : (
+            <div style={{ marginTop: 4 }}>
+              <GroupHeader icon="⚙" label="Administration" open={adminOpen} active={adminActive} onClick={toggleAdmin} />
+              {adminOpen && adminNav.map(item => (
+                <NavItemRow key={item.id} item={item as NavItem} active={active} collapsed={false} indent />
+              ))}
+            </div>
+          )
         )}
       </nav>
 
@@ -330,6 +341,19 @@ function NavLabel({ children }: { children: React.ReactNode }) {
     <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: LABEL_COLOR, padding: "8px 20px 3px", fontWeight: 600 }}>
       {children}
     </div>
+  );
+}
+
+function GroupHeader({ icon, label, open, active, onClick }: { icon: string; label: string; open: boolean; active: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} title={open ? "Réduire" : "Déplier"}
+      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "7px 20px", background: "none", border: "none", cursor: "pointer",
+        borderLeft: active ? `2px solid ${GOLD}` : "2px solid transparent",
+        color: active ? GOLD : ITEM_COLOR, fontWeight: 600, fontSize: 13 }}>
+      <span style={{ fontSize: 14, width: 16, textAlign: "center", color: active ? GOLD : "#A09880" }}>{icon}</span>
+      <span style={{ flex: 1, textAlign: "left" }}>{label}</span>
+      <span style={{ fontSize: 10, color: LABEL_COLOR, transition: "transform 0.15s", transform: open ? "rotate(90deg)" : "none" }}>▸</span>
+    </button>
   );
 }
 
