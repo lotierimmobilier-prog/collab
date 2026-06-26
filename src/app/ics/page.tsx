@@ -77,13 +77,19 @@ export default function IcsPage() {
         r.onerror = reject;
         r.readAsDataURL(file);
       });
+      setFournMsg("Analyse du PDF en cours (cela peut prendre jusqu'à une minute)…");
       const r = await fetch("/api/ics/fournisseurs/import", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: base64, scope: fournScope, createContacts: true }),
       });
-      const d = await r.json();
-      setFournMsg(r.ok ? (d.message || "Import terminé.") : (d.error || "Échec de l'import."));
-    } catch { setFournMsg("Erreur réseau pendant l'import."); }
+      // Réponse possiblement non-JSON (504 du proxy si le PDF est très long).
+      const text = await r.text();
+      let d: { message?: string; error?: string } = {};
+      try { d = JSON.parse(text); } catch { /* pas du JSON */ }
+      if (r.ok) setFournMsg(d.message || "Import terminé.");
+      else if (r.status === 504 || r.status === 502) setFournMsg("Le PDF est volumineux et l'analyse a dépassé le délai. Réessayez, ou scindez le PDF (gestion / syndic séparément).");
+      else setFournMsg(d.error || `Échec de l'import (code ${r.status}).`);
+    } catch { setFournMsg("Erreur réseau pendant l'import. Réessayez."); }
     finally { setFournImporting(false); }
   }
 

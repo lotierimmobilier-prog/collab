@@ -10,6 +10,7 @@ const DARK        = "#1C1A17";
 const LABEL_COLOR = "#A09880";
 const ITEM_COLOR  = "#5C5449";
 const BORDER      = "#E6E1D9";
+const RED         = "#DC2626";
 
 const COLLAPSED_W = 52;
 const EXPANDED_W  = 230;
@@ -23,7 +24,7 @@ const nav: NavItem[] = [
   { id: "dashboard", label: "Tableau de bord",     icon: "⊟",  href: "/",                   group: "Principal" },
   { id: "tasks",     label: "Tâches",               icon: "✓",  href: "/taches",             group: "Principal" },
   { id: "planning",  label: "Planning",             icon: "▦",  href: "/planning",           group: "Principal" },
-  { id: "mail",      label: "Messagerie email",     icon: "@",  href: "/messagerie",         group: "Principal", badge: 3 },
+  { id: "mail",      label: "Messagerie email",     icon: "@",  href: "/messagerie",         group: "Principal" },
   { id: "chat",      label: "Messages internes",    icon: "💬", href: "/messagerie-interne", group: "Principal" },
   { id: "appels",    label: "Appels téléphoniques", icon: "📞", href: "/appels",             group: "Principal" },
   { id: "annuaire",  label: "Annuaire",             icon: "▤",  href: "/annuaire",           group: "Principal" },
@@ -77,6 +78,23 @@ export default function Sidebar({ active }: { active: string }) {
   const adminActive = active.startsWith("admin");
   const [directionOpen, setDirectionOpen] = useState(true);
   const [adminOpen, setAdminOpen] = useState(true);
+  const [badges, setBadges] = useState<{ mail: { count: number; urgent: boolean }; chat: { count: number; urgent: boolean } } | null>(null);
+
+  // Pastilles du menu (messages non lus / alertes urgentes), rafraîchies périodiquement.
+  useEffect(() => {
+    let alive = true;
+    const load = () => fetch("/api/sidebar/badges").then(r => r.ok ? r.json() : null).then(d => { if (alive && d) setBadges(d); }).catch(() => {});
+    load();
+    const t = setInterval(load, 45_000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+
+  // Type de pastille pour un item : "urgent" (rouge), "normal" (doré), ou null.
+  function navDot(id: string): "urgent" | "normal" | null {
+    const b = id === "mail" ? badges?.mail : id === "chat" ? badges?.chat : null;
+    if (!b || !b.count) return null;
+    return b.urgent ? "urgent" : "normal";
+  }
 
   useEffect(() => {
     setMounted(true);
@@ -126,7 +144,7 @@ export default function Sidebar({ active }: { active: string }) {
                 <div key={group}>
                   <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: LABEL_COLOR, padding: "10px 20px 4px", fontWeight: 600 }}>{group}</div>
                   {nav.filter(n => n.group === group).map(item => (
-                    <MobileMenuItem key={item.id} item={item} active={active} onClose={() => setMobileOpen(false)} />
+                    <MobileMenuItem key={item.id} item={item} active={active} onClose={() => setMobileOpen(false)} dot={navDot(item.id)} />
                   ))}
                 </div>
               ))}
@@ -178,6 +196,7 @@ export default function Sidebar({ active }: { active: string }) {
         }}>
           {MOBILE_NAV.map(item => {
             const isActive = active === item.id;
+            const d = navDot(item.id);
             return (
               <Link key={item.id} href={item.href} style={{ flex: 1, textDecoration: "none" }}>
                 <div style={{
@@ -188,7 +207,10 @@ export default function Sidebar({ active }: { active: string }) {
                   background: isActive ? GOLD_BG : "transparent",
                   transition: "all 0.15s",
                 }}>
-                  <span style={{ fontSize: 18 }}>{item.icon}</span>
+                  <span style={{ fontSize: 18, position: "relative" }}>
+                    {item.icon}
+                    {d && <span style={{ position: "absolute", top: -2, right: -6, width: 8, height: 8, borderRadius: "50%", background: d === "urgent" ? RED : GOLD, border: "1.5px solid #fff" }} />}
+                  </span>
                   <span style={{ fontSize: 9, fontWeight: isActive ? 700 : 500, letterSpacing: "0.02em" }}>{item.label}</span>
                 </div>
               </Link>
@@ -252,7 +274,7 @@ export default function Sidebar({ active }: { active: string }) {
               {!isCollapsed && <NavLabel>{group}</NavLabel>}
               {isCollapsed && <div style={{ height: 8 }} />}
               {items.map(item => (
-                <NavItemRow key={item.id} item={item} active={active} collapsed={isCollapsed} />
+                <NavItemRow key={item.id} item={item} active={active} collapsed={isCollapsed} dot={navDot(item.id)} />
               ))}
             </div>
           );
@@ -317,8 +339,9 @@ export default function Sidebar({ active }: { active: string }) {
   );
 }
 
-function MobileMenuItem({ item, active, onClose }: { item: NavItem; active: string; onClose: () => void }) {
+function MobileMenuItem({ item, active, onClose, dot }: { item: NavItem; active: string; onClose: () => void; dot?: "urgent" | "normal" | null }) {
   const isActive = active === item.id;
+  const dotColor = dot === "urgent" ? RED : dot === "normal" ? GOLD : null;
   return (
     <Link href={item.href} style={{ textDecoration: "none" }} onClick={onClose}>
       <div style={{
@@ -329,6 +352,7 @@ function MobileMenuItem({ item, active, onClose }: { item: NavItem; active: stri
         fontWeight: isActive ? 600 : 400,
       }}>
         <span style={{ fontSize: 17, width: 22, textAlign: "center" }}>{item.icon}</span>
+        {dotColor && <span style={{ width: 9, height: 9, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />}
         <span style={{ fontSize: 14 }}>{item.label}</span>
         {item.badge && (
           <span style={{ marginLeft: "auto", background: GOLD, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 600 }}>{item.badge}</span>
@@ -359,8 +383,9 @@ function GroupHeader({ icon, label, open, active, onClick }: { icon: string; lab
   );
 }
 
-function NavItemRow({ item, active, collapsed, indent }: { item: NavItem; active: string; collapsed: boolean; indent?: boolean }) {
+function NavItemRow({ item, active, collapsed, indent, dot }: { item: NavItem; active: string; collapsed: boolean; indent?: boolean; dot?: "urgent" | "normal" | null }) {
   const isActive = active === item.id;
+  const dotColor = dot === "urgent" ? RED : dot === "normal" ? GOLD : null;
   const pl = !collapsed && indent ? 40 : collapsed ? 0 : 20;
   return (
     <Link href={item.href} style={{ textDecoration: "none" }} title={collapsed ? item.label : undefined}>
@@ -382,12 +407,16 @@ function NavItemRow({ item, active, collapsed, indent }: { item: NavItem; active
         <span style={{ fontSize: collapsed ? 15 : indent ? 12 : 13, width: collapsed ? "auto" : 16, textAlign: "center", color: isActive ? GOLD : "#A09880" }}>
           {item.icon}
         </span>
+        {!collapsed && dotColor && (
+          <span title={dot === "urgent" ? "Alerte urgente à traiter" : "Nouveaux messages"}
+            style={{ width: 9, height: 9, borderRadius: "50%", background: dotColor, flexShrink: 0, boxShadow: dot === "urgent" ? `0 0 0 3px ${RED}22` : undefined }} />
+        )}
         {!collapsed && <span style={{ flex: 1, fontSize: indent ? 12 : 13 }}>{item.label}</span>}
         {!collapsed && item.badge && (
           <span style={{ background: GOLD, color: "#fff", borderRadius: 10, padding: "1px 6px", fontSize: 10, fontWeight: 600 }}>{item.badge}</span>
         )}
-        {collapsed && item.badge && (
-          <span style={{ position: "absolute", top: 2, right: 6, width: 7, height: 7, borderRadius: "50%", background: GOLD }} />
+        {collapsed && (dotColor || item.badge) && (
+          <span style={{ position: "absolute", top: 2, right: 6, width: 8, height: 8, borderRadius: "50%", background: dotColor ?? GOLD }} />
         )}
       </div>
     </Link>

@@ -20,7 +20,10 @@ export interface ParsedFournisseur {
 export async function extractFournisseursPdf(base64: string): Promise<ParsedFournisseur[]> {
   const client = getAnthropic();
   const resp = await client.messages.create({
-    model: MODELS.smart,
+    // Modèle rapide (Haiku) : l'extraction d'un tableau de fournisseurs est
+    // simple mais volumineuse → on privilégie le débit pour rester dans le
+    // délai du proxy (évite « Erreur réseau » sur les longs PDF).
+    model: MODELS.fast,
     max_tokens: 8000,
     system: "Tu extrais une liste de fournisseurs depuis un document PDF. Tu réponds UNIQUEMENT par un tableau JSON valide, sans texte autour.",
     messages: [{
