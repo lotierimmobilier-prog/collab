@@ -42,7 +42,11 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   const body = await req.json();
-  const { taskId, supplierId, title, description, address, deadline, amount, notes } = body;
+  const {
+    taskId, supplierId, title, description, address, deadline, amount, notes,
+    interventionType, onSiteName, onSitePhone, onSiteRole, keyAtAgency, accessInfo,
+    urgency, quoteRequired, agentName, agentPhone,
+  } = body;
   if (!supplierId || !title?.trim()) return NextResponse.json({ error: "Fournisseur et titre requis" }, { status: 400 });
 
   const ref   = await nextRef();
@@ -59,6 +63,16 @@ export async function POST(req: NextRequest) {
       notes:       notes || null,
       status:      "brouillon",
       createdBy:   session.user.id,
+      interventionType: interventionType || null,
+      onSiteName:  onSiteName || null,
+      onSitePhone: onSitePhone || null,
+      onSiteRole:  onSiteRole || null,
+      keyAtAgency: !!keyAtAgency,
+      accessInfo:  accessInfo || null,
+      urgency:     urgency || null,
+      quoteRequired: !!quoteRequired,
+      agentName:   agentName || null,
+      agentPhone:  agentPhone || null,
     },
     include: { supplier: { select: { id: true, name: true, type: true, phone: true, email: true } } },
   });
