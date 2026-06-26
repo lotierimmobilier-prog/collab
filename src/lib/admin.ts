@@ -27,6 +27,7 @@ export interface User {
   avatar?: string;
   accessOverrides?: ModuleAccess[]; // droits individuels qui surchargent le rôle
   gedAccess?: string | null;        // null = défaut rôle | complet | restreint | aucun
+  parrainId?: string | null;        // parrain (formation par parrainage)
 }
 
 export function getUserRight(user: User, role: Role | undefined, moduleId: string): Right {

@@ -5,11 +5,12 @@ import { User, Role, ModuleAccess, Right, MODULES, RIGHTS, avatarColor, getIniti
 interface Props {
   user: User | null;
   roles: Role[];
+  allUsers?: User[];
   onClose: () => void;
   onSave: (u: User) => void;
 }
 
-export default function UserModal({ user, roles, onClose, onSave }: Props) {
+export default function UserModal({ user, roles, allUsers = [], onClose, onSave }: Props) {
   const [tab, setTab] = useState<"infos" | "acces">("infos");
   const [f, setF] = useState({
     prenom: user?.prenom ?? "",
@@ -19,6 +20,7 @@ export default function UserModal({ user, roles, onClose, onSave }: Props) {
     roleId: user?.roleId ?? roles[0]?.id ?? "",
     active: user?.active ?? true,
     gedAccess: (user as { gedAccess?: string } | null)?.gedAccess ?? "",
+    parrainId: (user as { parrainId?: string } | null)?.parrainId ?? "",
   });
   const [overrides, setOverrides] = useState<ModuleAccess[]>(user?.accessOverrides ?? []);
   const [showPwd, setShowPwd] = useState(false);
@@ -77,6 +79,7 @@ export default function UserModal({ user, roles, onClose, onSave }: Props) {
       createdAt: user?.createdAt ?? new Date().toLocaleDateString("fr-FR"),
       accessOverrides: overrides.length > 0 ? overrides : undefined,
       gedAccess: f.gedAccess || null,
+      parrainId: f.parrainId || null,
     } as User);
   }
 
@@ -179,6 +182,19 @@ export default function UserModal({ user, roles, onClose, onSave }: Props) {
                 </div>
                 <span style={{ fontSize: 13, color: "#374151" }}>Compte {f.active ? "actif" : "inactif"}</span>
               </label>
+
+              {/* Parrain (formation par parrainage) */}
+              <F label="Parrain (formation)">
+                <select value={f.parrainId} onChange={e => set("parrainId", e.target.value)} style={{ ...inp, width: "100%" }}>
+                  <option value="">— Aucun (pas de parrainage) —</option>
+                  {allUsers.filter(u => u.id !== user?.id).map(u => (
+                    <option key={u.id} value={u.id}>{u.prenom} {u.nom}</option>
+                  ))}
+                </select>
+                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>
+                  Associez un parrain pour débloquer l’espace de formation de ce filleul. Modifiable aussi dans Formation → onglet « Parrains ».
+                </div>
+              </F>
             </div>
           )}
 
