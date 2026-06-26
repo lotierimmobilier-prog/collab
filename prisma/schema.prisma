@@ -22,6 +22,10 @@ model User {
   lastLogin       DateTime?
   avatar          String?
 
+  parrainId       String?   // parrain (formation par parrainage)
+  parrain         User?     @relation("Mentorship", fields: [parrainId], references: [id], onDelete: SetNull)
+  filleuls        User[]    @relation("Mentorship")
+
   tasks               Task[]
   sentMessages        InternalMessage[]  @relation("MessageSender")
   channelMemberships  ChannelMember[]
@@ -760,6 +764,57 @@ model ActivityLog {
   @@index([userId])
   @@index([createdAt])
   @@map("activity_logs")
+}
+
+// ── Formation par parrainage ─────────────────────────────────
+
+model TrainingModule {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  order       Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  competences TrainingCompetence[]
+
+  @@map("training_modules")
+}
+
+model TrainingCompetence {
+  id          String   @id @default(cuid())
+  moduleId    String
+  module      TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  validations CompetenceValidation[]
+
+  @@index([moduleId])
+  @@map("training_competences")
+}
+
+/// Avancement d'un filleul sur une compétence : dates réalisées + double
+/// validation (parrain + filleul). Terminée quand les deux ont validé.
+model CompetenceValidation {
+  id                 String   @id @default(cuid())
+  competenceId       String
+  competence         TrainingCompetence @relation(fields: [competenceId], references: [id], onDelete: Cascade)
+  filleulId          String
+  dates              Json?    // jours réalisés : ["2026-06-27", …]
+  parrainValidated   Boolean  @default(false)
+  parrainValidatedAt DateTime?
+  parrainComment     String?
+  filleulValidated   Boolean  @default(false)
+  filleulValidatedAt DateTime?
+  filleulComment     String?
+  updatedAt          DateTime @updatedAt @default(now())
+
+  @@unique([competenceId, filleulId])
+  @@index([filleulId])
+  @@map("competence_validations")
 }
 
 /// Mémoire d'Auguste : termes techniques appris au fil des demandes (glossaire agence).
