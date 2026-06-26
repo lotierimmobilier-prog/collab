@@ -207,6 +207,7 @@ export default function AnnuairePage() {
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                       {c.email && <a href={`mailto:${c.email}`} title="Envoyer un mail" style={iconBtn}>✉</a>}
                       {c.phone && <a href={`tel:${c.phone}`} title="Appeler" style={iconBtn}>📞</a>}
+                      {c.icsRef && <a href={`/ics?recherche=${encodeURIComponent(contactName(c))}`} title="Documents ICS (GED)" style={iconBtn}>📁</a>}
                       <button onClick={() => setTaskFor(c)} title="Créer une tâche liée" style={iconBtnBtn}>✅</button>
                       <button onClick={() => setRdvFor(c)} title="Créer un rendez-vous lié" style={iconBtnBtn}>📅</button>
                     </div>
