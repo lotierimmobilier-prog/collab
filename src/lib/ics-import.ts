@@ -23,6 +23,7 @@ export interface IcsTenantRecord {
   civiliteProprio: string | null;
   nomProprietaire: string | null;
   prenomProprietaire: string | null;
+  raw: Record<string, string>;   // ligne complète (toutes les colonnes)
 }
 
 const clean = (v: unknown): string => String(v ?? "").trim();
@@ -61,6 +62,8 @@ export function parseIcsTenantsExport(buf: Buffer): { records: IcsTenantRecord[]
       civiliteProprio: orNull(g("Civilite Propritaire")),
       nomProprietaire: orNull(g("Nom Proprietaire")),
       prenomProprietaire: orNull(g("Prenom Proprietaire")),
+      // Toutes les colonnes, nettoyées, conservées telles quelles.
+      raw: Object.fromEntries(Object.keys(r).map(k => [k, clean(r[k])])),
     });
   }
 

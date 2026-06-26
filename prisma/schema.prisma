@@ -862,6 +862,7 @@ model IcsTenant {
   civiliteProprio    String?
   nomProprietaire    String?
   prenomProprietaire String?
+  raw                Json?    // ligne complète de l'export (toutes les colonnes)
   updatedAt          DateTime @updatedAt @default(now())
 
   @@index([nomLocataire])

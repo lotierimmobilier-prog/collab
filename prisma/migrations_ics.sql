@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS ics_tenants (
 );
 CREATE INDEX IF NOT EXISTS ics_tenants_nomlocataire_idx ON ics_tenants ("nomLocataire");
 CREATE INDEX IF NOT EXISTS ics_tenants_nomproprietaire_idx ON ics_tenants ("nomProprietaire");
+ALTER TABLE ics_tenants ADD COLUMN IF NOT EXISTS "raw" JSONB;
 
 -- Rapprochement des fiches annuaire avec les références ICS.
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "icsType"  TEXT;
