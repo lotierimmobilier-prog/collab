@@ -791,9 +791,26 @@ model TrainingCompetence {
   createdAt   DateTime @default(now())
 
   validations CompetenceValidation[]
+  questions   TrainingQuestion[]
 
   @@index([moduleId])
   @@map("training_competences")
+}
+
+/// Question de contrôle des connaissances (QCM) rattachée à une compétence.
+model TrainingQuestion {
+  id           String   @id @default(cuid())
+  competenceId String
+  competence   TrainingCompetence @relation(fields: [competenceId], references: [id], onDelete: Cascade)
+  prompt       String
+  choices      Json     // ["réponse A", "réponse B", …]
+  correctIndex Int      @default(0)
+  explanation  String?
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@index([competenceId])
+  @@map("training_questions")
 }
 
 /// Avancement d'un filleul sur une compétence : dates réalisées + double
@@ -810,6 +827,7 @@ model CompetenceValidation {
   filleulValidated   Boolean  @default(false)
   filleulValidatedAt DateTime?
   filleulComment     String?
+  quiz               Json?    // réponses du filleul au QCM : { "<questionId>": <indexChoisi> }
   updatedAt          DateTime @updatedAt @default(now())
 
   @@unique([competenceId, filleulId])

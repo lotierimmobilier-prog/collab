@@ -10,7 +10,10 @@ export async function GET() {
   const modules = await prisma.trainingModule.findMany({
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
     include: {
-      competences: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] },
+      competences: {
+        orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+        include: { questions: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] } },
+      },
     },
   });
   return NextResponse.json({ modules });

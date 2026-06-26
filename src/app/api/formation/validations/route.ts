@@ -64,6 +64,8 @@ export async function POST(req: NextRequest) {
     if (!rel.isSelf && !isAdmin) return NextResponse.json({ error: "Réservé au filleul" }, { status: 403 });
   } else if (action === "setDates") {
     if (!rel.isSelf && !rel.isParrain) return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+  } else if (action === "setQuiz") {
+    if (!rel.isSelf && !isAdmin) return NextResponse.json({ error: "Réservé au filleul" }, { status: 403 });
   } else {
     return NextResponse.json({ error: "action inconnue" }, { status: 400 });
   }
@@ -79,6 +81,11 @@ export async function POST(req: NextRequest) {
       : [];
     update.dates = dates;
     create.dates = dates;
+  } else if (action === "setQuiz") {
+    // { quiz: { "<questionId>": <indexChoisi> } }
+    const quiz = body?.quiz && typeof body.quiz === "object" ? body.quiz : {};
+    update.quiz = quiz;
+    create.quiz = quiz;
   } else if (action === "validateParrain") {
     const value = !!body?.value;
     update.parrainValidated = value;
