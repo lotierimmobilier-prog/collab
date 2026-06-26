@@ -204,13 +204,32 @@ export async function icsLoginAuthCode(cfg: IcsConfigData, username: string, pas
       html = await res.text();
       break;
     }
-    // La page Keycloak peut contenir plusieurs formulaires (login, « redémarrer
-    // la connexion », sélecteur de langue…). On cible celui qui poste les
-    // identifiants : action vers /login-actions/authenticate.
-    const forms = [...html.matchAll(/<form\s[^>]*action="([^"]+)"/gi)].map(f => f[1].replace(/&amp;/g, "&"));
-    const loginAction = forms.find(a => /login-actions\/authenticate/i.test(a)) ?? forms[0];
-    if (!loginAction) return { ok: false, error: "Page de connexion ICS non reconnue (formulaire de connexion introuvable)." };
-    const action = new URL(loginAction, pageUrl).toString();
+    // On repère le formulaire de connexion (action vers login-actions/authenticate)
+    // ET on lit ses VRAIS champs : noms des inputs identifiant/mot de passe et
+    // champs cachés (le thème ICS peut renommer les champs).
+    let action = "", formInner = "";
+    for (const fm of html.matchAll(/<form\b[^>]*action="([^"]+)"[^>]*>([\s\S]*?)<\/form>/gi)) {
+      const act = fm[1].replace(/&amp;/g, "&");
+      if (/login-actions\/authenticate/i.test(act)) { action = act; formInner = fm[2]; break; }
+      if (!action) { action = act; formInner = fm[2]; }
+    }
+    if (!action) return { ok: false, error: "Page de connexion ICS non reconnue (formulaire de connexion introuvable)." };
+    action = new URL(action, pageUrl).toString();
+
+    const body = new URLSearchParams();
+    let userField = "", passField = "";
+    for (const im of formInner.matchAll(/<input\b[^>]*>/gi)) {
+      const tag = im[0];
+      const name = /name="([^"]*)"/i.exec(tag)?.[1];
+      if (!name) continue;
+      const type = (/type="([^"]*)"/i.exec(tag)?.[1] || "text").toLowerCase();
+      const value = (/value="([^"]*)"/i.exec(tag)?.[1] ?? "").replace(/&amp;/g, "&");
+      if (type === "password") { passField = name; continue; }
+      if (!userField && (type === "text" || type === "email" || /user|email|login|ident/i.test(name))) { userField = name; continue; }
+      if (type === "hidden") body.set(name, value);
+    }
+    body.set(userField || "username", username);
+    body.set(passField || "password", password);
 
     // 2. Envoi des identifiants (avec Origin/Referer, comme un navigateur).
     const post: Response = await fetch(action, {
@@ -219,7 +238,7 @@ export async function icsLoginAuthCode(cfg: IcsConfigData, username: string, pas
         "Content-Type": "application/x-www-form-urlencoded", Cookie: cookieHeader(jar),
         Origin: authOrigin, Referer: pageUrl, "User-Agent": UA,
       },
-      body: new URLSearchParams({ username, password, credentialId: "" }),
+      body,
     });
     parseSetCookies(post, jar);
     const loc = post.headers.get("location");
@@ -228,8 +247,8 @@ export async function icsLoginAuthCode(cfg: IcsConfigData, username: string, pas
       const errHtml = await post.text().catch(() => "");
       const kc = /kc-feedback-text[^>]*>([^<]+)<|id="input-error[^"]*"[^>]*>\s*([^<]+)|class="(?:alert|message|pf-c-alert__title)[^"]*"[^>]*>\s*(?:<[^>]+>\s*)*([^<]{3,})/i.exec(errHtml);
       const detail = (kc?.[1] || kc?.[2] || kc?.[3] || "").replace(/\s+/g, " ").trim();
-      const stillLogin = /login-actions\/authenticate|name="password"/i.test(errHtml);
-      const diag = `cookies=${jar.size}, form=${forms.length>0?"ok":"absent"}, action=${new URL(action).host}, postStatus=${post.status}, reLogin=${stillLogin}`;
+      const stillLogin = /login-actions\/authenticate|type="password"/i.test(errHtml);
+      const diag = `cookies=${jar.size}, userField=${userField || "?"}, passField=${passField || "?"}, action=${new URL(action).host}, postStatus=${post.status}, reLogin=${stillLogin}`;
       return { ok: false, error: detail
         ? `ICS a refusé la connexion : « ${detail} ».`
         : `ICS n'a pas validé la connexion (HTTP ${post.status}). [diag: ${diag}]` };
