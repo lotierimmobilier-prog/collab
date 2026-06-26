@@ -1,0 +1,53 @@
+import { NextResponse } from "next/server";
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+
+// GET /api/sidebar/badges — pastilles du menu pour l'utilisateur courant :
+//   { mail: {count, urgent}, chat: {count, urgent} }
+// « urgent » = un élément non lu qui nécessite un traitement prioritaire.
+const URGENT_RE = /urgent|relance|mise en demeure|impay|sinistre|fuite|d[ée]g[âa]t|d[ée]lai|mise en demeure/i;
+
+export async function GET() {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  const uid = session.user.id;
+
+  const result = { mail: { count: 0, urgent: false }, chat: { count: 0, urgent: false } };
+
+  // ── Emails non lus (boîte de réception, cloisonné à l'utilisateur) ──
+  try {
+    const configs = await prisma.mailAccountConfig.findMany({ where: { sharedUserIds: { has: uid } }, select: { id: true } });
+    const allowed = configs.map(c => c.id);
+    const where = {
+      read: false,
+      folder: "INBOX",
+      OR: [{ accountId: { in: allowed } }, { ownerId: uid }],
+    };
+    result.mail.count = await prisma.emailMessage.count({ where });
+    if (result.mail.count > 0) {
+      // Urgent = un email non lu marqué (étoile) ou dont l'objet correspond à
+      // un mot-clé prioritaire.
+      const sample = await prisma.emailMessage.findMany({ where, select: { subject: true, starred: true }, take: 80 });
+      result.mail.urgent = sample.some(m => m.starred || URGENT_RE.test(m.subject || ""));
+    }
+  } catch { /* tables mail absentes → 0 */ }
+
+  // ── Messages internes non lus (channels de l'utilisateur) ──
+  try {
+    const memberships = await prisma.channelMember.findMany({ where: { userId: uid }, select: { channelId: true } });
+    const channelIds = memberships.map(m => m.channelId);
+    if (channelIds.length) {
+      const msgs = await prisma.internalMessage.findMany({
+        where: { channelId: { in: channelIds }, NOT: { senderId: uid } },
+        select: { content: true, readBy: true },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+      });
+      const unread = msgs.filter(m => !(m.readBy ?? []).includes(uid));
+      result.chat.count = unread.length;
+      result.chat.urgent = unread.some(m => URGENT_RE.test(m.content || ""));
+    }
+  } catch { /* tables chat absentes → 0 */ }
+
+  return NextResponse.json(result);
+}
