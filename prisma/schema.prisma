@@ -377,7 +377,8 @@ model Owner {
   bic         String?
   bankName    String?
   notes       String?
-  icsMandat   String?  @unique   // référence ICS (idMandat) pour la synchro
+  icsMandat   String?           // mandat ICS représentatif (informatif)
+  icsKey      String?  @unique   // clé de regroupement (nom normalisé) : un compte par propriétaire
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
