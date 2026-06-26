@@ -8,6 +8,10 @@ const ALLOWED = ["admin", "dirigeant", "direction", "gestionnaire", "syndic", "a
 //   body: { contactName?, contactEmail?, sendEmail? }
 // La salle est hébergée par Jitsi (meet.jit.si) : aucun compte requis, ouverture
 // directe dans le navigateur du téléphone.
+// TODO (bientôt) : visio intégrée à la marque Lotier, hébergée sur notre
+// domaine (Jitsi self-hosted ou LiveKit). Il suffira de remplacer la base de
+// l'URL ci-dessous par le serveur dédié (et d'embarquer la salle dans une page
+// /visio/[room] interne) — le reste du flux (envoi du lien, email) ne change pas.
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });

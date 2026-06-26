@@ -185,6 +185,10 @@ function VisioModal({ contact, onClose }: { contact: { name?: string; email?: st
       <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 440, maxWidth: "94vw", background: "#fff", borderRadius: 16, zIndex: 70, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ fontWeight: 700, fontSize: 15, color: DARK }}>📹 Visio en direct</div>
         <div style={{ fontSize: 12.5, color: "#6b7280" }}>Envoyez un lien : le locataire ouvre la vidéo sur son téléphone (sans installation) et vous montre le problème en direct.</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 9, padding: "8px 11px", fontSize: 12, color: "#6b7280" }}>
+          <span style={{ background: GOLD, color: "#fff", borderRadius: 6, padding: "1px 7px", fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }}>BIENTÔT</span>
+          <span>Visio intégrée Lotier (hébergée sur notre domaine, à la marque de l'agence) — <strong>en préparation</strong>. En attendant, le lien ci-dessous fonctionne déjà.</span>
+        </div>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="Nom du contact" style={inp} />
         <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email (pour envoyer le lien)" style={inp} />
         {!url ? (
