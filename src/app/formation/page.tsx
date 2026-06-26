@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
 import { validationStatus, V_STATUS_LABEL, type ValidationLike } from "@/lib/formation";
@@ -720,6 +721,8 @@ function AddRow({ placeholder1, placeholder2, onAdd }: { placeholder1: string; p
 
 // ─── Admin : affecter les parrains ───────────────────────────────────
 function Affectation({ users, reload }: { users: AdminUser[]; reload: () => void }) {
+  const { update } = useSession();
+  const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
 
   async function setParrain(userId: string, parrainId: string) {
@@ -731,6 +734,13 @@ function Affectation({ users, reload }: { users: AdminUser[]; reload: () => void
       });
       reload();
     } finally { setBusy(null); }
+  }
+
+  async function impersonate(u: AdminUser) {
+    if (!confirm(`Prendre la main sur le compte de ${u.prenom} ${u.nom} ?\nVous verrez le logiciel comme cet utilisateur ; un bandeau rouge permettra de revenir.`)) return;
+    await update({ impersonate: u.id });
+    router.push("/formation");
+    router.refresh();
   }
 
   return (
@@ -756,6 +766,10 @@ function Affectation({ users, reload }: { users: AdminUser[]; reload: () => void
                 <option key={p.id} value={p.id}>{p.prenom} {p.nom}</option>
               ))}
             </select>
+            <button onClick={() => impersonate(u)} title="Prendre la main (voir en tant que cet utilisateur)"
+              style={{ ...btnGhost, padding: "6px 10px", fontSize: 12, whiteSpace: "nowrap" }}>
+              👤→ Prendre la main
+            </button>
           </div>
         ))}
       </div>
