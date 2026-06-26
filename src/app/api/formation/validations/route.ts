@@ -1,13 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { runMigrations } from "@/lib/run-migrations";
+
+// Auto-réparation : si une colonne/table récente manque encore en base, on
+// applique les migrations puis on réessaie une fois.
+async function heal<T>(fn: () => Promise<T>): Promise<T> {
+  try { return await fn(); }
+  catch (e) {
+    if (/does not exist|column|relation|table/i.test(String(e))) { await runMigrations(); return await fn(); }
+    throw e;
+  }
+}
 
 // Récupère le lien de parrainage entre le filleul et l'utilisateur courant.
 async function relationFor(currentUserId: string, isAdmin: boolean, filleulId: string) {
-  const filleul = await prisma.user.findUnique({
+  const filleul = await heal(() => prisma.user.findUnique({
     where: { id: filleulId },
     select: { id: true, prenom: true, nom: true, parrainId: true },
-  });
+  }));
   if (!filleul) return { filleul: null, isSelf: false, isParrain: false };
   return {
     filleul,
@@ -30,9 +41,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
   }
 
-  const validations = await prisma.competenceValidation.findMany({
+  const validations = await heal(() => prisma.competenceValidation.findMany({
     where: { filleulId },
-  });
+  }));
   return NextResponse.json({ filleul: rel.filleul, validations });
 }
 
@@ -105,11 +116,11 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const v = await prisma.competenceValidation.upsert({
+    const v = await heal(() => prisma.competenceValidation.upsert({
       where: { competenceId_filleulId: { competenceId, filleulId } },
       update,
       create,
-    });
+    }));
     return NextResponse.json(v);
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });

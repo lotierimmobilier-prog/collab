@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { runMigrations } from "@/lib/run-migrations";
 
 // GET /api/formation/modules — liste des modules + compétences (ordonnés).
 export async function GET() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const modules = await prisma.trainingModule.findMany({
+  const query = () => prisma.trainingModule.findMany({
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
     include: {
       competences: {
@@ -16,7 +17,16 @@ export async function GET() {
       },
     },
   });
-  return NextResponse.json({ modules });
+  try {
+    return NextResponse.json({ modules: await query() });
+  } catch (e) {
+    // Auto-réparation si les tables Formation manquent encore.
+    if (/does not exist|relation|table|column/i.test(String(e))) {
+      try { await runMigrations(); return NextResponse.json({ modules: await query() }); }
+      catch { return NextResponse.json({ modules: [] }); }
+    }
+    return NextResponse.json({ modules: [] });
+  }
 }
 
 // POST /api/formation/modules — crée un module ou une compétence (admin).
