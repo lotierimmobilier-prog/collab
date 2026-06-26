@@ -68,6 +68,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     error: "/login",
   },
 
+  events: {
+    async signIn({ user }) {
+      try {
+        await prisma.activityLog.create({ data: { userId: user.id, userName: user.name ?? null, kind: "login", label: "Connexion" } });
+      } catch { /* journalisation best-effort */ }
+    },
+    async signOut(message) {
+      try {
+        const token = (message as { token?: { id?: string; name?: string } }).token;
+        if (token?.id) await prisma.activityLog.create({ data: { userId: token.id, userName: token.name ?? null, kind: "logout", label: "Déconnexion" } });
+      } catch { /* best-effort */ }
+    },
+  },
+
   callbacks: {
     async jwt({ token, user }) {
       if (user) {

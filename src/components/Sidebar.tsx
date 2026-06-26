@@ -42,6 +42,7 @@ const adminNav = [
   { id: "admin-users",     label: "Utilisateurs",   icon: "○", href: "/admin/utilisateurs" },
   { id: "admin-roles",     label: "Rôles & droits", icon: "◫", href: "/admin/roles" },
   { id: "admin-perf",      label: "Performances",   icon: "🏆", href: "/admin/performance" },
+  { id: "admin-activite",  label: "Activité & connexions", icon: "📊", href: "/admin/activite" },
   { id: "admin-settings",  label: "Paramètres",     icon: "⚙", href: "/admin/parametres" },
   { id: "admin-knowledge", label: "Base Auguste",   icon: "✦", href: "/admin/knowledge" },
   { id: "admin-auguste-logs", label: "Historique Auguste", icon: "🕘", href: "/admin/auguste-historique" },

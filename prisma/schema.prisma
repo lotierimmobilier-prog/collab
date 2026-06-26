@@ -741,6 +741,35 @@ model TxnMemory {
   @@map("txn_memory")
 }
 
+/// Journal d'activité : connexions, déconnexions et actions des utilisateurs.
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  userName  String?
+  kind      String   @default("action") // login | logout | action
+  label     String?
+  path      String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+/// Temps de présence quotidien par utilisateur (secondes actives).
+model UserPresence {
+  id       String   @id @default(cuid())
+  userId   String
+  userName String?
+  day      String   // AAAA-MM-JJ
+  seconds  Int      @default(0)
+  lastSeen DateTime @default(now())
+
+  @@unique([userId, day])
+  @@index([day])
+  @@map("user_presence")
+}
+
 /// Compte rendu de réunion de direction. Pièces jointes (PDF / audio) en base64
 /// dans `documents` : [{ id, name, mime, kind: "pdf"|"audio", size, data }].
 model DirectionMeeting {
