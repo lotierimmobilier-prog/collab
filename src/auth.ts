@@ -13,8 +13,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
+        // Sélection explicite des seules colonnes nécessaires : la connexion
+        // ne doit jamais dépendre de colonnes récentes (évite tout 500 si une
+        // migration n'est pas encore appliquée sur l'instance).
         const user = await prisma.user.findUnique({
           where: { email: String(credentials.email).toLowerCase() },
+          select: {
+            id: true, email: true, passwordHash: true, active: true,
+            prenom: true, nom: true, roleId: true,
+          },
         });
 
         if (!user || !user.active) return null;
@@ -92,31 +99,35 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
 
       // « Prendre la main » sur un utilisateur (impersonation) — réservé admin.
+      // Enveloppé : une erreur ici ne doit jamais casser la session.
       if (trigger === "update" && session && typeof session === "object") {
-        const imp = (session as Record<string, unknown>).impersonate;
-        if (imp === null) {
-          // Retour à l'administration : on restaure l'identité d'origine.
-          if (token.impersonatorId) {
-            const admin = await prisma.user.findUnique({ where: { id: token.impersonatorId as string } });
-            if (admin) {
-              token.id = admin.id; token.prenom = admin.prenom; token.nom = admin.nom;
-              token.roleId = admin.roleId; token.name = `${admin.prenom} ${admin.nom}`;
+        const sel = { id: true, prenom: true, nom: true, roleId: true } as const;
+        try {
+          const imp = (session as Record<string, unknown>).impersonate;
+          if (imp === null) {
+            // Retour à l'administration : on restaure l'identité d'origine.
+            if (token.impersonatorId) {
+              const admin = await prisma.user.findUnique({ where: { id: token.impersonatorId as string }, select: sel });
+              if (admin) {
+                token.id = admin.id; token.prenom = admin.prenom; token.nom = admin.nom;
+                token.roleId = admin.roleId; token.name = `${admin.prenom} ${admin.nom}`;
+              }
+              token.impersonatorId = undefined;
+              token.impersonatorName = undefined;
             }
-            token.impersonatorId = undefined;
-            token.impersonatorName = undefined;
-          }
-        } else if (typeof imp === "string" && imp) {
-          // Démarrage : uniquement si l'utilisateur effectif est admin et n'impersonne pas déjà.
-          if (token.roleId === "admin" && !token.impersonatorId) {
-            const target = await prisma.user.findUnique({ where: { id: imp } });
-            if (target && target.id !== token.id) {
-              token.impersonatorId = token.id;
-              token.impersonatorName = token.name ?? `${token.prenom} ${token.nom}`;
-              token.id = target.id; token.prenom = target.prenom; token.nom = target.nom;
-              token.roleId = target.roleId; token.name = `${target.prenom} ${target.nom}`;
+          } else if (typeof imp === "string" && imp) {
+            // Démarrage : uniquement si l'utilisateur effectif est admin et n'impersonne pas déjà.
+            if (token.roleId === "admin" && !token.impersonatorId) {
+              const target = await prisma.user.findUnique({ where: { id: imp }, select: sel });
+              if (target && target.id !== token.id) {
+                token.impersonatorId = token.id;
+                token.impersonatorName = token.name ?? `${token.prenom} ${token.nom}`;
+                token.id = target.id; token.prenom = target.prenom; token.nom = target.nom;
+                token.roleId = target.roleId; token.name = `${target.prenom} ${target.nom}`;
+              }
             }
           }
-        }
+        } catch { /* impersonation best-effort : on ne casse pas la session */ }
       }
       return token;
     },

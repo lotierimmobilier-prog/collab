@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
         accessOverrides: accessOverrides ?? undefined,
         gedAccess: gedAccess ?? null,
       },
+      select: { id: true, prenom: true, nom: true, email: true, roleId: true, active: true },
     });
     return NextResponse.json({ ...user, password: "••••••••" }, { status: 201 });
   } catch (e: unknown) {
