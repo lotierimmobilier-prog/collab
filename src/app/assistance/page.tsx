@@ -26,6 +26,28 @@ export default function AssistancePage() {
   const [form, setForm] = useState({ role: "locataire", contactName: "", contactPhone: "", contactEmail: "", address: "", sendEmail: false });
   const [lastLink, setLastLink] = useState("");
   const [odsFor, setOdsFor] = useState<Req | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [odsInitial, setOdsInitial] = useState<any>(null);
+  const [analyzing, setAnalyzing] = useState<string | null>(null);
+  const [visioFor, setVisioFor] = useState<{ name?: string; email?: string } | null>(null);
+
+  async function analyze(r: Req) {
+    setAnalyzing(r.id);
+    try {
+      const res = await fetch(`/api/assistance/${r.id}/auguste`, { method: "POST" });
+      const d = await res.json();
+      if (!res.ok) { alert(d.error || "Analyse impossible."); return; }
+      setOdsInitial({
+        supplierId: d.supplier?.id ?? "",
+        type: d.interventionType ?? "",
+        urgency: d.urgency ?? "normal",
+        summary: d.summary, confidence: d.confidence, reason: d.reason,
+        supplierName: d.supplier?.name, supplierHasEmail: !!d.supplier?.email,
+      });
+      setOdsFor(r);
+    } catch { alert("Erreur réseau."); }
+    finally { setAnalyzing(null); }
+  }
 
   const load = useCallback(async () => {
     try { const r = await fetch("/api/assistance"); if (r.ok) { const d = await r.json(); setRequests(d.requests ?? []); } } catch { /* */ }
@@ -72,6 +94,7 @@ export default function AssistancePage() {
                   Envoyer le lien par email
                 </label>
                 <button onClick={createLink} disabled={creating} style={btnGold}>{creating ? "Création…" : "Créer le lien"}</button>
+                <button onClick={() => setVisioFor({ name: form.contactName, email: form.contactEmail })} style={btnGhost} title="Démarrer une visio en direct avec le locataire">📹 Visio en direct</button>
               </div>
               {lastLink && (
                 <div style={{ marginTop: 12, background: GOLD_BG, borderRadius: 8, padding: "10px 12px", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -100,11 +123,17 @@ export default function AssistancePage() {
                         <a href={`/declaration/${r.token}`} target="_blank" style={{ ...btnGhost, textDecoration: "none", fontSize: 12 }}>Ouvrir le lien</a>
                       )}
                       {r.status === "soumise" && (
-                        <button onClick={() => setOdsFor(r)} style={{ ...btnGold, padding: "6px 12px", fontSize: 12 }}>Créer l'ODS</button>
+                        <>
+                          <button onClick={() => analyze(r)} disabled={analyzing === r.id} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12, borderColor: GOLD, color: GOLD }}>
+                            {analyzing === r.id ? "Analyse…" : "🤖 Analyse Auguste"}
+                          </button>
+                          <button onClick={() => { setOdsInitial(null); setOdsFor(r); }} style={{ ...btnGold, padding: "6px 12px", fontSize: 12 }}>Créer l'ODS</button>
+                        </>
                       )}
                       {r.status === "ods_cree" && (
                         <a href="/ordres-de-service" style={{ ...btnGhost, textDecoration: "none", fontSize: 12 }}>Voir l'ODS →</a>
                       )}
+                      <button onClick={() => setVisioFor({ name: r.contactName, email: r.contactEmail })} title="Visio en direct" style={{ ...btnGhost, padding: "6px 10px", fontSize: 12 }}>📹</button>
                     </div>
                     {r.address && <div style={{ fontSize: 12, color: "#6b7280", marginTop: 6 }}>📍 {r.address}</div>}
                     {r.description && <div style={{ fontSize: 13, color: DARK, marginTop: 6, lineHeight: 1.4 }}>{r.description}</div>}
@@ -125,16 +154,67 @@ export default function AssistancePage() {
         </div>
       </div>
 
-      {odsFor && <ToOdsModal req={odsFor} onClose={() => setOdsFor(null)} onDone={() => { setOdsFor(null); load(); }} />}
+      {odsFor && <ToOdsModal req={odsFor} initial={odsInitial} onClose={() => { setOdsFor(null); setOdsInitial(null); }} onDone={() => { setOdsFor(null); setOdsInitial(null); load(); }} />}
+      {visioFor && <VisioModal contact={visioFor} onClose={() => setVisioFor(null)} />}
     </div>
   );
 }
 
-function ToOdsModal({ req, onClose, onDone }: { req: Req; onClose: () => void; onDone: () => void }) {
+function VisioModal({ contact, onClose }: { contact: { name?: string; email?: string }; onClose: () => void }) {
+  const [name, setName] = useState(contact.name ?? "");
+  const [email, setEmail] = useState(contact.email ?? "");
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  async function generate(sendEmail: boolean) {
+    setBusy(true); setMsg("");
+    try {
+      const r = await fetch("/api/visio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contactName: name, contactEmail: email, sendEmail }) });
+      const d = await r.json();
+      if (!r.ok) { setMsg(d.error || "Échec."); return; }
+      setUrl(d.cleanUrl);
+      if (sendEmail) setMsg(d.emailed ? "Lien envoyé par email." : "Lien généré (email non configuré).");
+    } catch { setMsg("Erreur réseau."); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 60 }} />
+      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 440, maxWidth: "94vw", background: "#fff", borderRadius: 16, zIndex: 70, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: DARK }}>📹 Visio en direct</div>
+        <div style={{ fontSize: 12.5, color: "#6b7280" }}>Envoyez un lien : le locataire ouvre la vidéo sur son téléphone (sans installation) et vous montre le problème en direct.</div>
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="Nom du contact" style={inp} />
+        <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email (pour envoyer le lien)" style={inp} />
+        {!url ? (
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+            <button onClick={onClose} style={btnGhost}>Annuler</button>
+            <button onClick={() => generate(false)} disabled={busy} style={{ ...btnGhost, borderColor: GOLD, color: GOLD }}>Générer le lien</button>
+            <button onClick={() => generate(true)} disabled={busy || !email} style={btnGold}>✉️ Envoyer par email</button>
+          </div>
+        ) : (
+          <>
+            <div style={{ background: GOLD_BG, borderRadius: 8, padding: "10px 12px", fontSize: 12.5, color: DARK, wordBreak: "break-all" }}>{url}</div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+              <button onClick={() => navigator.clipboard?.writeText(url)} style={btnGhost}>Copier</button>
+              <a href={`sms:?&body=${encodeURIComponent("Visio avec votre agence : " + url)}`} style={{ ...btnGhost, textDecoration: "none" }}>SMS</a>
+              <a href={url} target="_blank" rel="noreferrer" style={{ ...btnGold, textDecoration: "none" }}>Rejoindre</a>
+            </div>
+          </>
+        )}
+        {msg && <div style={{ fontSize: 12, color: msg.includes("Échec") || msg.includes("réseau") ? RED : GREEN }}>{msg}</div>}
+      </div>
+    </>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ToOdsModal({ req, initial, onClose, onDone }: { req: Req; initial?: any; onClose: () => void; onDone: () => void }) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [supplierId, setSupplierId] = useState("");
-  const [type, setType] = useState("");
-  const [urgency, setUrgency] = useState("normal");
+  const [supplierId, setSupplierId] = useState(initial?.supplierId ?? "");
+  const [type, setType] = useState(initial?.type ?? "");
+  const [urgency, setUrgency] = useState(initial?.urgency ?? "normal");
   const [quote, setQuote] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -176,6 +256,13 @@ function ToOdsModal({ req, onClose, onDone }: { req: Req; onClose: () => void; o
       <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 460, maxWidth: "94vw", background: "#fff", borderRadius: 16, zIndex: 70, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ fontWeight: 700, fontSize: 15, color: DARK }}>Créer l'ordre de service</div>
         <div style={{ fontSize: 12.5, color: "#6b7280" }}>Reprend l'adresse, la description, le contact et les photos de la demande de {req.contactName || "le déclarant"}.</div>
+        {initial?.summary && (
+          <div style={{ background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 12px", fontSize: 12.5, color: DARK }}>
+            <div style={{ fontWeight: 700, marginBottom: 3 }}>🤖 Analyse d'Auguste{typeof initial.confidence === "number" ? ` — confiance ${Math.round(initial.confidence * 100)}%` : ""}</div>
+            <div>{initial.summary}</div>
+            {initial.supplierName && <div style={{ marginTop: 4, color: "#6b7280" }}>Fournisseur suggéré : <strong>{initial.supplierName}</strong>{initial.reason ? ` — ${initial.reason}` : ""}</div>}
+          </div>
+        )}
         <select value={supplierId} onChange={e => setSupplierId(e.target.value)} style={inp}>
           <option value="">— Fournisseur —</option>
           {suppliers.map(s => <option key={s.id} value={s.id}>{s.name} ({s.type}){s.email ? "" : " — sans email"}</option>)}
