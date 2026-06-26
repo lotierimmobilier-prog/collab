@@ -58,10 +58,22 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
   L.push(`La facture est à adresser à l'agence (${acc.email}).`);
   L.push(``);
+  // Pièces jointes (photos…)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const atts = Array.isArray(ods.attachments) ? (ods.attachments as any[]) : [];
+  if (atts.length) L.push(`${atts.length} pièce(s) jointe(s) : ${atts.map(a => a.name).join(", ")}.`);
   L.push(`Pour toute question : ${agentName || "votre agence"}${ods.agentPhone ? ` — ${ods.agentPhone}` : ""}.`);
   L.push(`Cordialement,`);
   L.push(`${acc.name}`);
   const text = L.join("\n");
+
+  const mailAttachments = atts
+    .filter(a => a?.data && a?.name)
+    .map(a => ({
+      filename: String(a.name),
+      content: Buffer.from(String(a.data), "base64"),
+      contentType: a.mime ? String(a.mime) : undefined,
+    }));
 
   const subject = `[${ods.ref}] ${ods.interventionType ? ods.interventionType + " — " : ""}${ods.title}`;
 
@@ -81,6 +93,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       subject,
       text,
       html: `<div style="font-family:sans-serif;font-size:14px;line-height:1.6;color:#1C1A17">${text.replace(/\n/g, "<br/>")}</div>`,
+      ...(mailAttachments.length ? { attachments: mailAttachments } : {}),
     });
   } catch (e) {
     return NextResponse.json({ error: `Envoi échoué : ${e instanceof Error ? e.message : String(e)}` }, { status: 502 });

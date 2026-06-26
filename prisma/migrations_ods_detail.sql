@@ -15,3 +15,4 @@ ALTER TABLE service_orders ADD COLUMN IF NOT EXISTS "agentName"        TEXT;
 ALTER TABLE service_orders ADD COLUMN IF NOT EXISTS "agentPhone"       TEXT;
 ALTER TABLE service_orders ADD COLUMN IF NOT EXISTS "sentAt"           TIMESTAMP(3);
 ALTER TABLE service_orders ADD COLUMN IF NOT EXISTS "sentTo"           TEXT;
+ALTER TABLE service_orders ADD COLUMN IF NOT EXISTS attachments        JSONB;

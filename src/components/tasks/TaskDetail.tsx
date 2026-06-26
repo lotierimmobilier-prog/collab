@@ -400,12 +400,28 @@ function ODSModal({ task, onClose, onSave }: { task: Task; onClose: () => void; 
   });
   const [saving, setSaving] = useState(false);
   const [sendMsg, setSendMsg] = useState("");
+  const [attachments, setAttachments] = useState<{ id: string; name: string; mime: string; size: number; data: string }[]>([]);
 
   useEffect(() => {
     fetch("/api/fournisseurs").then(r => r.json()).then(d => { if (Array.isArray(d)) setSuppliers(d.filter((s: Supplier & { active: boolean }) => s.active)); }).catch(() => {});
   }, []);
 
   function set(k: string, v: string | boolean) { setF(p => ({ ...p, [k]: v })); }
+
+  async function addFiles(files: FileList | null) {
+    if (!files) return;
+    const next: { id: string; name: string; mime: string; size: number; data: string }[] = [];
+    for (const file of Array.from(files).slice(0, 20)) {
+      if (file.size > 8 * 1024 * 1024) { setSendMsg(`« ${file.name} » dépasse 8 Mo, ignoré.`); continue; }
+      const data = await new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(String(r.result).split(",")[1] || "");
+        r.onerror = rej; r.readAsDataURL(file);
+      });
+      next.push({ id: Math.random().toString(36).slice(2), name: file.name, mime: file.type || "application/octet-stream", size: file.size, data });
+    }
+    setAttachments(p => [...p, ...next].slice(0, 20));
+  }
 
   async function submit(andSend: boolean) {
     if (!f.supplierId || !f.title.trim()) return;
@@ -414,7 +430,7 @@ function ODSModal({ task, onClose, onSave }: { task: Task; onClose: () => void; 
       const r = await fetch("/api/ods", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...f, taskId: task.id }),
+        body: JSON.stringify({ ...f, taskId: task.id, attachments }),
       });
       if (!r.ok) { setSendMsg("Échec de la création."); return; }
       const created = await r.json();
@@ -506,6 +522,29 @@ function ODSModal({ task, onClose, onSave }: { task: Task; onClose: () => void; 
             <input type="checkbox" checked={f.quoteRequired} onChange={e => set("quoteRequired", e.target.checked)} />
             Demander un devis avant intervention
           </label>
+
+          {/* Photos / pièces jointes (insérées dans l'email au fournisseur) */}
+          <FLabel label="Photos & pièces jointes (envoyées au fournisseur)">
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, border: `1px dashed ${GOLD}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, color: GOLD, cursor: "pointer", background: "#FCFAF6" }}>
+              📎 Ajouter des photos / fichiers
+              <input type="file" multiple accept="image/*,.pdf" style={{ display: "none" }} onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
+            </label>
+            {attachments.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                {attachments.map(a => (
+                  <div key={a.id} style={{ position: "relative", border: "1px solid #e5e7eb", borderRadius: 8, padding: 6, width: 76, textAlign: "center", background: "#fff" }}>
+                    {a.mime.startsWith("image/")
+                      ? <img src={`data:${a.mime};base64,${a.data}`} alt={a.name} style={{ width: 62, height: 50, objectFit: "cover", borderRadius: 4 }} />
+                      : <div style={{ width: 62, height: 50, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>📄</div>}
+                    <div style={{ fontSize: 9, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>{a.name}</div>
+                    <button onClick={() => setAttachments(p => p.filter(x => x.id !== a.id))} title="Retirer"
+                      style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%", border: "none", background: "#dc2626", color: "#fff", fontSize: 11, cursor: "pointer", lineHeight: 1 }}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </FLabel>
+
           <FLabel label="Notes internes (non envoyées)"><textarea value={f.notes} onChange={e => set("notes", e.target.value)} rows={2} style={{ ...inp, height: "auto", padding: "8px 10px", resize: "none" }} /></FLabel>
           {sendMsg && <div style={{ fontSize: 12, color: sendMsg.startsWith("Échec") || sendMsg.startsWith("Erreur") || sendMsg.includes("échoué") ? "#dc2626" : "#059669" }}>{sendMsg}</div>}
         </div>
