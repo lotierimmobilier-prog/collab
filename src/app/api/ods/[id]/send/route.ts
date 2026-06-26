@@ -31,6 +31,16 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const me = await prisma.user.findUnique({ where: { id: uid }, select: { prenom: true, nom: true } });
   const agentName = ods.agentName || `${me?.prenom ?? ""} ${me?.nom ?? ""}`.trim();
 
+  // Jeton du portail fournisseur (créé si absent) + URL.
+  let token = ods.supplierToken;
+  if (!token) {
+    token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    await prisma.serviceOrder.update({ where: { id }, data: { supplierToken: token } });
+  }
+  const host = _req?.headers?.get?.("x-forwarded-host") || _req?.headers?.get?.("host");
+  const proto = _req?.headers?.get?.("x-forwarded-proto") || "https";
+  const portalUrl = `${host ? `${proto}://${host}` : (process.env.NEXTAUTH_URL || "https://collab.lotier-immobilier.com")}/intervention/${token}`;
+
   // ── Construction de l'email ──────────────────────────────────
   const L: string[] = [];
   L.push(`Bonjour,`);
@@ -57,6 +67,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     L.push(`Montant convenu / plafond sans devis : ${ods.amount.toLocaleString("fr-FR")} €.`);
   }
   L.push(`La facture est à adresser à l'agence (${acc.email}).`);
+  L.push(``);
+  L.push(`➡ Suivez cette intervention, déposez votre devis/facture/photos et échangez avec nous ici :`);
+  L.push(portalUrl);
   L.push(``);
   // Pièces jointes (photos…)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
       agentName:   agentName || null,
       agentPhone:  agentPhone || null,
       attachments: atts.length ? atts : undefined,
+      supplierToken: Math.random().toString(36).slice(2) + Date.now().toString(36),
     },
     include: { supplier: { select: { id: true, name: true, type: true, phone: true, email: true } } },
   });

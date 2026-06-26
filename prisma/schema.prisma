@@ -377,6 +377,10 @@ model ServiceOrder {
   agentPhone       String?
   // ── Pièces jointes (photos du sinistre, plans…) : [{id,name,mime,size,data}] ──
   attachments Json?
+  // ── Espace d'échange fournisseur (portail externe) ──
+  supplierToken String? @unique          // jeton du lien fournisseur
+  messages      Json?                    // fil : [{id,author,name,body,at}]
+  supplierFiles Json?                    // dépôts : [{id,kind,name,mime,size,data,at,by}]
   // ── Suivi d'envoi ──
   sentAt      DateTime?
   sentTo      String?
