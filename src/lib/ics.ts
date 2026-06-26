@@ -15,6 +15,9 @@ function b64url(buf: Buffer): string {
   return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+// User-Agent « navigateur » pour que Keycloak serve la page de login standard.
+const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+
 export interface IcsConfigData {
   authBaseUrl: string;
   realm: string;
@@ -182,33 +185,54 @@ export async function icsLoginAuthCode(cfg: IcsConfigData, username: string, pas
     response_mode: "query", code_challenge: challenge, code_challenge_method: "S256",
   });
 
+  const authOrigin = new URL(authUrl).origin;
   const jar = new Map<string, string>();
   try {
     // 1. Page de connexion (suivre quelques redirections internes Keycloak).
     let url: string | null = `${authUrl}?${params}`;
     let html = "";
-    for (let hop = 0; hop < 4 && url; hop++) {
-      const res: Response = await fetch(url, { redirect: "manual", headers: { Cookie: cookieHeader(jar) } });
+    let pageUrl = url;
+    for (let hop = 0; hop < 5 && url; hop++) {
+      const res: Response = await fetch(url, { redirect: "manual", headers: { Cookie: cookieHeader(jar), "User-Agent": UA } });
       parseSetCookies(res, jar);
-      if (res.status >= 300 && res.status < 400) { url = res.headers.get("location"); continue; }
+      if (res.status >= 300 && res.status < 400) {
+        const next = res.headers.get("location");
+        url = next ? new URL(next, url).toString() : null;
+        continue;
+      }
+      pageUrl = url;
       html = await res.text();
       break;
     }
     const m = /<form\s[^>]*action="([^"]+)"/i.exec(html);
     if (!m) return { ok: false, error: "Page de connexion ICS non reconnue (le formulaire a changé ou une étape supplémentaire est requise)." };
-    const action = m[1].replace(/&amp;/g, "&");
+    const action = new URL(m[1].replace(/&amp;/g, "&"), pageUrl).toString();
 
-    // 2. Envoi des identifiants.
+    // 2. Envoi des identifiants (avec Origin/Referer, comme un navigateur).
     const post: Response = await fetch(action, {
       method: "POST", redirect: "manual",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", Cookie: cookieHeader(jar) },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded", Cookie: cookieHeader(jar),
+        Origin: authOrigin, Referer: pageUrl, "User-Agent": UA,
+      },
       body: new URLSearchParams({ username, password, credentialId: "" }),
     });
     parseSetCookies(post, jar);
     const loc = post.headers.get("location");
-    if (!loc) return { ok: false, error: "Identifiants ICS refusés, ou double authentification (SMS/Google) active sur le compte." };
+    if (!loc) {
+      // Pas de redirection → Keycloak a réaffiché le formulaire avec un message d'erreur.
+      const errHtml = await post.text().catch(() => "");
+      const kc = /<span[^>]*kc-feedback-text[^>]*>([^<]+)<\/span>|id="input-error"[^>]*>([^<]+)</i.exec(errHtml);
+      const detail = (kc?.[1] || kc?.[2] || "").trim();
+      return { ok: false, error: detail
+        ? `ICS a refusé la connexion : « ${detail} ».`
+        : `ICS n'a pas validé la connexion (HTTP ${post.status}). Identifiants à revérifier.` };
+    }
     const cm = /[?&#]code=([^&]+)/.exec(loc);
-    if (!cm) return { ok: false, error: "Connexion ICS : code d'autorisation non reçu." };
+    if (!cm) {
+      const head = loc.split("#")[0].split("?")[0];
+      return { ok: false, error: `Connexion ICS : pas de code reçu (redirection vers ${head}). Une action du compte est peut-être requise.` };
+    }
 
     // 3. Échange du code contre un jeton.
     const tk: Response = await fetch(tokenUrl, {
