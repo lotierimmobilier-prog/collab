@@ -23,10 +23,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       data.passwordHash = await bcrypt.hash(password, 12);
     }
 
-    const user = await prisma.user.update({
-      where: { id }, data,
-      select: { id: true, prenom: true, nom: true, email: true, roleId: true, active: true },
-    });
+    const sel = { id: true, prenom: true, nom: true, email: true, roleId: true, active: true };
+    let user;
+    try {
+      user = await prisma.user.update({ where: { id }, data, select: sel });
+    } catch (err) {
+      // Résilience : si une colonne récente manque encore en base, on la
+      // retire et on réessaie (évite un 500 pendant la fenêtre de migration).
+      const m = String(err).match(/column `?(\w+)`? of relation/i) || String(err).match(/column "?(\w+)"? .* does not exist/i);
+      if (m && (m[1] in data)) {
+        delete data[m[1]];
+        user = await prisma.user.update({ where: { id }, data, select: sel });
+      } else { throw err; }
+    }
     return NextResponse.json({ ...user, password: "••••••••" });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
