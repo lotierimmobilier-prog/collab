@@ -69,3 +69,6 @@ ALTER TABLE ics_config ADD COLUMN IF NOT EXISTS "gedToken"       TEXT;
 ALTER TABLE ics_config ADD COLUMN IF NOT EXISTS "gedTokenExp"    TIMESTAMP(3);
 ALTER TABLE ics_config ADD COLUMN IF NOT EXISTS "gedLastTestOk"  BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE ics_config ADD COLUMN IF NOT EXISTS "gedLastError"   TEXT;
+
+-- Droit d'accès à la GED par utilisateur (null = défaut selon rôle).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS "gedAccess" TEXT;

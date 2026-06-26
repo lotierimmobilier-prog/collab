@@ -9,7 +9,7 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
       select: {
         id: true, prenom: true, nom: true, email: true,
-        roleId: true, active: true, accessOverrides: true,
+        roleId: true, active: true, accessOverrides: true, gedAccess: true,
         createdAt: true, lastLogin: true, avatar: true,
       },
     });
@@ -29,7 +29,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { prenom, nom, email, password, roleId, active, accessOverrides } = body;
+    const { prenom, nom, email, password, roleId, active, accessOverrides, gedAccess } = body;
     if (!prenom || !nom || !email || !password || !roleId) {
       return NextResponse.json({ error: "Champs obligatoires manquants" }, { status: 400 });
     }
@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
         prenom, nom, email: email.toLowerCase(), passwordHash,
         roleId, active: active ?? true,
         accessOverrides: accessOverrides ?? undefined,
+        gedAccess: gedAccess ?? null,
       },
     });
     return NextResponse.json({ ...user, password: "••••••••" }, { status: 201 });

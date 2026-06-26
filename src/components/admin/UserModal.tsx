@@ -18,6 +18,7 @@ export default function UserModal({ user, roles, onClose, onSave }: Props) {
     password: user?.password ?? "",
     roleId: user?.roleId ?? roles[0]?.id ?? "",
     active: user?.active ?? true,
+    gedAccess: (user as { gedAccess?: string } | null)?.gedAccess ?? "",
   });
   const [overrides, setOverrides] = useState<ModuleAccess[]>(user?.accessOverrides ?? []);
   const [showPwd, setShowPwd] = useState(false);
@@ -75,7 +76,8 @@ export default function UserModal({ user, roles, onClose, onSave }: Props) {
       active: f.active,
       createdAt: user?.createdAt ?? new Date().toLocaleDateString("fr-FR"),
       accessOverrides: overrides.length > 0 ? overrides : undefined,
-    });
+      gedAccess: f.gedAccess || null,
+    } as User);
   }
 
   function generatePassword() {
@@ -209,6 +211,23 @@ export default function UserModal({ user, roles, onClose, onSave }: Props) {
                   )}
                 </div>
               )}
+
+              {/* Accès GED ICS */}
+              <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: "12px 14px", marginBottom: 14, background: "#FAFAF8" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1C1A17" }}>📁 Documents ICS (GED)</div>
+                    <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>Par défaut : direction/gestion = complet, commercial = bail + EDL, autres = aucun.</div>
+                  </div>
+                  <select value={f.gedAccess} onChange={e => set("gedAccess", e.target.value)}
+                    style={{ height: 34, border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 10px", fontSize: 13, background: "#fff", minWidth: 200 }}>
+                    <option value="">Selon le rôle (défaut)</option>
+                    <option value="complet">Complet — toute la GED</option>
+                    <option value="restreint">Restreint — bail + état des lieux</option>
+                    <option value="aucun">Aucun accès</option>
+                  </select>
+                </div>
+              </div>
 
               {/* Tableau des modules */}
               <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, overflow: "hidden" }}>
