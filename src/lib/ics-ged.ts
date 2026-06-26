@@ -27,6 +27,9 @@ async function gedGet<T = unknown>(apiBase: string, servlet: string, params: Rec
     const res = await fetch(`${apiBase}/${servlet}?${qs}`, { headers: { Accept: "application/json" }, signal: ctrl.signal });
     const data = await res.json().catch(() => ({ responseCode: String(res.status), msg: "Réponse non-JSON", payload: null }));
     return data as GedResp<T>;
+  } catch (e) {
+    // Jamais lever : on renvoie une réponse d'erreur exploitable par l'appelant.
+    return { responseCode: "0", msg: `Erreur réseau GED : ${(e as Error).message}`, payload: null as unknown as T };
   } finally { clearTimeout(t); }
 }
 
