@@ -56,6 +56,18 @@ export default function IcsPage() {
   }, []);
   useEffect(() => { const t = setTimeout(() => loadTenants(search), 250); return () => clearTimeout(t); }, [search, loadTenants]);
 
+  const [creatingContacts, setCreatingContacts] = useState(false);
+
+  async function createContacts() {
+    setCreatingContacts(true); setImportMsg("");
+    try {
+      const r = await fetch("/api/ics/tenants/create-contacts", { method: "POST" });
+      const d = await r.json();
+      setImportMsg(r.ok ? (d.message || "Contacts créés.") : (d.error || "Échec de la création."));
+    } catch { setImportMsg("Erreur réseau pendant la création des contacts."); }
+    finally { setCreatingContacts(false); }
+  }
+
   async function importFile(file: File) {
     setImporting(true); setImportMsg("");
     try {
@@ -199,6 +211,12 @@ export default function IcsPage() {
                 <button onClick={() => fileRef.current?.click()} disabled={importing} style={btnPrimary}>
                   {importing ? "Import en cours…" : "Importer l'export Locataires"}
                 </button>
+                {tenantTotal > 0 && (
+                  <button onClick={createContacts} disabled={creatingContacts} style={btnGhost}
+                    title="Créer dans l'annuaire les locataires et propriétaires de l'index ICS (sans doublon)">
+                    {creatingContacts ? "Création…" : "Créer les contacts dans l'annuaire"}
+                  </button>
+                )}
                 {importMsg && <span style={{ fontSize: 12, color: importMsg.startsWith("Échec") || importMsg.startsWith("Erreur") ? RED : GREEN }}>{importMsg}</span>}
               </div>
 
