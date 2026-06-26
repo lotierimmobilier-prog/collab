@@ -801,6 +801,15 @@ model IcsConfig {
   idSociete     String   @default("54246")
   username    String?
   passwordEnc String?   // mot de passe chiffré (format iv:tag:cipher en base64)
+  // Accès direct à la GED (ged-tomcat1) : login société + email + mot de passe.
+  gedSociete     String?
+  gedEmail       String?
+  gedPasswordEnc String?
+  gedCle         String?   // clé de portefeuille (mémorisée après 1er login)
+  gedToken       String?   // jeton GED courant (valable ~24 h)
+  gedTokenExp    DateTime?
+  gedLastTestOk  Boolean   @default(false)
+  gedLastError   String?
   enabled     Boolean   @default(false)
   lastTestAt  DateTime?
   lastTestOk  Boolean   @default(false)
