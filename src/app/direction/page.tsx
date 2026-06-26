@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
@@ -106,11 +107,22 @@ function expiryStyle(days: number | null) {
 }
 
 export default function DirectionPage() {
+  return <Suspense fallback={null}><DirectionPageInner /></Suspense>;
+}
+
+function DirectionPageInner() {
   const { data: session } = useSession();
   const role = session?.user?.roleId;
   const allowed = role === "admin" || role === "direction" || role === "dirigeant";
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState(SECTIONS[0].id);
   const section = SECTIONS.find(s => s.id === tab);
+
+  // Ouverture directe d'un onglet via ?tab= (liens du menu Direction).
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (t && (SECTIONS.some(s => s.id === t) || t === MEETINGS_TAB)) setTab(t);
+  }, [searchParams]);
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#F3F1EC" }}>

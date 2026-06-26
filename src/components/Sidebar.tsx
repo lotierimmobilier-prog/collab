@@ -33,9 +33,13 @@ const nav: NavItem[] = [
 ];
 
 const directionNav = [
-  { id: "direction", label: "Gestion d'entreprise", icon: "🏛", href: "/direction" },
-  { id: "comptabilite", label: "Comptabilité", icon: "💶", href: "/comptabilite/banque" },
-  { id: "ics", label: "Connecteur ICS", icon: "⇄", href: "/ics" },
+  { id: "dir-flotte",     label: "Flotte de véhicules",      icon: "🚗", href: "/direction?tab=flotte" },
+  { id: "dir-locaux",     label: "Locaux",                    icon: "🏢", href: "/direction?tab=locaux" },
+  { id: "dir-cartes",     label: "Cartes professionnelles",   icon: "🪪", href: "/direction?tab=cartes" },
+  { id: "dir-assurances", label: "Assurances",                icon: "🛡", href: "/direction?tab=assurances" },
+  { id: "dir-cr",         label: "Comptes rendus de réunion", icon: "📝", href: "/direction?tab=comptes-rendus" },
+  { id: "comptabilite",   label: "Comptabilité",              icon: "💶", href: "/comptabilite/banque" },
+  { id: "ics",            label: "Connecteur ICS",            icon: "⇄", href: "/ics" },
 ];
 
 const adminNav = [
