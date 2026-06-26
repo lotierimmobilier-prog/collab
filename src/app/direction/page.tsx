@@ -4,8 +4,10 @@ import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
+import MeetingsSection from "@/components/direction/MeetingsSection";
 
 const GOLD = "#B8966A"; const DARK = "#1C1A17"; const BORDER = "#E6E1D9";
+const MEETINGS_TAB = "comptes-rendus";
 
 type FieldType = "text" | "date" | "number" | "select" | "textarea";
 interface Field { key: string; label: string; type: FieldType; options?: { value: string; label: string }[]; full?: boolean }
@@ -108,7 +110,7 @@ export default function DirectionPage() {
   const role = session?.user?.roleId;
   const allowed = role === "admin" || role === "direction" || role === "dirigeant";
   const [tab, setTab] = useState(SECTIONS[0].id);
-  const section = SECTIONS.find(s => s.id === tab)!;
+  const section = SECTIONS.find(s => s.id === tab);
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#F3F1EC" }}>
@@ -130,8 +132,14 @@ export default function DirectionPage() {
                     {s.title}
                   </button>
                 ))}
+                <button onClick={() => setTab(MEETINGS_TAB)}
+                  style={{ display: "flex", alignItems: "center", gap: 6, border: `1px solid ${tab === MEETINGS_TAB ? GOLD : BORDER}`, background: tab === MEETINGS_TAB ? "#F7F0E6" : "#fff", color: tab === MEETINGS_TAB ? GOLD : "#6b7280", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  Comptes rendus de réunion
+                </button>
               </div>
-              <DirectionSection key={section.id} section={section} />
+              {tab === MEETINGS_TAB
+                ? <MeetingsSection />
+                : section && <DirectionSection key={section.id} section={section} />}
             </div>
           </div>
         )}

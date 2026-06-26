@@ -741,6 +741,23 @@ model TxnMemory {
   @@map("txn_memory")
 }
 
+/// Compte rendu de réunion de direction. Pièces jointes (PDF / audio) en base64
+/// dans `documents` : [{ id, name, mime, kind: "pdf"|"audio", size, data }].
+model DirectionMeeting {
+  id           String   @id @default(cuid())
+  title        String   @default("Réunion de direction")
+  date         DateTime
+  participants String?
+  summary      String?
+  documents    Json?
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([date])
+  @@map("direction_meetings")
+}
+
 /// Connecteur ICS (MyICS / Spirit). Configuration unique (id = "default").
 /// Le mot de passe est stocké chiffré (AES-256-GCM). Jamais en clair.
 model IcsConfig {
