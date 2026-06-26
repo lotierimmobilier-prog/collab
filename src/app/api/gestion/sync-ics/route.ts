@@ -22,21 +22,38 @@ export async function POST() {
   const userId = session.user.id;
   const num = (v: string | null) => { const n = parseFloat(String(v ?? "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
   const date = (v: string | null) => { const d = v ? new Date(v) : null; return d && !isNaN(d.getTime()) ? d : new Date(); };
+  const norm = (s: string | null) => (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+  const PRO_CIV = ["SCI", "SAS", "SARL", "EURL", "SNC", "SCCV", "SC", "GFA", "STE", "SOCIETE", "COPROPRIETE", "INDIVISION"];
 
-  let owners = 0, lots = 0, tnts = 0, baux = 0;
+  const ownerKeys = new Set<string>();
+  let lots = 0, tnts = 0, baux = 0;
   const errors: string[] = [];
 
   for (const t of tenants) {
     try {
-      // 1. Propriétaire (par idMandat)
+      // 1. Propriétaire — REGROUPÉ par nom (un compte par propriétaire),
+      //    marqué professionnel/SCI selon la civilité.
       let ownerId: string | undefined;
-      if (t.idMandat) {
+      const civ = norm(t.civiliteProprio);
+      const isSci = civ === "SCI";
+      const isCompany = PRO_CIV.includes(civ);
+      const rawNom = (t.nomProprietaire ?? "").trim();
+      const rawPrenom = (t.prenomProprietaire ?? "").trim();
+      const key = norm(isCompany ? rawNom : `${rawNom} ${rawPrenom}`);
+      if (rawNom && key) {
+        const ownerData = {
+          ownerType: isSci ? "sci" : isCompany ? "company" : "individual",
+          companyName: isCompany ? rawNom : null,
+          nom: rawNom, prenom: isCompany ? "" : rawPrenom,
+          notes: isCompany && rawPrenom ? `Représentant : ${rawPrenom}` : null,
+          icsMandat: t.idMandat,
+        };
         const o = await prisma.owner.upsert({
-          where: { icsMandat: t.idMandat },
-          update: { prenom: t.prenomProprietaire ?? "", nom: t.nomProprietaire ?? "—" },
-          create: { icsMandat: t.idMandat, prenom: t.prenomProprietaire ?? "", nom: t.nomProprietaire ?? "—" },
+          where: { icsKey: key },
+          update: ownerData,
+          create: { icsKey: key, ...ownerData },
         });
-        ownerId = o.id; owners++;
+        ownerId = o.id; ownerKeys.add(key);
       }
 
       // 2. Lot (par idLot)
@@ -78,6 +95,20 @@ export async function POST() {
     }
   }
 
+  // Nettoyage : supprime les anciens comptes propriétaires ICS désormais sans lot
+  // (issus du regroupement par mandat → regroupement par nom).
+  let cleaned = 0;
+  try {
+    const orphans = await prisma.owner.findMany({
+      where: { OR: [{ icsKey: { not: null } }, { icsMandat: { not: null } }], lots: { none: {} } },
+      select: { id: true },
+    });
+    if (orphans.length) {
+      const res = await prisma.owner.deleteMany({ where: { id: { in: orphans.map((o: { id: string }) => o.id) } } });
+      cleaned = res.count;
+    }
+  } catch { /* best-effort */ }
+
   const [totOwners, totLots, totTenants, totBaux] = await Promise.all([
     prisma.owner.count(), prisma.lot.count(), prisma.tenant.count(), prisma.bail.count(),
   ]);
@@ -86,7 +117,8 @@ export async function POST() {
     ok: errors.length === 0,
     traite: tenants.length,
     errors,
-    message: `Synchronisation : ${owners} propriétaire(s), ${lots} lot(s), ${tnts} locataire(s), ${baux} bail/baux traités.` +
+    message: `Synchronisation : ${ownerKeys.size} propriétaire(s) regroupé(s), ${lots} lot(s), ${tnts} locataire(s), ${baux} bail/baux traités.` +
+             (cleaned ? ` ${cleaned} doublon(s) propriétaire nettoyé(s).` : "") +
              (errors.length ? ` ⚠️ ${errors.length} erreur(s) : ${errors[0]}` : "") +
              ` Module Gestion : ${totOwners} propriétaires, ${totLots} lots, ${totTenants} locataires, ${totBaux} baux.`,
   });
