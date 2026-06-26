@@ -22,7 +22,7 @@ interface Person { id: string; prenom: string; nom: string; email?: string; acti
 interface MeInfo extends Person { roleId: string; parrainId: string | null; parrain: Person | null; }
 interface AdminUser extends Person { roleId: string; parrainId: string | null; parrain: Person | null; }
 
-type Tab = "parcours" | "filleuls" | "modules" | "affectation";
+type Tab = "parcours" | "filleuls" | "suivi" | "modules" | "affectation";
 
 export default function FormationPage() {
   const { data: session } = useSession();
@@ -60,9 +60,15 @@ export default function FormationPage() {
     else setTab("parcours");
   }, [me, isAdmin, filleuls.length]);
 
+  // Tous les filleuls de l'agence (admin) = utilisateurs ayant un parrain.
+  const allFilleuls: Person[] = users
+    .filter(u => u.parrainId)
+    .map(u => ({ id: u.id, prenom: u.prenom, nom: u.nom, email: u.email }));
+
   const tabs: { id: Tab; label: string; show: boolean }[] = [
     { id: "parcours", label: "Mon parcours", show: !!me?.parrainId },
     { id: "filleuls", label: `Mes filleuls${filleuls.length ? ` (${filleuls.length})` : ""}`, show: filleuls.length > 0 },
+    { id: "suivi", label: `Suivi des filleuls${allFilleuls.length ? ` (${allFilleuls.length})` : ""}`, show: !!isAdmin },
     { id: "modules", label: "Modules & compétences", show: !!isAdmin },
     { id: "affectation", label: "Parrains", show: !!isAdmin },
   ];
@@ -116,6 +122,14 @@ export default function FormationPage() {
 
             {tab === "filleuls" && (
               <FilleulsView filleuls={filleuls} modules={modules} isAdmin={!!isAdmin} />
+            )}
+
+            {tab === "suivi" && isAdmin && (
+              allFilleuls.length === 0
+                ? <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, padding: 26, textAlign: "center", color: "#6b7280", fontSize: 13.5 }}>
+                    Aucun filleul pour le moment. Attribuez un parrain à un utilisateur dans l’onglet <strong>Parrains</strong>.
+                  </div>
+                : <FilleulsView filleuls={allFilleuls} modules={modules} isAdmin={true} />
             )}
 
             {tab === "modules" && isAdmin && (
