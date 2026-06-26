@@ -22,7 +22,7 @@ function typeInfo(v: string) { return TYPES.find(t => t.value === v) ?? { icon: 
 interface Supplier {
   id: string; name: string; type: string; contact?: string;
   phone?: string; email?: string; address?: string; siret?: string;
-  notes?: string; active: boolean; ordersCount?: number;
+  notes?: string; active: boolean; ordersCount?: number; metier?: string;
 }
 
 export default function FournisseursPage() {
@@ -32,6 +32,38 @@ export default function FournisseursPage() {
   const [editing, setEditing]     = useState<Supplier | null>(null);
   const [filterType, setFilterType] = useState("all");
   const [search, setSearch]       = useState("");
+  const [enriching, setEnriching] = useState<string | null>(null); // id en cours, ou "batch"
+  const [enrichMsg, setEnrichMsg] = useState("");
+
+  // Auguste devine le métier d'un fournisseur (recherche web + mails échangés).
+  async function enrichOne(s: Supplier) {
+    setEnriching(s.id); setEnrichMsg("");
+    try {
+      const r = await fetch(`/api/fournisseurs/${s.id}/metier`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const d = await r.json();
+      if (!r.ok) { setEnrichMsg(`${s.name} : ${d.error || "échec"}`); return; }
+      const ti = typeInfo(d.type);
+      setEnrichMsg(d.applied
+        ? `${s.name} → ${ti.icon} ${ti.label}${d.metier ? ` (${d.metier})` : ""} — confiance ${d.confidence}%.`
+        : `${s.name} : Auguste hésite (${d.metier || "?"}, confiance ${d.confidence}%) — non appliqué, à vérifier.`);
+      await load();
+    } catch {
+      setEnrichMsg(`${s.name} : erreur réseau.`);
+    } finally { setEnriching(null); }
+  }
+
+  // Complète en lot les métiers manquants (fournisseurs en catégorie « Autre »).
+  async function enrichMissing() {
+    setEnriching("batch"); setEnrichMsg("Auguste recherche les métiers manquants… (cela peut prendre une minute)");
+    try {
+      const r = await fetch("/api/fournisseurs/metier/enrich-missing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limit: 12 }) });
+      const d = await r.json();
+      setEnrichMsg(r.ok ? d.message : (d.error || "Échec de l'enrichissement."));
+      await load();
+    } catch {
+      setEnrichMsg("Erreur réseau pendant l'enrichissement.");
+    } finally { setEnriching(null); }
+  }
 
   async function load() {
     setLoading(true);
@@ -76,10 +108,23 @@ export default function FournisseursPage() {
           </div>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher…"
             style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 12px", fontSize: 13, outline: "none", width: 200, background: "#f9fafb" }} />
+          {suppliers.filter(s => s.type === "autre").length > 0 && (
+            <button onClick={enrichMissing} disabled={enriching !== null} title="Auguste recherche le métier des fournisseurs sans catégorie (recherche web + mails)"
+              style={{ background: "#fff", color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 500, cursor: enriching ? "default" : "pointer", opacity: enriching ? 0.6 : 1 }}>
+              {enriching === "batch" ? "Recherche…" : `✨ Métiers manquants (${suppliers.filter(s => s.type === "autre").length})`}
+            </button>
+          )}
           <button onClick={() => { setEditing(null); setShowForm(true); }} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
             + Ajouter fournisseur
           </button>
         </div>
+
+        {enrichMsg && (
+          <div style={{ background: "#F7F0E6", borderBottom: "1px solid #e5e7eb", padding: "8px 24px", fontSize: 12.5, color: "#7a5c33", display: "flex", gap: 8, alignItems: "center" }}>
+            <span style={{ flex: 1 }}>{enrichMsg}</span>
+            <button onClick={() => setEnrichMsg("")} style={{ background: "none", border: "none", cursor: "pointer", color: "#7a5c33", fontSize: 16 }}>×</button>
+          </div>
+        )}
 
         {/* Filtres par type */}
         <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "8px 24px", display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -116,8 +161,14 @@ export default function FournisseursPage() {
                           {!s.active && <span style={{ background: "#f3f4f6", color: "#6b7280", borderRadius: 5, padding: "1px 6px", fontSize: 10 }}>Inactif</span>}
                         </div>
                         <span style={{ background: "#F7F0E6", color: GOLD, borderRadius: 5, padding: "1px 7px", fontSize: 11, fontWeight: 500 }}>{ti.icon} {ti.label}</span>
+                        {s.metier && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 3 }}>{s.metier}</div>}
                       </div>
                       <div style={{ display: "flex", gap: 4 }}>
+                        <button onClick={() => enrichOne(s)} disabled={enriching !== null}
+                          title="Deviner le métier avec Auguste (recherche web + mails)"
+                          style={{ border: `1px solid ${GOLD}`, borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: enriching ? "default" : "pointer", color: GOLD, background: "#fff", opacity: enriching && enriching !== s.id ? 0.5 : 1 }}>
+                          {enriching === s.id ? "…" : "🔎"}
+                        </button>
                         <button onClick={() => { setEditing(s); setShowForm(true); }} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer", background: "#fff" }}>✏</button>
                         <button onClick={() => deleteSupplier(s.id)} style={{ border: "1px solid #fecaca", borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer", color: "#dc2626", background: "#fff" }}>✕</button>
                       </div>
