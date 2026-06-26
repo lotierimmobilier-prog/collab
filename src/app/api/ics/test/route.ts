@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { isDirection } from "@/lib/direction";
 import { decryptSecret } from "@/lib/ics-crypto";
-import { icsLogin, icsGedLink } from "@/lib/ics";
+import { icsAuthenticate, icsGedLink } from "@/lib/ics";
 
 const ID = "default";
 
@@ -23,7 +23,7 @@ export async function POST() {
     return NextResponse.json({ ok: false, error: "Impossible de déchiffrer le mot de passe (clé serveur modifiée ?). Ressaisissez-le." }, { status: 400 });
   }
 
-  const result = await icsLogin(cfg, cfg.username, password);
+  const result = await icsAuthenticate(cfg, cfg.username, password);
 
   // Si l'authentification réussit, on vérifie aussi l'accès à la GED en
   // demandant le lien d'un bail d'exemple (le 1er de l'index ICS, s'il existe).
@@ -50,6 +50,7 @@ export async function POST() {
     ok: result.ok,
     error: result.error ?? null,
     ropcUnsupported: result.ropcUnsupported ?? false,
+    mode: result.mode ?? null,
     expiresIn: result.expiresIn ?? null,
     ged,
   });
