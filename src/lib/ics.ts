@@ -204,65 +204,79 @@ export async function icsLoginAuthCode(cfg: IcsConfigData, username: string, pas
       html = await res.text();
       break;
     }
-    // On repère le formulaire de connexion (action vers login-actions/authenticate)
-    // ET on lit ses VRAIS champs : noms des inputs identifiant/mot de passe et
-    // champs cachés (le thème ICS peut renommer les champs).
-    let action = "", formInner = "";
-    for (const fm of html.matchAll(/<form\b[^>]*action="([^"]+)"[^>]*>([\s\S]*?)<\/form>/gi)) {
-      const act = fm[1].replace(/&amp;/g, "&");
-      if (/login-actions\/authenticate/i.test(act)) { action = act; formInner = fm[2]; break; }
-      if (!action) { action = act; formInner = fm[2]; }
-    }
-    if (!action) return { ok: false, error: "Page de connexion ICS non reconnue (formulaire de connexion introuvable)." };
-    action = new URL(action, pageUrl).toString();
+    // 2. Boucle de connexion : certains flux Keycloak demandent l'identifiant
+    // PUIS le mot de passe sur deux pages successives. À chaque étape, on lit le
+    // VRAI formulaire et on remplit les champs présents (identifiant et/ou mdp).
+    let pageHtml = html, pageRef = pageUrl, code = "", lastDiag = "";
+    for (let step = 0; step < 4 && !code; step++) {
+      let action = "", formInner = "";
+      for (const fm of pageHtml.matchAll(/<form\b[^>]*action="([^"]+)"[^>]*>([\s\S]*?)<\/form>/gi)) {
+        const act = fm[1].replace(/&amp;/g, "&");
+        if (/login-actions\//i.test(act)) { action = act; formInner = fm[2]; break; }
+        if (!action) { action = act; formInner = fm[2]; }
+      }
+      if (!action) return { ok: false, error: `Page de connexion ICS non reconnue. [diag: step=${step}, cookies=${jar.size}]` };
+      action = new URL(action, pageRef).toString();
 
-    const body = new URLSearchParams();
-    let userField = "", passField = "";
-    for (const im of formInner.matchAll(/<input\b[^>]*>/gi)) {
-      const tag = im[0];
-      const name = /name="([^"]*)"/i.exec(tag)?.[1];
-      if (!name) continue;
-      const type = (/type="([^"]*)"/i.exec(tag)?.[1] || "text").toLowerCase();
-      const value = (/value="([^"]*)"/i.exec(tag)?.[1] ?? "").replace(/&amp;/g, "&");
-      if (type === "password") { passField = name; continue; }
-      if (!userField && (type === "text" || type === "email" || /user|email|login|ident/i.test(name))) { userField = name; continue; }
-      if (type === "hidden") body.set(name, value);
-    }
-    body.set(userField || "username", username);
-    body.set(passField || "password", password);
+      const body = new URLSearchParams();
+      let userField = "", passField = "";
+      for (const im of formInner.matchAll(/<input\b[^>]*>/gi)) {
+        const tag = im[0];
+        const name = /name="([^"]*)"/i.exec(tag)?.[1];
+        if (!name) continue;
+        const type = (/type="([^"]*)"/i.exec(tag)?.[1] || "text").toLowerCase();
+        const value = (/value="([^"]*)"/i.exec(tag)?.[1] ?? "").replace(/&amp;/g, "&");
+        if (type === "password") { passField = name; continue; }
+        if (type === "submit" || type === "button") continue;
+        if (!userField && (type === "text" || type === "email" || /user|email|login|ident/i.test(name))) { userField = name; continue; }
+        if (type === "hidden") body.set(name, value);
+      }
+      if (userField) body.set(userField, username);
+      if (passField) body.set(passField, password);
+      if (!userField && !passField) {
+        return { ok: false, error: `Connexion ICS impossible côté serveur (page de mot de passe générée en JavaScript). Un navigateur embarqué sera nécessaire. [diag: step=${step}, cookies=${jar.size}]` };
+      }
 
-    // 2. Envoi des identifiants (avec Origin/Referer, comme un navigateur).
-    const post: Response = await fetch(action, {
-      method: "POST", redirect: "manual",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded", Cookie: cookieHeader(jar),
-        Origin: authOrigin, Referer: pageUrl, "User-Agent": UA,
-      },
-      body,
-    });
-    parseSetCookies(post, jar);
-    const loc = post.headers.get("location");
-    if (!loc) {
-      // Pas de redirection → Keycloak a réaffiché le formulaire avec un message.
-      const errHtml = await post.text().catch(() => "");
-      const kc = /kc-feedback-text[^>]*>([^<]+)<|id="input-error[^"]*"[^>]*>\s*([^<]+)|class="(?:alert|message|pf-c-alert__title)[^"]*"[^>]*>\s*(?:<[^>]+>\s*)*([^<]{3,})/i.exec(errHtml);
-      const detail = (kc?.[1] || kc?.[2] || kc?.[3] || "").replace(/\s+/g, " ").trim();
-      const stillLogin = /login-actions\/authenticate|type="password"/i.test(errHtml);
-      const diag = `cookies=${jar.size}, userField=${userField || "?"}, passField=${passField || "?"}, action=${new URL(action).host}, postStatus=${post.status}, reLogin=${stillLogin}`;
+      const post: Response = await fetch(action, {
+        method: "POST", redirect: "manual",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", Cookie: cookieHeader(jar), Origin: authOrigin, Referer: pageRef, "User-Agent": UA },
+        body,
+      });
+      parseSetCookies(post, jar);
+      lastDiag = `step=${step}, cookies=${jar.size}, user=${userField || "-"}, pass=${passField || "-"}, status=${post.status}`;
+
+      const loc = post.headers.get("location");
+      if (loc) {
+        const cm = /[?&#]code=([^&]+)/.exec(loc);
+        if (cm) { code = decodeURIComponent(cm[1]); break; }
+        // Redirection interne Keycloak → on suit pour atteindre l'étape suivante.
+        let follow: string | null = new URL(loc, action).toString();
+        for (let h = 0; h < 5 && follow; h++) {
+          const r: Response = await fetch(follow, { redirect: "manual", headers: { Cookie: cookieHeader(jar), "User-Agent": UA } });
+          parseSetCookies(r, jar);
+          const l2 = r.headers.get("location");
+          const cm2 = l2 ? /[?&#]code=([^&]+)/.exec(l2) : null;
+          if (cm2) { code = decodeURIComponent(cm2[1]); break; }
+          if (r.status >= 300 && r.status < 400) { follow = l2 ? new URL(l2, follow).toString() : null; continue; }
+          pageHtml = await r.text(); pageRef = follow; follow = null;
+        }
+      } else {
+        pageHtml = await post.text(); pageRef = action;   // page suivante (mdp) renvoyée directement
+      }
+    }
+
+    if (!code) {
+      const kc = /kc-feedback-text[^>]*>([^<]+)</i.exec(pageHtml);
+      const detail = (kc?.[1] || "").replace(/\s+/g, " ").trim();
       return { ok: false, error: detail
         ? `ICS a refusé la connexion : « ${detail} ».`
-        : `ICS n'a pas validé la connexion (HTTP ${post.status}). [diag: ${diag}]` };
-    }
-    const cm = /[?&#]code=([^&]+)/.exec(loc);
-    if (!cm) {
-      const head = loc.split("#")[0].split("?")[0];
-      return { ok: false, error: `Connexion ICS : pas de code reçu (redirection vers ${head}). Une action du compte est peut-être requise.` };
+        : `ICS n'a pas validé la connexion. [diag: ${lastDiag}]` };
     }
 
     // 3. Échange du code contre un jeton.
     const tk: Response = await fetch(tokenUrl, {
       method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ grant_type: "authorization_code", client_id: cfg.clientId, code: decodeURIComponent(cm[1]), redirect_uri: redirectUri, code_verifier: verifier }),
+      body: new URLSearchParams({ grant_type: "authorization_code", client_id: cfg.clientId, code, redirect_uri: redirectUri, code_verifier: verifier }),
     });
     const data = await tk.json().catch(() => ({})) as Record<string, unknown>;
     if (tk.ok && typeof data.access_token === "string") {
