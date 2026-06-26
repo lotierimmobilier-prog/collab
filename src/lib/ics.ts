@@ -226,11 +226,13 @@ export async function icsLoginAuthCode(cfg: IcsConfigData, username: string, pas
     if (!loc) {
       // Pas de redirection → Keycloak a réaffiché le formulaire avec un message.
       const errHtml = await post.text().catch(() => "");
-      const kc = /kc-feedback-text[^>]*>([^<]+)<|id="input-error[^"]*"[^>]*>\s*([^<]+)|class="(?:alert|message)[^"]*"[^>]*>\s*(?:<[^>]+>\s*)*([^<]{3,})/i.exec(errHtml);
+      const kc = /kc-feedback-text[^>]*>([^<]+)<|id="input-error[^"]*"[^>]*>\s*([^<]+)|class="(?:alert|message|pf-c-alert__title)[^"]*"[^>]*>\s*(?:<[^>]+>\s*)*([^<]{3,})/i.exec(errHtml);
       const detail = (kc?.[1] || kc?.[2] || kc?.[3] || "").replace(/\s+/g, " ").trim();
+      const stillLogin = /login-actions\/authenticate|name="password"/i.test(errHtml);
+      const diag = `cookies=${jar.size}, form=${forms.length>0?"ok":"absent"}, action=${new URL(action).host}, postStatus=${post.status}, reLogin=${stillLogin}`;
       return { ok: false, error: detail
         ? `ICS a refusé la connexion : « ${detail} ».`
-        : `ICS n'a pas validé la connexion (HTTP ${post.status}). Identifiants à revérifier.` };
+        : `ICS n'a pas validé la connexion (HTTP ${post.status}). [diag: ${diag}]` };
     }
     const cm = /[?&#]code=([^&]+)/.exec(loc);
     if (!cm) {
