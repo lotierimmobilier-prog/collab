@@ -26,6 +26,7 @@ export interface User {
   lastLogin?: string;
   avatar?: string;
   accessOverrides?: ModuleAccess[]; // droits individuels qui surchargent le rôle
+  gedAccess?: string | null;        // null = défaut rôle | complet | restreint | aucun
 }
 
 export function getUserRight(user: User, role: Role | undefined, moduleId: string): Right {

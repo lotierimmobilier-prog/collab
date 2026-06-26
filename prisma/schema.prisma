@@ -16,6 +16,7 @@ model User {
   roleId          String
   active          Boolean   @default(true)
   accessOverrides Json?
+  gedAccess       String?   // null = défaut selon rôle | complet | restreint | aucun
   phone           String?
   createdAt       DateTime  @default(now())
   lastLogin       DateTime?

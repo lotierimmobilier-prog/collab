@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { canAccessIcsGed } from "@/lib/ics";
-import { getValidGedToken } from "@/lib/ics-ged-auth";
+import { getValidGedToken, gedLevelForUser } from "@/lib/ics-ged-auth";
 import { gedSearchGerance, GedMatch } from "@/lib/ics-ged";
 
 export const runtime = "nodejs";
@@ -12,8 +11,8 @@ export const runtime = "nodejs";
  *  propriétaire). */
 export async function GET(req: NextRequest) {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
-  if (!canAccessIcsGed(session.user.roleId)) return NextResponse.json({ error: "Accès non autorisé" }, { status: 403 });
+  if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (await gedLevelForUser(session.user.id) === "none") return NextResponse.json({ error: "Accès non autorisé" }, { status: 403 });
 
   const q = (req.nextUrl.searchParams.get("q") || "").trim();
   if (q.length < 2) return NextResponse.json({ folders: [] });

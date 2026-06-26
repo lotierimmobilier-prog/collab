@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
-import { canAccessIcsGed } from "@/lib/ics";
-import { getValidGedToken } from "@/lib/ics-ged-auth";
+import { canAccessIcsGed, gedDocAllowed } from "@/lib/ics";
+import { getValidGedToken, gedLevelForUser } from "@/lib/ics-ged-auth";
 import { gedFindDocuments } from "@/lib/ics-ged";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -530,7 +530,8 @@ async function executeTool(
     }
 
     case "recherche_documents_ics": {
-      if (!canAccessIcsGed(userRole)) return { error: "Accès aux documents ICS réservé à la direction et à la gestion locative." };
+      const gedLevel = await gedLevelForUser(userId);
+      if (gedLevel === "none") return { error: "Accès aux documents ICS non autorisé pour votre profil." };
       const nom = (input.nom as string | undefined)?.trim();
       if (!nom) return { error: "Précisez le nom du propriétaire ou locataire." };
       const tk = await getValidGedToken();
@@ -578,6 +579,8 @@ async function executeTool(
         const filtered = allDocs.filter(d => tenantNames.some((tn: string) => norm(d.dossier).includes(tn)));
         if (filtered.length) docs = filtered;
       }
+      // Accès restreint (commerciaux) : baux et états des lieux uniquement.
+      docs = docs.filter(d => gedDocAllowed(d.nom, gedLevel));
 
       return {
         instructions: "Présente chaque document sous forme de lien Markdown cliquable [nom du document](lien) — le lien ouvre le PDF. Si le tiers recherché est un locataire, précise qu'il s'agit du dossier de son propriétaire (la GED est organisée par propriétaire). Si rien n'est trouvé, propose d'ouvrir le Drive ICS.",
@@ -632,9 +635,13 @@ export async function POST(req: NextRequest) {
   const glossaire = terms.length
     ? `\n\n══ MÉMOIRE — TERMES TECHNIQUES DE L'AGENCE ══\nTu as appris et mémorisé ces termes ; utilise-les pour comprendre les demandes :\n${terms.map((t: { term: string; definition: string | null }) => `- ${t.term} : ${t.definition}`).join("\n")}\nQuand l'utilisateur t'explique un NOUVEAU terme/sigle métier, appelle noter_terme pour t'en souvenir durablement.`
     : `\n\nQuand l'utilisateur t'explique un terme/sigle métier propre à l'agence, appelle l'outil noter_terme pour le mémoriser durablement.`;
-  const gedCap = canAccessIcsGed(userRole)
+  const userGedLevel = await gedLevelForUser(userId);
+  const gedCap = userGedLevel === "complet"
     ? "\n- Documents ICS (GED) : retrouver les documents d'un propriétaire/locataire (quittances, baux, mandats…) via recherche_documents_ics"
+    : userGedLevel === "restreint"
+    ? "\n- Documents ICS (GED) : retrouver les baux et états des lieux d'un locataire/propriétaire via recherche_documents_ics"
     : "";
+  void canAccessIcsGed;
 
   const SYSTEM = `Tu es Auguste, l'assistant IA de l'agence immobilière Lotier Immobilier.
 Tu aides les collaborateurs à gérer leur travail quotidien depuis la plateforme Collab.

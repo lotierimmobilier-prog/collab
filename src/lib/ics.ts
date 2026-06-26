@@ -35,6 +35,30 @@ export function canAccessIcsGed(roleId?: string | null): boolean {
   return roleId === "admin" || roleId === "direction" || roleId === "dirigeant" || roleId === "gestionnaire";
 }
 
+export type GedLevel = "none" | "restreint" | "complet";
+
+/**
+ * Niveau d'accès GED d'un utilisateur. Le réglage par utilisateur (gedAccess)
+ * prime ; sinon valeur par défaut selon le rôle :
+ *  - admin / direction / dirigeant / gestionnaire → complet
+ *  - commercial → restreint (bail + état des lieux)
+ *  - autres → aucun
+ */
+export function gedAccessLevel(roleId?: string | null, gedAccess?: string | null): GedLevel {
+  if (gedAccess === "complet" || gedAccess === "restreint") return gedAccess;
+  if (gedAccess === "aucun") return "none";
+  if (["admin", "direction", "dirigeant", "gestionnaire"].includes(roleId ?? "")) return "complet";
+  if (roleId === "commercial") return "restreint";
+  return "none";
+}
+
+/** En accès restreint, seuls les baux et états des lieux sont autorisés. */
+export function gedDocAllowed(name: string, level: GedLevel): boolean {
+  if (level === "complet") return true;
+  if (level === "none") return false;
+  return /bail|baux|etat\s*des?\s*lieux|état\s*des?\s*lieux|\bedl\b/i.test(name);
+}
+
 export interface IcsLoginResult {
   ok: boolean;
   accessToken?: string;

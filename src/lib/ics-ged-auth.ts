@@ -3,8 +3,15 @@
 import { prisma } from "@/lib/prisma";
 import { decryptSecret } from "@/lib/ics-crypto";
 import { gedLogin, gedTokenValid } from "@/lib/ics-ged";
+import { gedAccessLevel, GedLevel } from "@/lib/ics";
 
 const ID = "default";
+
+/** Niveau d'accès GED d'un utilisateur (réglage individuel sinon défaut du rôle). */
+export async function gedLevelForUser(userId: string): Promise<GedLevel> {
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { roleId: true, gedAccess: true } });
+  return gedAccessLevel(u?.roleId, u?.gedAccess);
+}
 
 export async function getValidGedToken(): Promise<{ token?: string; apiBase?: string | null; error?: string }> {
   const cfg = await prisma.icsConfig.findUnique({ where: { id: ID } });
