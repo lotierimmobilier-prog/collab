@@ -43,20 +43,33 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { prenom, nom, email, password, roleId, active, accessOverrides, gedAccess } = body;
+    const { prenom, nom, email, password, roleId, active, accessOverrides, gedAccess, parrainId } = body;
     if (!prenom || !nom || !email || !password || !roleId) {
       return NextResponse.json({ error: "Champs obligatoires manquants" }, { status: 400 });
     }
     const passwordHash = await bcrypt.hash(password, 12);
-    const user = await prisma.user.create({
-      data: {
-        prenom, nom, email: email.toLowerCase(), passwordHash,
-        roleId, active: active ?? true,
-        accessOverrides: accessOverrides ?? undefined,
-        gedAccess: gedAccess ?? null,
-      },
-      select: { id: true, prenom: true, nom: true, email: true, roleId: true, active: true },
-    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = {
+      prenom, nom, email: email.toLowerCase(), passwordHash,
+      roleId, active: active ?? true,
+      accessOverrides: accessOverrides ?? undefined,
+    };
+    if (gedAccess) data.gedAccess = gedAccess;
+    if (parrainId) data.parrainId = parrainId;
+
+    const sel = { id: true, prenom: true, nom: true, email: true, roleId: true, active: true };
+    let user;
+    try {
+      user = await prisma.user.create({ data, select: sel });
+    } catch (err) {
+      // Résilience : si une colonne récente manque encore en base (migration
+      // pas encore appliquée), on retire la colonne fautive et on réessaie.
+      const m = String(err).match(/column `?(\w+)`? of relation/i) || String(err).match(/column "?(\w+)"? .* does not exist/i);
+      if (m && (m[1] in data)) {
+        delete data[m[1]];
+        user = await prisma.user.create({ data, select: sel });
+      } else { throw err; }
+    }
     return NextResponse.json({ ...user, password: "••••••••" }, { status: 201 });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);

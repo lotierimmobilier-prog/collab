@@ -11,12 +11,52 @@ if [ -z "$DATABASE_URL" ]; then
   exit 1
 fi
 
+# ── URL compatible psql/libpq ────────────────────────────────────────────
+# Prisma ajoute à DATABASE_URL des paramètres qui lui sont propres
+# (schema, connection_limit, pgbouncer, pool_timeout, sslaccept…). libpq
+# (psql) REFUSE ces paramètres inconnus et la connexion échoue → les
+# migrations ne s'appliquaient pas. On reconstruit une URL épurée pour psql,
+# en conservant uniquement les paramètres compris par libpq, et en traduisant
+# « schema= » en search_path.
+build_psql_url() {
+  _url="$1"
+  _base="${_url%%\?*}"
+  _query=""
+  case "$_url" in *\?*) _query="${_url#*\?}" ;; esac
+  _keep=""
+  _schema=""
+  OLDIFS="$IFS"; IFS='&'
+  for _kv in $_query; do
+    case "$_kv" in
+      schema=*) _schema="${_kv#schema=}" ;;
+      sslmode=*|sslrootcert=*|sslcert=*|sslkey=*|sslpassword=*|connect_timeout=*|application_name=*|options=*|target_session_attrs=*)
+        _keep="${_keep:+$_keep&}$_kv" ;;
+    esac
+  done
+  IFS="$OLDIFS"
+  if [ -n "$_schema" ] && [ "$_schema" != "public" ]; then
+    export PGOPTIONS="--search_path=$_schema,public"
+  fi
+  if [ -n "$_keep" ]; then echo "$_base?$_keep"; else echo "$_base"; fi
+}
+
+PSQL_URL="$(build_psql_url "$DATABASE_URL")"
+
+echo "▶ Vérification de la connexion psql…"
+if psql "$PSQL_URL" -tAc 'SELECT 1' >/dev/null 2>&1; then
+  echo "  ✓ Connexion psql OK — les migrations vont être appliquées."
+else
+  echo "  ✖ psql ne parvient pas à se connecter — voir l'URL. Démarrage quand même." >&2
+fi
+
 run_sql() {
   if [ -f "$1" ]; then
     echo "  → $1"
     # On ne stoppe pas le démarrage si une migration déjà appliquée renvoie une
     # erreur bénigne ; les migrations Collab sont idempotentes (IF NOT EXISTS).
-    psql "$DATABASE_URL" -f "$1" || echo "    (avertissement sur $1, ignoré)"
+    psql "$PSQL_URL" -f "$1" >/dev/null 2>&1 \
+      && echo "    ✓ ok" \
+      || echo "    (avertissement sur $1, ignoré)"
   fi
 }
 

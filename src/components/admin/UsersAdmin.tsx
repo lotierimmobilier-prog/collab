@@ -43,6 +43,8 @@ export default function UsersAdmin() {
           prenom: user.prenom, nom: user.nom, email: user.email,
           password: user.password, roleId: user.roleId, active: user.active,
           accessOverrides: user.accessOverrides ?? null,
+          gedAccess: user.gedAccess ?? null,
+          parrainId: user.parrainId ?? null,
         }),
       });
       const data = await res.json();
@@ -219,6 +221,7 @@ export default function UsersAdmin() {
         <UserModal
           user={editing === "new" ? null : editing}
           roles={roles}
+          allUsers={users}
           onClose={() => setEditing(null)}
           onSave={saveUser}
         />
