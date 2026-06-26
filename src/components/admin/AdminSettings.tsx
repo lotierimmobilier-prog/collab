@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import MailTemplates from "@/components/admin/MailTemplates";
 
 const GOLD    = "#B8966A";
 const GOLD_BG = "#F7F0E6";
@@ -63,6 +64,7 @@ export default function AdminSettings() {
   const [saved,  setSaved]  = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [testTo, setTestTo] = useState("");
 
   useEffect(() => {
     fetch("/api/admin/settings")
@@ -86,9 +88,12 @@ export default function AdminSettings() {
   async function testMail() {
     setTesting(true); setTestResult(null);
     try {
-      const r = await fetch("/api/admin/settings/test-mail", { method: "POST" });
+      const r = await fetch("/api/admin/settings/test-mail", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: testTo.trim() || undefined }),
+      });
       const d = await r.json();
-      setTestResult(d.ok ? "✅ Email test envoyé avec succès !" : `❌ Erreur : ${d.error}`);
+      setTestResult(d.ok ? `✅ Email test envoyé à ${d.to} !` : `❌ Erreur : ${d.error}`);
     } catch { setTestResult("❌ Impossible de joindre le serveur"); }
     finally { setTesting(false); }
   }
@@ -183,16 +188,21 @@ export default function AdminSettings() {
         <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 12 }}>N'oubliez pas d'<strong>Enregistrer</strong> pour appliquer.</div>
       </Section>
 
-      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <button onClick={save} disabled={saving} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
           {saving ? "Enregistrement…" : "Enregistrer"}
         </button>
+        <input value={testTo} onChange={e => setTestTo(e.target.value)} placeholder={`Email de test (déf. ${settings.smtp_user})`} type="email"
+          style={{ ...inp, width: 240, height: 40 }} />
         <button onClick={testMail} disabled={testing} style={{ background: "#f3f4f6", color: "#374151", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 16px", fontSize: 14, cursor: "pointer" }}>
           {testing ? "Envoi…" : "📧 Tester l'envoi"}
         </button>
         {saved && <span style={{ color: "#059669", fontSize: 13, fontWeight: 500 }}>✓ Paramètres sauvegardés</span>}
         {testResult && <span style={{ fontSize: 13 }}>{testResult}</span>}
       </div>
+
+      <div style={{ height: 20 }} />
+      <MailTemplates />
 
       <Section title="⚠️ Zone de danger">
         <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 14, lineHeight: 1.6 }}>

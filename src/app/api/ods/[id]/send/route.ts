@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import nodemailer from "nodemailer";
+import { getTemplate, renderTemplate } from "@/lib/mail-templates";
 
 const ROLE_LABEL: Record<string, string> = {
   locataire: "Locataire", coproprietaire: "Copropriétaire",
@@ -41,44 +42,41 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const proto = _req?.headers?.get?.("x-forwarded-proto") || "https";
   const portalUrl = `${host ? `${proto}://${host}` : (process.env.NEXTAUTH_URL || "https://collab.lotier-immobilier.com")}/intervention/${token}`;
 
-  // ── Construction de l'email ──────────────────────────────────
-  const L: string[] = [];
-  L.push(`Bonjour,`);
-  L.push(``);
-  L.push(`Nous vous confions l'intervention suivante (réf. ${ods.ref}) :`);
-  L.push(``);
-  if (ods.interventionType) L.push(`• Type : ${ods.interventionType}`);
-  L.push(`• Objet : ${ods.title}`);
-  if (ods.description) L.push(`• Description : ${ods.description}`);
-  if (ods.address) L.push(`• Lieu : ${ods.address}`);
-  if (ods.urgency === "urgent") L.push(`• ⚠ URGENT`);
-  if (ods.deadline) L.push(`• Délai souhaité : ${new Date(ods.deadline).toLocaleDateString("fr-FR")}`);
-  L.push(``);
-  if (ods.onSiteName || ods.onSitePhone) {
-    const role = ods.onSiteRole ? ` (${ROLE_LABEL[ods.onSiteRole] ?? ods.onSiteRole})` : "";
-    L.push(`Contact sur place${role} : ${[ods.onSiteName, ods.onSitePhone].filter(Boolean).join(" — ")}`);
-  }
-  if (ods.keyAtAgency) L.push(`Accès : le logement n'est pas loué — les clés sont à retirer à l'agence.`);
-  if (ods.accessInfo) L.push(`Infos d'accès : ${ods.accessInfo}`);
-  L.push(``);
-  if (ods.quoteRequired) {
-    L.push(`Merci de nous adresser un DEVIS avant toute intervention.`);
-  } else if (ods.amount) {
-    L.push(`Montant convenu / plafond sans devis : ${ods.amount.toLocaleString("fr-FR")} €.`);
-  }
-  L.push(`La facture est à adresser à l'agence (${acc.email}).`);
-  L.push(``);
-  L.push(`➡ Suivez cette intervention, déposez votre devis/facture/photos et échangez avec nous ici :`);
-  L.push(portalUrl);
-  L.push(``);
-  // Pièces jointes (photos…)
+  // ── Construction de l'email (modèle « ods_supplier », éditable en admin) ──
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const atts = Array.isArray(ods.attachments) ? (ods.attachments as any[]) : [];
-  if (atts.length) L.push(`${atts.length} pièce(s) jointe(s) : ${atts.map(a => a.name).join(", ")}.`);
-  L.push(`Pour toute question : ${agentName || "votre agence"}${ods.agentPhone ? ` — ${ods.agentPhone}` : ""}.`);
-  L.push(`Cordialement,`);
-  L.push(`${acc.name}`);
-  const text = L.join("\n");
+
+  const contact = [ods.onSiteName, ods.onSitePhone].filter(Boolean).join(" — ");
+  const contactRole = ods.onSiteRole ? `(${ROLE_LABEL[ods.onSiteRole] ?? ods.onSiteRole})` : "";
+  const devis = ods.quoteRequired
+    ? "Merci de nous adresser un DEVIS avant toute intervention."
+    : (ods.amount ? `Montant convenu / plafond sans devis : ${ods.amount.toLocaleString("fr-FR")} €.` : "");
+
+  const vars: Record<string, string> = {
+    ref: ods.ref,
+    type: ods.interventionType ?? "",
+    type_titre: `${ods.interventionType ? ods.interventionType + " — " : ""}${ods.title}`,
+    titre: ods.title,
+    description: ods.description ?? "",
+    lieu: ods.address ?? "",
+    urgence: ods.urgency === "urgent" ? "⚠ URGENT" : "",
+    delai: ods.deadline ? new Date(ods.deadline).toLocaleDateString("fr-FR") : "",
+    contact_role: contact ? contactRole : "",
+    contact,
+    cle_agence: ods.keyAtAgency ? "Accès : le logement n'est pas loué — les clés sont à retirer à l'agence." : "",
+    acces: ods.accessInfo ?? "",
+    devis,
+    agence_email: acc.email ?? "",
+    portail: portalUrl,
+    pieces: atts.length ? `${atts.length} pièce(s) jointe(s) : ${atts.map(a => a.name).join(", ")}.` : "",
+    agent: `${agentName || "votre agence"}${ods.agentPhone ? ` — ${ods.agentPhone}` : ""}`,
+    agence_nom: acc.name ?? "",
+  };
+
+  const tpl = await getTemplate("ods_supplier");
+  const rendered = renderTemplate(tpl ?? { subject: "[{{ref}}] {{type_titre}}", body: "" }, vars);
+  const text = rendered.body;
+  const subject = rendered.subject;
 
   const mailAttachments = atts
     .filter(a => a?.data && a?.name)
@@ -87,8 +85,6 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       content: Buffer.from(String(a.data), "base64"),
       contentType: a.mime ? String(a.mime) : undefined,
     }));
-
-  const subject = `[${ods.ref}] ${ods.interventionType ? ods.interventionType + " — " : ""}${ods.title}`;
 
   const port = acc.smtpPort || 587;
   const isDirectSsl = acc.smtpSsl === true && port === 465;
