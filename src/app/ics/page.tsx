@@ -58,6 +58,19 @@ export default function IcsPage() {
   useEffect(() => { const t = setTimeout(() => loadTenants(search), 250); return () => clearTimeout(t); }, [search, loadTenants]);
 
   const [creatingContacts, setCreatingContacts] = useState(false);
+  const [ownerImporting, setOwnerImporting] = useState(false);
+  const ownerFileRef = useRef<HTMLInputElement>(null);
+
+  async function importOwners(file: File) {
+    setOwnerImporting(true); setImportMsg("");
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const r = await fetch("/api/ics/owners/import", { method: "POST", body: fd });
+      const d = await r.json();
+      setImportMsg(r.ok ? (d.message || "Propriétaires importés.") : (d.error || "Échec de l'import."));
+    } catch { setImportMsg("Erreur réseau pendant l'import des propriétaires."); }
+    finally { setOwnerImporting(false); }
+  }
 
   async function createContacts() {
     setCreatingContacts(true); setImportMsg("");
@@ -208,9 +221,15 @@ export default function IcsPage() {
               </p>
               <input ref={fileRef} type="file" accept=".xls,.xlsx,.csv" style={{ display: "none" }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) importFile(f); e.target.value = ""; }} />
+              <input ref={ownerFileRef} type="file" accept=".xls,.xlsx,.csv" style={{ display: "none" }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) importOwners(f); e.target.value = ""; }} />
               <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                 <button onClick={() => fileRef.current?.click()} disabled={importing} style={btnPrimary}>
                   {importing ? "Import en cours…" : "Importer l'export Locataires"}
+                </button>
+                <button onClick={() => ownerFileRef.current?.click()} disabled={ownerImporting} style={btnGhost}
+                  title="Importer/mettre à jour les propriétaires dans l'annuaire (nouveautés et modifications uniquement)">
+                  {ownerImporting ? "Import…" : "Importer l'export Propriétaires"}
                 </button>
                 {tenantTotal > 0 && (
                   <button onClick={createContacts} disabled={creatingContacts} style={btnGhost}
