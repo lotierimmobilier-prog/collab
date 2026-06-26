@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
+import GedDrive from "@/components/ics/GedDrive";
 
 const GOLD = "#B8966A"; const DARK = "#1C1A17"; const BORDER = "#E6E1D9";
 const GOLD_BG = "#F7F0E6"; const RED = "#9B2C2C"; const GREEN = "#2F855A";
@@ -248,12 +249,15 @@ export default function IcsPage() {
               )}
             </div>
 
+            {/* Drive GED — consultation directe des documents */}
+            <GedDrive canEdit={allowed} />
+
             {/* Feuille de route */}
             <div style={{ background: GOLD_BG, borderRadius: 14, border: `1px solid ${GOLD}33`, padding: 18 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: DARK, marginBottom: 10 }}>Étapes du connecteur</div>
               <Step n="1" done state="Fait">Fondation : stockage chiffré des identifiants + test d'authentification Keycloak.</Step>
               <Step n="2" done state="Fait">Index ICS : import de l'export Locataires (bail ↔ locataire ↔ bien ↔ propriétaire).</Step>
-              <Step n="3" state="Après test de connexion">Consultation des documents ICS en direct (sans copie), depuis chaque fiche.</Step>
+              <Step n="3" done state="Fait">Consultation des documents ICS en direct (GED), sans copie.</Step>
             </div>
 
           </div>

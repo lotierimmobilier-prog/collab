@@ -14,6 +14,7 @@ import AccountConfigPanel from "./AccountConfigPanel";
 import LabelManager from "./LabelManager";
 import ThreadList from "./ThreadList";
 import ThreadView from "./ThreadView";
+import RecipientInput from "./RecipientInput";
 import GoogleMailConnect from "./GoogleMailConnect";
 import SignatureEditor from "./SignatureEditor";
 import RichTextEditor from "./RichTextEditor";
@@ -1071,14 +1072,14 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
 
           <div style={{ borderBottom: "1px solid #f3f4f6", padding: "8px 0", display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 11, color: "#9ca3af", width: 24, flexShrink: 0 }}>À</span>
-            <input value={to} onChange={e => setTo(e.target.value)} placeholder="destinataire@email.com" style={{ flex: 1, border: "none", fontSize: 13, outline: "none", fontFamily: "inherit" }} />
+            <RecipientInput value={to} onChange={setTo} placeholder="Nom du contact ou destinataire@email.com" />
             <button onClick={() => setShowCc(s => !s)} style={{ background: "none", border: "none", fontSize: 10, color: "#9ca3af", cursor: "pointer" }}>Cc</button>
           </div>
 
           {showCc && (
             <div style={{ borderBottom: "1px solid #f3f4f6", padding: "8px 0", display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 11, color: "#9ca3af", width: 24, flexShrink: 0 }}>Cc</span>
-              <input value={cc} onChange={e => setCc(e.target.value)} placeholder="copie@email.com" style={{ flex: 1, border: "none", fontSize: 13, outline: "none", fontFamily: "inherit" }} />
+              <RecipientInput value={cc} onChange={setCc} placeholder="Nom du contact ou copie@email.com" />
             </div>
           )}
 

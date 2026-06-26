@@ -59,3 +59,13 @@ CREATE INDEX IF NOT EXISTS ics_tenants_nomproprietaire_idx ON ics_tenants ("nomP
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "icsType"  TEXT;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "icsRef"   TEXT;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "icsIdLot" TEXT;
+
+-- Accès direct à la GED (ged-tomcat1).
+ALTER TABLE ics_config ADD COLUMN IF NOT EXISTS "gedSociete"     TEXT;
+ALTER TABLE ics_config ADD COLUMN IF NOT EXISTS "gedEmail"       TEXT;
+ALTER TABLE ics_config ADD COLUMN IF NOT EXISTS "gedPasswordEnc" TEXT;
+ALTER TABLE ics_config ADD COLUMN IF NOT EXISTS "gedCle"         TEXT;
+ALTER TABLE ics_config ADD COLUMN IF NOT EXISTS "gedToken"       TEXT;
+ALTER TABLE ics_config ADD COLUMN IF NOT EXISTS "gedTokenExp"    TIMESTAMP(3);
+ALTER TABLE ics_config ADD COLUMN IF NOT EXISTS "gedLastTestOk"  BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE ics_config ADD COLUMN IF NOT EXISTS "gedLastError"   TEXT;
