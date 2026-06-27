@@ -340,6 +340,12 @@ model Supplier {
   modeReglement String?                  // Virement | Chèque | …
   scope     String   @default("gestion") // gestion | syndic
   contactId String?                      // fiche annuaire liée
+  // ── Conformité assurance (décennale / RC pro) ──
+  insuranceType   String?               // decennale | rcpro | both | autre
+  insurer         String?               // assureur
+  insurancePolicy String?               // n° de police
+  insuranceExpiry DateTime?             // fin de validité de l'attestation
+  insuranceDoc    Json?                 // attestation : {name,mime,size,data}
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

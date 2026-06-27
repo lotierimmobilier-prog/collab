@@ -17,7 +17,7 @@ interface ODS {
   id: string; ref: string; supplierId: string; title: string; description?: string;
   address?: string; deadline?: string; amount?: number; status: string; notes?: string;
   createdAt: string; sentAt?: string | null;
-  supplier?: { name: string; type: string; phone?: string; email?: string };
+  supplier?: { name: string; type: string; phone?: string; email?: string; insuranceExpiry?: string | null };
 }
 
 interface SupplierLite { id: string; name: string; type: string; metier?: string; email?: string; phone?: string }
@@ -59,7 +59,15 @@ export default function ODSPage() {
   const [sending, setSending] = useState<string | null>(null);
   async function sendToSupplier(o: ODS) {
     if (!o.supplier?.email) { alert("Ce fournisseur n'a pas d'adresse email."); return; }
-    if (!confirm(`Envoyer l'ordre de service ${o.ref} par email à ${o.supplier.name} (${o.supplier.email}) ?`)) return;
+    // Contrôle de conformité : assurance décennale / RC pro à jour ?
+    const exp = o.supplier.insuranceExpiry;
+    const days = exp ? Math.floor((new Date(exp).getTime() - Date.now()) / 86_400_000) : null;
+    if (days === null || days < 0) {
+      const msg = days === null
+        ? `⚠ Aucune attestation d'assurance n'est renseignée pour ${o.supplier.name}.`
+        : `⚠ L'assurance de ${o.supplier.name} est EXPIRÉE (depuis le ${new Date(exp!).toLocaleDateString("fr-FR")}).`;
+      if (!confirm(`${msg}\n\nIl est recommandé de vérifier sa décennale / RC pro avant l'intervention.\n\nEnvoyer quand même l'ordre de service ${o.ref} ?`)) return;
+    } else if (!confirm(`Envoyer l'ordre de service ${o.ref} par email à ${o.supplier.name} (${o.supplier.email}) ?`)) return;
     setSending(o.id);
     try {
       const r = await fetch(`/api/ods/${o.id}/send`, { method: "POST" });
