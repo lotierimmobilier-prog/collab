@@ -75,7 +75,9 @@ export function middleware(req: NextRequest) {
       });
     }
     const loginUrl = new URL("/login", req.nextUrl);
-    loginUrl.searchParams.set("callbackUrl", encodeURIComponent(pathname));
+    // searchParams.set encode déjà la valeur : pas de encodeURIComponent ici
+    // (sinon double encodage → callbackUrl = "%2F" → redirection vers "/%2F").
+    loginUrl.searchParams.set("callbackUrl", pathname + req.nextUrl.search);
     return NextResponse.redirect(loginUrl);
   }
 
