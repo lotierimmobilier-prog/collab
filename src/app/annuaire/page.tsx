@@ -205,7 +205,7 @@ export default function AnnuairePage() {
                       <span title={`Fiche rapprochée d'ICS (${c.icsType ?? "ICS"})`} style={{ background: "#1C7A4A18", color: "#1C7A4A", borderRadius: 6, padding: "3px 8px", fontSize: 10.5, fontWeight: 700, flexShrink: 0 }}>ICS ✓</span>
                     )}
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                      {c.email && <a href={`mailto:${c.email}`} title="Envoyer un mail" style={iconBtn}>✉</a>}
+                      {c.email && <a href={`/messagerie?to=${encodeURIComponent(c.email)}`} title="Envoyer un mail depuis la messagerie" style={iconBtn}>✉</a>}
                       {c.phone && <a href={`tel:${c.phone}`} title="Appeler" style={iconBtn}>📞</a>}
                       {c.icsRef && <a href={`/ics?recherche=${encodeURIComponent(contactName(c))}`} title="Documents ICS (GED)" style={iconBtn}>📁</a>}
                       <button onClick={() => setTaskFor(c)} title="Créer une tâche liée" style={iconBtnBtn}>✅</button>

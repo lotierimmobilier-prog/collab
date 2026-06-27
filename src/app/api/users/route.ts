@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { auth } from "@/auth";
 import { saveUser } from "@/lib/user-write";
 import { getExtras, setExtras } from "@/lib/user-extras";
+import { isSuperAdminEmail, isAdminRole } from "@/lib/superadmin";
 
 // GET /api/users — liste tous les utilisateurs.
 // On ne sélectionne que les colonnes RÉELLEMENT présentes dans « users », puis
 // on fusionne les attributs de la table annexe user_extras (parrain, ville,
 // statut salarié, GED, surcharges d'accès) qui en est la source de vérité.
 export async function GET() {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fmt = (u: any) => ({
     ...u,
@@ -41,7 +46,9 @@ export async function GET() {
     const extras = await getExtras(rows.map(r => r.id));
     const merged = rows.map(r => {
       const ex = extras.get(r.id);
-      if (!ex) return r;
+      // Le super admin d'origine (adresse codée en dur) l'est toujours.
+      const superAdmin = isSuperAdminEmail(r.email) || ex?.superAdmin === true;
+      if (!ex) return { ...r, superAdmin };
       return {
         ...r,
         parrainId: ex.parrainId ?? r.parrainId ?? null,
@@ -49,6 +56,7 @@ export async function GET() {
         isEmployee: ex.isEmployee ?? r.isEmployee ?? false,
         gedAccess: ex.gedAccess ?? r.gedAccess ?? null,
         accessOverrides: ex.accessOverrides ?? r.accessOverrides ?? null,
+        superAdmin,
       };
     });
     return NextResponse.json(merged.map(fmt));
@@ -60,10 +68,23 @@ export async function GET() {
 // POST /api/users — créer un utilisateur
 export async function POST(req: NextRequest) {
   try {
+    const session = await auth();
+    if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    if (session.user.roleId !== "admin") return NextResponse.json({ error: "Réservé à l'administration" }, { status: 403 });
+    const callerSuper = session.user.superAdmin === true || isSuperAdminEmail(session.user.email);
+
     const body = await req.json();
-    const { prenom, nom, email, password, roleId, active, accessOverrides, gedAccess, parrainId, isEmployee, city } = body;
+    const { prenom, nom, email, password, roleId, active, accessOverrides, gedAccess, parrainId, isEmployee, city, superAdmin } = body;
     if (!prenom || !nom || !email || !password || !roleId) {
       return NextResponse.json({ error: "Champs obligatoires manquants" }, { status: 400 });
+    }
+
+    // Gouvernance : seul le super admin crée un administrateur ou désigne un super admin.
+    if (isAdminRole(roleId) && !callerSuper) {
+      return NextResponse.json({ error: "Seul le super administrateur peut créer un administrateur." }, { status: 403 });
+    }
+    if (superAdmin && !callerSuper) {
+      return NextResponse.json({ error: "Seul le super administrateur peut désigner un super administrateur." }, { status: 403 });
     }
     const passwordHash = await bcrypt.hash(password, 12);
     // Colonnes de base sur « users » ; les attributs annexes (parrain, ville,
@@ -77,6 +98,7 @@ export async function POST(req: NextRequest) {
       parrainId: parrainId || null, city: city?.trim() || null,
       isEmployee: !!isEmployee, gedAccess: gedAccess || null,
       accessOverrides: accessOverrides ?? null,
+      superAdmin: callerSuper ? !!superAdmin : false,
     });
     return NextResponse.json({ ...user, password: "••••••••" }, { status: 201 });
   } catch (e: unknown) {

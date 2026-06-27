@@ -9,11 +9,12 @@ export interface Extras {
   city: string | null;
   isEmployee: boolean;
   gedAccess: string | null;
+  superAdmin: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   accessOverrides: any;
 }
 
-const FIELDS = ["parrainId", "city", "isEmployee", "gedAccess", "accessOverrides"] as const;
+const FIELDS = ["parrainId", "city", "isEmployee", "gedAccess", "superAdmin", "accessOverrides"] as const;
 
 export async function getExtras(userIds: string[]): Promise<Map<string, Partial<Extras>>> {
   const map = new Map<string, Partial<Extras>>();
@@ -21,7 +22,7 @@ export async function getExtras(userIds: string[]): Promise<Map<string, Partial<
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rows: any[] = await prisma.$queryRawUnsafe(
-      `SELECT "userId","parrainId","city","isEmployee","gedAccess","accessOverrides" FROM user_extras WHERE "userId" = ANY($1::text[])`,
+      `SELECT "userId","parrainId","city","isEmployee","gedAccess","superAdmin","accessOverrides" FROM user_extras WHERE "userId" = ANY($1::text[])`,
       userIds,
     );
     for (const r of rows) map.set(r.userId, r);
@@ -44,8 +45,8 @@ export async function setExtras(userId: string, fields: Record<string, any>): Pr
       const v = fields[k];
       if (k === "accessOverrides") {
         await prisma.$executeRawUnsafe(`UPDATE user_extras SET "accessOverrides" = $1::jsonb, "updatedAt" = now() WHERE "userId" = $2`, v == null ? null : JSON.stringify(v), userId);
-      } else if (k === "isEmployee") {
-        await prisma.$executeRawUnsafe(`UPDATE user_extras SET "isEmployee" = $1, "updatedAt" = now() WHERE "userId" = $2`, !!v, userId);
+      } else if (k === "isEmployee" || k === "superAdmin") {
+        await prisma.$executeRawUnsafe(`UPDATE user_extras SET "${k}" = $1, "updatedAt" = now() WHERE "userId" = $2`, !!v, userId);
       } else {
         await prisma.$executeRawUnsafe(`UPDATE user_extras SET "${k}" = $1, "updatedAt" = now() WHERE "userId" = $2`, (v ?? null) || null, userId);
       }

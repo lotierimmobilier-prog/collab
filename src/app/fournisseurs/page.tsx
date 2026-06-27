@@ -240,7 +240,7 @@ export default function FournisseursPage() {
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                       {s.contact && <InfoLine icon="👤" text={s.contact} />}
                       {s.phone   && <InfoLine icon="📞" text={s.phone} href={`tel:${s.phone}`} />}
-                      {s.email   && <InfoLine icon="✉️"  text={s.email} href={`mailto:${s.email}`} />}
+                      {s.email   && <InfoLine icon="✉️"  text={s.email} href={`/messagerie?to=${encodeURIComponent(s.email)}`} />}
                       {s.address && <InfoLine icon="📍" text={s.address} />}
                       {s.siret   && <InfoLine icon="🏢" text={`SIRET : ${s.siret}`} />}
                     </div>

@@ -49,6 +49,7 @@ export default function MailBoard() {
   const [showLabels, setShowLabels]             = useState(false);
   const [labelsOpen, setLabelsOpen]             = useState(false);
   const [showCompose, setShowCompose]           = useState(false);
+  const [composePrefill, setComposePrefill]     = useState<{ to: string; subject?: string } | null>(null);
   const [forwardData, setForwardData]           = useState<{ to: string; cc?: string; subject: string; body: string; accountId: string } | null>(null);
   const [aiKey, setAiKey]                       = useState("");
   const [syncing, setSyncing]                   = useState<string | null>(null);
@@ -173,6 +174,25 @@ export default function MailBoard() {
     window.history.replaceState({}, "", url.toString());
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threads]);
+
+  /* ── Ouverture directe du compositeur via ?to=<email>&subject=<sujet> ──
+     Depuis l'annuaire et les fiches (« Envoyer un mail »), on ouvre la
+     messagerie interne avec le destinataire pré-rempli plutôt qu'un
+     client mail externe (mailto:). */
+  const composeLinkOpened = useRef(false);
+  useEffect(() => {
+    if (composeLinkOpened.current) return;
+    composeLinkOpened.current = true;
+    const sp = new URLSearchParams(window.location.search);
+    const to = sp.get("to");
+    if (!to) return;
+    setComposePrefill({ to, subject: sp.get("subject") ?? "" });
+    setShowCompose(true);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("to");
+    url.searchParams.delete("subject");
+    window.history.replaceState({}, "", url.toString());
+  }, []);
 
   async function saveAccounts(a: MailAccount[]) {
     setAccounts(a);
@@ -811,7 +831,10 @@ export default function MailBoard() {
         </div>
       </div>
 
-      {showCompose && <ComposeModal accounts={accounts} gmailConfigs={gmailConfigs} labels={customLabels} onClose={() => setShowCompose(false)} onSend={msg => { addMessage(msg); setShowCompose(false); }} />}
+      {showCompose && <ComposeModal accounts={accounts} gmailConfigs={gmailConfigs} labels={customLabels}
+        replyTo={composePrefill ? { to: composePrefill.to, subject: composePrefill.subject ?? "" } : undefined}
+        onClose={() => { setShowCompose(false); setComposePrefill(null); }}
+        onSend={msg => { addMessage(msg); setShowCompose(false); setComposePrefill(null); }} />}
       {forwardData && <ComposeModal accounts={accounts} gmailConfigs={gmailConfigs} labels={customLabels}
         replyTo={{ to: forwardData.to, subject: forwardData.subject, accountId: forwardData.accountId }}
         initialBody={forwardData.body}
