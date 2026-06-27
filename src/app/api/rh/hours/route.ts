@@ -52,12 +52,27 @@ export async function POST(req: NextRequest) {
     const sign = !!body?.sign;
     const me = await prisma.user.findUnique({ where: { id: uid }, select: { prenom: true, nom: true } });
     const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || req.headers.get("x-real-ip") || null;
+    const num = (v: unknown) => (v != null && v !== "" ? Number(v) : null);
+
+    // Total du mois recalculé côté serveur depuis le détail quotidien.
+    let total = num(body.totalHours);
+    if (Array.isArray(body.entries)) {
+      try { const { totals } = await import("@/lib/decompte"); total = totals(month, body.entries).monthTotal; } catch { /* garde la valeur fournie */ }
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const base: any = {
-      totalHours: body.totalHours != null && body.totalHours !== "" ? Number(body.totalHours) : null,
+      totalHours: total,
       note: body.note?.trim() || null,
       status: sign ? "signe" : "brouillon",
+      employe: `${me?.prenom ?? ""} ${me?.nom ?? ""}`.trim() || null,
+      societe: String(body.societe || "Lotier Immobilier"),
+      heureHebdo: num(body.heureHebdo),
+      avantageNature: body.avantageNature?.trim() || null,
+      acompte: num(body.acompte),
+      acompteMode: body.acompteMode?.trim() || null,
+      primeMotif: body.primeMotif?.trim() || null,
+      primeMontant: num(body.primeMontant),
     };
     if (Array.isArray(body.entries)) base.entries = body.entries;
     if (sign) {

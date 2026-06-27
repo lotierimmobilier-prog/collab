@@ -33,6 +33,7 @@ const FILES = [
   "migrations_procedures.sql",
   "migrations_procedures_roles.sql",
   "migrations_rh.sql",
+  "migrations_rh_decompte.sql",
 ];
 
 export interface MigrationReport {
