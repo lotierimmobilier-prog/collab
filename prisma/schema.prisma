@@ -1052,6 +1052,54 @@ model Procedure {
   @@map("procedures")
 }
 
+/// RH — demande de congé (circuit de validation par la direction).
+model LeaveRequest {
+  id           String    @id @default(cuid())
+  userId       String
+  type         String    @default("conges_payes") // conges_payes | rtt | maladie | sans_solde | recuperation | autre
+  startDate    DateTime
+  endDate      DateTime
+  halfDayStart Boolean   @default(false) // commence l'après-midi
+  halfDayEnd   Boolean   @default(false) // finit le matin
+  days         Float?    // nombre de jours décompté
+  reason       String?
+  status       String    @default("en_attente") // en_attente | approuve | refuse | annule
+  decidedById  String?
+  decidedAt    DateTime?
+  decisionNote String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("leave_requests")
+}
+
+/// RH — relevé d'heures mensuel, signé par l'agent puis validé par la direction.
+model MonthlyHours {
+  id                 String    @id @default(cuid())
+  userId             String
+  month              String    // "2026-06"
+  totalHours         Float?
+  entries            Json?     // détail optionnel : [{date, hours, note}]
+  note               String?
+  // ── Signature de l'agent (preuve : nom, horodatage, IP) ──
+  agentSigned        Boolean   @default(false)
+  agentSignedAt      DateTime?
+  agentSignatureName String?
+  agentSignatureIp   String?
+  // ── Validation direction ──
+  status             String    @default("brouillon") // brouillon | signe | valide | refuse
+  validatedById      String?
+  validatedAt        DateTime?
+  validationNote     String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([userId, month])
+  @@index([userId])
+  @@map("monthly_hours")
+}
+
 /// Drive personnel — arborescence dossiers/fichiers par utilisateur,
 /// stockée en base (fichiers en base64).
 model DriveItem {
