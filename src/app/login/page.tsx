@@ -4,10 +4,24 @@ import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
+// Nettoie le callbackUrl : décode les valeurs (ré)encodées (ex. "%2F" → "/"),
+// n'autorise QUE les chemins internes (commençant par "/"), et retombe sur le
+// tableau de bord pour les valeurs vides/invalides (anciennes URL "%2F").
+function safeCallback(raw: string | null): string {
+  if (!raw) return "/";
+  let v = raw;
+  for (let i = 0; i < 3 && /%[0-9A-Fa-f]{2}/.test(v); i++) {
+    try { v = decodeURIComponent(v); } catch { break; }
+  }
+  if (!v.startsWith("/") || v.startsWith("//")) return "/";
+  if (v === "/login") return "/";
+  return v;
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/";
+  const callbackUrl = safeCallback(searchParams.get("callbackUrl"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
