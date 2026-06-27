@@ -21,12 +21,30 @@ en plus de l'identifiant client déjà présent.
    utilisateurs en testeurs).
 
 ### 2. Variables d'environnement (VPS / déploiement)
+
+`GOOGLE_CLIENT_SECRET` est un secret **runtime serveur** : il ne doit PAS être
+mis dans le build / le workflow GitHub (sinon il serait inscrit dans l'image).
+Il se place dans **`.env.local` sur le VPS**, déjà chargé automatiquement par
+`docker-compose.vps.yml` (`env_file: .env.local`).
+
+Sur le VPS, dans `/var/www/collab/.env.local`, ajouter la ligne :
 ```
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=<id client>
-GOOGLE_CLIENT_SECRET=<secret client>
-NEXTAUTH_URL=https://collab.lotier-immobilier.com   # déjà défini normalement
-AUTH_SECRET=<déjà défini>                            # sert au chiffrement du refresh_token
+GOOGLE_CLIENT_SECRET=<secret client copié depuis Google Cloud>
 ```
+Variables attendues (les autres sont déjà présentes) :
+```
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=<id client>      # déjà défini (secret GitHub, build)
+GOOGLE_CLIENT_SECRET=<secret client>          # À AJOUTER dans .env.local (runtime)
+NEXTAUTH_URL=https://collab.lotier-immobilier.com   # déjà défini
+AUTH_SECRET=<déjà défini>                      # sert au chiffrement du refresh_token
+```
+
+Puis redémarrer le conteneur (sans rebuild) :
+```
+cd /var/www/collab
+docker compose -f docker-compose.vps.yml up -d
+```
+
 Le `refresh_token` est stocké **chiffré** (AES-256-GCM, clé dérivée de
 `AUTH_SECRET`) — jamais en clair, jamais committé.
 
