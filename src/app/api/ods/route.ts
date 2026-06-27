@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
   const orders = await prisma.serviceOrder.findMany({
     where: taskId ? { taskId } : {},
-    include: { supplier: { select: { id: true, name: true, type: true, phone: true, email: true } } },
+    include: { supplier: { select: { id: true, name: true, type: true, phone: true, email: true, insuranceExpiry: true } } },
     orderBy: { createdAt: "desc" },
   });
 
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
       attachments: atts.length ? atts : undefined,
       supplierToken: Math.random().toString(36).slice(2) + Date.now().toString(36),
     },
-    include: { supplier: { select: { id: true, name: true, type: true, phone: true, email: true } } },
+    include: { supplier: { select: { id: true, name: true, type: true, phone: true, email: true, insuranceExpiry: true } } },
   });
 
   return NextResponse.json({ ...fmt(order), supplier: order.supplier }, { status: 201 });

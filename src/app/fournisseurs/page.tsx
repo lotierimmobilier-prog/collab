@@ -23,6 +23,27 @@ interface Supplier {
   id: string; name: string; type: string; contact?: string;
   phone?: string; email?: string; address?: string; siret?: string;
   notes?: string; active: boolean; ordersCount?: number; metier?: string;
+  insuranceType?: string; insurer?: string; insurancePolicy?: string;
+  insuranceExpiry?: string | null; hasInsuranceDoc?: boolean;
+}
+
+// Statut de l'attestation d'assurance (décennale / RC pro).
+function insuranceStatus(expiry?: string | null): { label: string; color: string } | null {
+  if (!expiry) return null;
+  const days = Math.floor((new Date(expiry).getTime() - Date.now()) / 86_400_000);
+  if (isNaN(days)) return null;
+  if (days < 0) return { label: "Assurance expirée", color: "#DC2626" };
+  if (days <= 30) return { label: "Assurance expire bientôt", color: "#B45309" };
+  return { label: "Assurance à jour", color: "#2F855A" };
+}
+
+function fileToB64(file: File): Promise<{ name: string; mime: string; size: number; data: string }> {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res({ name: file.name, mime: file.type || "application/octet-stream", size: file.size, data: String(r.result).split(",")[1] || "" });
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
 }
 
 export default function FournisseursPage() {
@@ -74,7 +95,7 @@ export default function FournisseursPage() {
 
   useEffect(() => { load(); }, []);
 
-  async function saveSupplier(data: Partial<Supplier>) {
+  async function saveSupplier(data: Record<string, unknown>) {
     const isEdit = !!data.id;
     const r = await fetch(isEdit ? `/api/fournisseurs/${data.id}` : "/api/fournisseurs", {
       method: isEdit ? "PATCH" : "POST",
@@ -162,6 +183,7 @@ export default function FournisseursPage() {
                         </div>
                         <span style={{ background: "#F7F0E6", color: GOLD, borderRadius: 5, padding: "1px 7px", fontSize: 11, fontWeight: 500 }}>{ti.icon} {ti.label}</span>
                         {s.metier && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 3 }}>{s.metier}</div>}
+                        {(() => { const ins = insuranceStatus(s.insuranceExpiry); return ins ? <div style={{ marginTop: 4 }}><span style={{ background: ins.color + "20", color: ins.color, borderRadius: 5, padding: "1px 7px", fontSize: 10.5, fontWeight: 600 }}>🛡 {ins.label}</span></div> : null; })()}
                       </div>
                       <div style={{ display: "flex", gap: 4 }}>
                         <button onClick={() => enrichOne(s)} disabled={enriching !== null}
@@ -225,7 +247,7 @@ function InfoLine({ icon, text, href }: { icon: string; text: string; href?: str
   return <div style={style}>{content}</div>;
 }
 
-function SupplierForm({ supplier, onSave, onClose }: { supplier: Supplier | null; onSave: (d: Partial<Supplier>) => void; onClose: () => void }) {
+function SupplierForm({ supplier, onSave, onClose }: { supplier: Supplier | null; onSave: (d: Record<string, unknown>) => void; onClose: () => void }) {
   const [f, setF] = useState({
     name:    supplier?.name    ?? "",
     type:    supplier?.type    ?? "autre",
@@ -236,7 +258,12 @@ function SupplierForm({ supplier, onSave, onClose }: { supplier: Supplier | null
     siret:   supplier?.siret   ?? "",
     notes:   supplier?.notes   ?? "",
     active:  supplier?.active  ?? true,
+    insuranceType:   supplier?.insuranceType   ?? "",
+    insurer:         supplier?.insurer         ?? "",
+    insurancePolicy: supplier?.insurancePolicy ?? "",
+    insuranceExpiry: supplier?.insuranceExpiry ? supplier.insuranceExpiry.slice(0, 10) : "",
   });
+  const [insFile, setInsFile] = useState<{ name: string; mime: string; size: number; data: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
   function set(k: string, v: string | boolean) { setF(p => ({ ...p, [k]: v })); }
@@ -244,7 +271,7 @@ function SupplierForm({ supplier, onSave, onClose }: { supplier: Supplier | null
   async function submit() {
     if (!f.name.trim()) return;
     setSaving(true);
-    await onSave({ id: supplier?.id, ...f });
+    await onSave({ id: supplier?.id, ...f, ...(insFile ? { insuranceDoc: insFile } : {}) });
     setSaving(false);
   }
 
@@ -278,6 +305,31 @@ function SupplierForm({ supplier, onSave, onClose }: { supplier: Supplier | null
           </div>
 
           <F label="Adresse"><input value={f.address} onChange={e => set("address", e.target.value)} style={inp} placeholder="12 rue des Artisans, 31000 Toulouse" /></F>
+
+          {/* Conformité assurance (décennale / RC pro) */}
+          <div style={{ borderTop: `1px solid ${"#E6E1D9"}`, paddingTop: 14, marginTop: 2 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7280", marginBottom: 10 }}>🛡 ASSURANCE (DÉCENNALE / RC PRO)</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <F label="Type de garantie">
+                <select value={f.insuranceType} onChange={e => set("insuranceType", e.target.value)} style={inp}>
+                  <option value="">—</option>
+                  <option value="decennale">Décennale</option>
+                  <option value="rcpro">RC professionnelle</option>
+                  <option value="both">Décennale + RC pro</option>
+                  <option value="autre">Autre</option>
+                </select>
+              </F>
+              <F label="Date de validité"><input type="date" value={f.insuranceExpiry} onChange={e => set("insuranceExpiry", e.target.value)} style={inp} /></F>
+              <F label="Assureur"><input value={f.insurer} onChange={e => set("insurer", e.target.value)} style={inp} placeholder="ex. AXA" /></F>
+              <F label="N° de police"><input value={f.insurancePolicy} onChange={e => set("insurancePolicy", e.target.value)} style={inp} /></F>
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 5 }}>Attestation (PDF / photo)</div>
+              <input type="file" accept="image/*,.pdf" onChange={async e => { const fl = e.target.files?.[0]; if (fl) { if (fl.size > 20 * 1024 * 1024) { alert("Fichier trop volumineux (max 20 Mo)."); return; } setInsFile(await fileToB64(fl)); } }} style={{ fontSize: 13 }} />
+              {insFile && <span style={{ fontSize: 12, color: "#2F855A", marginLeft: 8 }}>✓ {insFile.name}</span>}
+              {!insFile && supplier?.hasInsuranceDoc && <a href={`/api/fournisseurs/${supplier.id}/insurance`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: GOLD, marginLeft: 8 }}>📎 Voir l'attestation actuelle</a>}
+            </div>
+          </div>
 
           <F label="Notes">
             <textarea value={f.notes} onChange={e => set("notes", e.target.value)} rows={3} style={{ ...inp, height: "auto", padding: "8px 10px", resize: "none" }} placeholder="Spécialités, tarifs horaires, conditions…" />
