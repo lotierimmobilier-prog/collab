@@ -22,6 +22,24 @@ export default function MailTemplates() {
   const [draft, setDraft] = useState<{ subject: string; body: string }>({ subject: "", body: "" });
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [testTo, setTestTo] = useState("jerome.bouba@lotier-immobilier.com");
+  const [testing, setTesting] = useState(false);
+  const [testMsg, setTestMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Aperçu : remplit les variables {{x}} par un exemple, et envoie le rendu.
+  async function testSend(t: Template) {
+    setTesting(true); setTestMsg(null);
+    const samples: Record<string, string> = Object.fromEntries(t.variables.map(v => [v.name, `«${v.hint || v.name}»`]));
+    const render = (s: string) => s.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => samples[k] ?? `{{${k}}}`);
+    const subject = `[TEST] ${render(draft.subject)}`;
+    const html = `<div style="font-family:sans-serif;font-size:14px;line-height:1.6;color:#1C1A17">${render(draft.body).replace(/\n/g, "<br/>")}</div>`;
+    try {
+      const r = await fetch("/api/admin/settings/test-mail", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: testTo.trim(), subject, html }) });
+      const d = await r.json().catch(() => ({}));
+      setTestMsg(d?.ok ? { ok: true, text: `✓ Test envoyé à ${d.to}` } : { ok: false, text: d?.error || "Échec de l'envoi." });
+    } catch { setTestMsg({ ok: false, text: "Erreur réseau." }); }
+    finally { setTesting(false); }
+  }
 
   async function load() {
     const r = await fetch("/api/admin/mail-templates");
@@ -106,6 +124,17 @@ export default function MailTemplates() {
                   </button>
                   {savedId === t.id && <span style={{ color: "#059669", fontSize: 13, fontWeight: 500 }}>✓ Modèle enregistré</span>}
                 </div>
+
+                {/* Test d'envoi du mail type */}
+                <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>Tester l'envoi vers :</span>
+                  <input value={testTo} onChange={e => setTestTo(e.target.value)} style={{ ...inp, height: 34, width: 260 }} />
+                  <button onClick={() => testSend(t)} disabled={testing || !testTo.trim()} style={{ background: "#fff", color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                    {testing ? "Envoi…" : "✉️ Envoyer un test"}
+                  </button>
+                  {testMsg && <span style={{ fontSize: 12.5, color: testMsg.ok ? "#059669" : "#dc2626" }}>{testMsg.text}</span>}
+                </div>
+                <div style={{ fontSize: 11, color: "#9ca3af" }}>Les variables sont remplacées par des exemples pour l'aperçu.</div>
               </div>
             )}
           </div>

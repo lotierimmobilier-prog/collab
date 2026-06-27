@@ -16,16 +16,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Adresse email de destination invalide." }, { status: 400 });
   }
 
-  try {
-    await sendMail({
-      to,
-      subject: "✅ Test email Collab",
-      html: `<div style="font-family:Arial,sans-serif;padding:24px;max-width:500px">
+  // Objet/contenu personnalisés (test d'un mail type) ou message de test par défaut.
+  const subject = (typeof body?.subject === "string" && body.subject.trim()) ? body.subject.trim() : "✅ Test email Collab";
+  const html = (typeof body?.html === "string" && body.html.trim())
+    ? body.html
+    : `<div style="font-family:Arial,sans-serif;padding:24px;max-width:500px">
         <h2 style="color:#B8966A">Test de configuration réussi !</h2>
         <p>Votre serveur SMTP est correctement configuré pour <strong>Collab — Lotier Immobilier</strong>.</p>
         <p style="color:#6b7280;font-size:12px">Destinataire : ${to}<br/>Envoyé depuis : ${cfg.from}</p>
-      </div>`,
-    });
+      </div>`;
+
+  try {
+    await sendMail({ to, subject, html });
     return NextResponse.json({ ok: true, to });
   } catch (err: unknown) {
     return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : String(err) });
