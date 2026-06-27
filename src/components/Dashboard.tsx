@@ -631,6 +631,10 @@ export default function Dashboard() {
       {/* Bannière d'accueil — version luxe + citation inspirante */}
       <Banner firstName={firstName} />
 
+      {/* Météo locale + prévisions 3 jours */}
+      <WeatherBlock />
+
+
       {/* Classement du trimestre — pleine largeur */}
       <div style={{ marginBottom: 16 }}>
         <RankingBlock refreshKey={refreshKey} currentUserId={currentUserId} />
@@ -651,6 +655,120 @@ export default function Dashboard() {
     </div>
   );
 }
+
+// ─── Météo locale + prévisions 3 jours ─────────────────────────────
+interface WeatherData { city: string | null; needsCity?: boolean; error?: string; current?: { temp: number; code: number }; daily?: { date: string; code: number; tmin: number; tmax: number }[] }
+
+// Codes météo WMO → icône + libellé.
+function wmo(code: number): { icon: string; label: string } {
+  if (code === 0) return { icon: "☀️", label: "Ciel dégagé" };
+  if (code === 1) return { icon: "🌤️", label: "Plutôt ensoleillé" };
+  if (code === 2) return { icon: "⛅", label: "Partiellement nuageux" };
+  if (code === 3) return { icon: "☁️", label: "Couvert" };
+  if (code === 45 || code === 48) return { icon: "🌫️", label: "Brouillard" };
+  if (code >= 51 && code <= 57) return { icon: "🌦️", label: "Bruine" };
+  if (code >= 61 && code <= 67) return { icon: "🌧️", label: "Pluie" };
+  if (code >= 71 && code <= 77) return { icon: "🌨️", label: "Neige" };
+  if (code >= 80 && code <= 82) return { icon: "🌦️", label: "Averses" };
+  if (code >= 85 && code <= 86) return { icon: "🌨️", label: "Averses de neige" };
+  if (code >= 95) return { icon: "⛈️", label: "Orage" };
+  return { icon: "🌡️", label: "—" };
+}
+
+function weatherJoke(daily?: WeatherData["daily"]): string {
+  const rainy = (daily ?? []).some(d => (d.code >= 51 && d.code <= 67) || (d.code >= 80 && d.code <= 99));
+  const sunny = (daily ?? []).every(d => d.code <= 3);
+  if (rainy) return "☂️ Glissez un parapluie dans la voiture : on cale les visites entre deux averses — personne n'achète sous la drache !";
+  if (sunny) return "😎 Grand beau prévu : le soleil reste votre meilleur négociateur pour les visites de la semaine.";
+  return "🗓️ Un œil sur le ciel pour caler vos visites au bon moment — un bien se vend mieux sous un joli ciel !";
+}
+
+function weekdayShort(iso: string): string {
+  const d = new Date(iso + "T00:00:00");
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const diff = Math.round((+new Date(d.getFullYear(), d.getMonth(), d.getDate()) - +t) / 86_400_000);
+  if (diff === 0) return "Auj.";
+  if (diff === 1) return "Demain";
+  return DAYS[d.getDay()].slice(0, 3);
+}
+
+function WeatherBlock() {
+  const [w, setW] = useState<WeatherData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [cityInput, setCityInput] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const load = () => { setLoading(true); fetch("/api/weather").then(r => r.json()).then(d => setW(d)).catch(() => setW({ city: null, error: "indisponible" })).finally(() => setLoading(false)); };
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  async function saveCity() {
+    if (!cityInput.trim()) return;
+    setSaving(true);
+    await fetch("/api/me/city", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ city: cityInput.trim() }) }).catch(() => {});
+    setSaving(false); setCityInput(""); load();
+  }
+
+  // Demande de ville (profil non renseigné).
+  if (!loading && w?.needsCity) {
+    return (
+      <div style={{ ...weatherCard, marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: "#6b7280" }}>
+          🌦️ Indiquez votre ville pour afficher la météo et organiser vos visites.
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <input value={cityInput} onChange={e => setCityInput(e.target.value)} onKeyDown={e => e.key === "Enter" && saveCity()} placeholder="Votre ville (ex. Bordeaux)" style={{ flex: 1, height: 34, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 10px", fontSize: 13, outline: "none" }} />
+          <button onClick={saveCity} disabled={saving} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "0 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{saving ? "…" : "Valider"}</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading || !w || w.error || !w.current) {
+    return (
+      <div style={{ ...weatherCard, marginBottom: 16, color: "#9ca3af", fontSize: 12.5 }}>
+        {loading ? "Météo en cours de chargement…" : `Météo indisponible${w?.city ? ` pour ${w.city}` : ""}.`}
+      </div>
+    );
+  }
+
+  const cur = wmo(w.current.code);
+  return (
+    <div style={{ ...weatherCard, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+        {/* Actuel */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 200 }}>
+          <div style={{ fontSize: 40, lineHeight: 1 }}>{cur.icon}</div>
+          <div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: "#1C1A17", lineHeight: 1 }}>{w.current.temp}°</div>
+            <div style={{ fontSize: 12.5, color: "#6b7280", marginTop: 3 }}>{cur.label} · <b style={{ color: GOLD }}>{w.city}</b></div>
+          </div>
+        </div>
+
+        <div style={{ flex: 1 }} />
+
+        {/* Prévisions 3 jours */}
+        <div style={{ display: "flex", gap: 8 }}>
+          {(w.daily ?? []).map(d => {
+            const wi = wmo(d.code);
+            return (
+              <div key={d.date} style={{ textAlign: "center", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px", minWidth: 64 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" }}>{weekdayShort(d.date)}</div>
+                <div style={{ fontSize: 22, margin: "2px 0" }}>{wi.icon}</div>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: "#374151" }}>{d.tmax}°<span style={{ color: "#9ca3af", fontWeight: 500 }}> / {d.tmin}°</span></div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Blague « organisation des visites » */}
+      <div style={{ fontSize: 12, color: "#8A6D44", background: GOLD_BG, borderRadius: 8, padding: "8px 12px", marginTop: 12 }}>
+        {weatherJoke(w.daily)}
+      </div>
+    </div>
+  );
+}
+const weatherCard: React.CSSProperties = { background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, padding: "16px 20px" };
 
 // ─── Bandeau d'accueil « luxe » + citation inspirante ───────────────
 const SERIF = "'Playfair Display', Georgia, 'Times New Roman', serif";

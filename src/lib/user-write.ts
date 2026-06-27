@@ -8,6 +8,7 @@ const USER_COLUMNS: Record<string, string> = {
   avatar: "TEXT",
   lastLogin: "TIMESTAMP(3)",
   isEmployee: "BOOLEAN NOT NULL DEFAULT false",
+  city: "TEXT",
 };
 
 // Exécute une LECTURE sur users de façon résiliente : si une colonne récente
