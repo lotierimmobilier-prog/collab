@@ -45,6 +45,8 @@ export default function UsersAdmin() {
           accessOverrides: user.accessOverrides ?? null,
           gedAccess: user.gedAccess ?? null,
           parrainId: user.parrainId ?? null,
+          isEmployee: (user as { isEmployee?: boolean }).isEmployee ?? false,
+          city: (user as { city?: string | null }).city ?? null,
         }),
       });
       const data = await res.json();

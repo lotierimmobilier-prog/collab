@@ -694,34 +694,50 @@ function WeatherInline() {
   const [loading, setLoading] = useState(true);
   const [cityInput, setCityInput] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const load = () => { setLoading(true); fetch("/api/weather").then(r => r.json()).then(d => setW(d)).catch(() => setW({ city: null, error: "indisponible" })).finally(() => setLoading(false)); };
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
+  const currentCity = w?.city ?? null;
+
+  function startEdit() { setCityInput(currentCity ?? ""); setEditing(true); }
   async function saveCity() {
     if (!cityInput.trim()) return;
     setSaving(true);
-    await fetch("/api/me/city", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ city: cityInput.trim() }) }).catch(() => {});
-    setSaving(false); setCityInput(""); load();
+    const r = await fetch("/api/me/city", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ city: cityInput.trim() }) }).catch(() => null);
+    setSaving(false); setEditing(false);
+    if (r && r.ok) load();
   }
 
   const tile: React.CSSProperties = { textAlign: "center", background: "rgba(247,240,230,0.10)", border: "1px solid rgba(247,240,230,0.18)", borderRadius: 10, padding: "7px 10px", minWidth: 58 };
+  const editLink: React.CSSProperties = { background: "none", border: "none", color: "#D8B783", fontSize: 11, cursor: "pointer", padding: 0, textDecoration: "underline" };
 
-  // Profil sans ville → invite à la saisir (depuis le bandeau).
-  if (!loading && w?.needsCity) {
+  // Saisie / modification de la ville.
+  if (editing || (!loading && w?.needsCity)) {
     return (
       <div style={{ minWidth: 230, maxWidth: 320 }}>
-        <div style={{ fontSize: 12, color: "rgba(247,240,230,0.85)", marginBottom: 8 }}>🌦️ Votre ville pour afficher la météo et caler les visites :</div>
+        <div style={{ fontSize: 12, color: "rgba(247,240,230,0.85)", marginBottom: 8 }}>🌦️ {currentCity ? "Changer de ville pour la météo :" : "Votre ville pour afficher la météo et caler les visites :"}</div>
         <div style={{ display: "flex", gap: 6 }}>
-          <input value={cityInput} onChange={e => setCityInput(e.target.value)} onKeyDown={e => e.key === "Enter" && saveCity()} placeholder="ex. Bordeaux" style={{ flex: 1, height: 32, border: "1px solid rgba(247,240,230,0.3)", borderRadius: 8, padding: "0 10px", fontSize: 12.5, outline: "none", background: "rgba(247,240,230,0.12)", color: "#F7F0E6" }} />
+          <input value={cityInput} onChange={e => setCityInput(e.target.value)} onKeyDown={e => e.key === "Enter" && saveCity()} placeholder="ex. Bordeaux" autoFocus style={{ flex: 1, height: 32, border: "1px solid rgba(247,240,230,0.3)", borderRadius: 8, padding: "0 10px", fontSize: 12.5, outline: "none", background: "rgba(247,240,230,0.12)", color: "#F7F0E6" }} />
           <button onClick={saveCity} disabled={saving} style={{ background: "#D8B783", color: "#1C1A17", border: "none", borderRadius: 8, padding: "0 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{saving ? "…" : "OK"}</button>
+          {currentCity && <button onClick={() => setEditing(false)} style={{ background: "none", border: "1px solid rgba(247,240,230,0.3)", color: "rgba(247,240,230,0.8)", borderRadius: 8, padding: "0 10px", fontSize: 12.5, cursor: "pointer" }}>Annuler</button>}
         </div>
       </div>
     );
   }
 
-  if (loading || !w || w.error || !w.current) {
-    return <div style={{ fontSize: 12, color: "rgba(247,240,230,0.6)", minWidth: 180, textAlign: "right" }}>{loading ? "Météo…" : "Météo indisponible"}</div>;
+  if (loading) return <div style={{ fontSize: 12, color: "rgba(247,240,230,0.6)", minWidth: 180, textAlign: "right" }}>Météo…</div>;
+
+  // Ville renseignée mais météo indisponible → on affiche la ville + « changer ».
+  if (!w || w.error || !w.current) {
+    return (
+      <div style={{ minWidth: 180, textAlign: "right" }}>
+        <div style={{ fontSize: 12.5, color: "rgba(247,240,230,0.85)" }}>📍 <b style={{ color: "#D8B783" }}>{currentCity ?? "Ville non définie"}</b></div>
+        <div style={{ fontSize: 11, color: "rgba(247,240,230,0.55)", margin: "3px 0 6px" }}>Météo momentanément indisponible</div>
+        <button onClick={startEdit} style={editLink}>✎ changer de ville</button>
+      </div>
+    );
   }
 
   const cur = wmo(w.current.code);
@@ -750,8 +766,11 @@ function WeatherInline() {
         })}
       </div>
 
-      {/* Blague « organisation des visites » */}
-      <div style={{ fontSize: 10.5, color: "#D8B783", marginTop: 9, textAlign: "right", lineHeight: 1.4, maxWidth: 290, marginLeft: "auto" }}>{weatherJoke(w.daily)}</div>
+      {/* Blague « organisation des visites » + changer de ville */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, marginTop: 9 }}>
+        <span style={{ fontSize: 10.5, color: "#D8B783", textAlign: "right", lineHeight: 1.4, maxWidth: 250 }}>{weatherJoke(w.daily)}</span>
+        <button onClick={startEdit} style={editLink}>✎ ville</button>
+      </div>
     </div>
   );
 }
