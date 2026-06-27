@@ -994,3 +994,45 @@ model IcsTenant {
   @@index([nomProprietaire])
   @@map("ics_tenants")
 }
+
+/// Espace personnel — document administratif/légal de l'utilisateur
+/// (assurance pro, carte pro, attestation ALUR…). Fichier en base64.
+model PersonalDocument {
+  id             String    @id @default(cuid())
+  userId         String
+  kind           String    // assurance_pro | carte_pro | alur | rib | piece_identite | autre
+  label          String?
+  number         String?
+  issuer         String?
+  issuedAt       DateTime?
+  expiresAt      DateTime?
+  alurHours      Int?       // heures de formation ALUR
+  fileName       String?
+  mime           String?
+  size           Int?
+  data           String?    // fichier en base64
+  lastReminderAt DateTime?  // dernier rappel email d'expiration
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([userId])
+  @@map("personal_documents")
+}
+
+/// Drive personnel — arborescence dossiers/fichiers par utilisateur,
+/// stockée en base (fichiers en base64).
+model DriveItem {
+  id        String   @id @default(cuid())
+  userId    String
+  parentId  String?  // dossier parent (null = racine)
+  kind      String   // folder | file
+  name      String
+  mime      String?
+  size      Int?
+  data      String?  // fichier en base64 (null pour un dossier)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, parentId])
+  @@map("drive_items")
+}

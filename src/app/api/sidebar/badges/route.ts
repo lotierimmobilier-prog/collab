@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { docStatus, runDueLegalReminders } from "@/lib/legal-docs";
 
 // GET /api/sidebar/badges — pastilles du menu pour l'utilisateur courant :
-//   { mail: {count, urgent}, chat: {count, urgent} }
+//   { mail: {count, urgent}, chat: {count, urgent}, legal: {count, urgent} }
 // « urgent » = un élément non lu qui nécessite un traitement prioritaire.
 const URGENT_RE = /urgent|relance|mise en demeure|impay|sinistre|fuite|d[ée]g[âa]t|d[ée]lai|mise en demeure/i;
 
@@ -12,7 +13,10 @@ export async function GET() {
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   const uid = session.user.id;
 
-  const result = { mail: { count: 0, urgent: false }, chat: { count: 0, urgent: false } };
+  const result = { mail: { count: 0, urgent: false }, chat: { count: 0, urgent: false }, legal: { count: 0, urgent: false } };
+
+  // Balayage quotidien des rappels d'expiration (throttlé, sans bloquer).
+  void runDueLegalReminders();
 
   // ── Emails non lus (boîte de réception, cloisonné à l'utilisateur) ──
   try {
@@ -48,6 +52,19 @@ export async function GET() {
       result.chat.urgent = unread.some(m => URGENT_RE.test(m.content || ""));
     }
   } catch { /* tables chat absentes → 0 */ }
+
+  // ── Documents administratifs : carte pro / assurance / ALUR à renouveler ──
+  try {
+    const docs = await prisma.personalDocument.findMany({
+      where: { userId: uid, expiresAt: { not: null } },
+      select: { expiresAt: true },
+    });
+    const statuses = docs.map(d => docStatus(d.expiresAt));
+    const soon = statuses.filter(s => s === "soon").length;
+    const expired = statuses.filter(s => s === "expired").length;
+    result.legal.count = soon + expired;
+    result.legal.urgent = expired > 0; // rouge dès qu'un document est expiré
+  } catch { /* table absente → 0 */ }
 
   return NextResponse.json(result);
 }
