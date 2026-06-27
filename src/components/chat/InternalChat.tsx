@@ -18,6 +18,7 @@ interface Attachment { name: string; size: number; mime?: string; data: string }
 interface Message {
   id: string; channelId: string; content: string; createdAt: string;
   sender: Member; isMe: boolean; attachments?: Attachment[];
+  readBy?: string[];   // ids des utilisateurs ayant lu (accusés « Vu »)
 }
 
 const MAX_ATTACH_BYTES = 20 * 1024 * 1024; // 20 Mo
@@ -176,6 +177,29 @@ export default function InternalChat() {
     return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
   };
 
+  // Accusé de lecture façon WhatsApp pour mes propres messages.
+  // ✓ = envoyé · ✓✓ doré = lu par le(s) destinataire(s).
+  const myId = session?.user?.id;
+  function readReceipt(msg: Message): { read: boolean; label: string; title: string } | null {
+    if (!msg.isMe || !activeChannel) return null;
+    const recipients = activeChannel.members.filter(m => m.id !== myId);
+    if (recipients.length === 0) return null;
+    const readBy = msg.readBy ?? [];
+    const readers = recipients.filter(m => readBy.includes(m.id));
+    const allRead = readers.length === recipients.length;
+    if (activeChannel.isDirect) {
+      return allRead
+        ? { read: true,  label: "Vu",     title: "Vu" }
+        : { read: false, label: "Envoyé", title: "Envoyé — pas encore lu" };
+    }
+    if (readers.length === 0) return { read: false, label: "Envoyé", title: "Envoyé — pas encore lu" };
+    return {
+      read: allRead,
+      label: allRead ? "Vu par tous" : `Vu ${readers.length}/${recipients.length}`,
+      title: "Vu par : " + readers.map(r => `${r.prenom} ${r.nom}`).join(", "),
+    };
+  }
+
   const directChannels = channels.filter(c => c.isDirect);
   const groupChannels  = channels.filter(c => !c.isDirect);
 
@@ -292,9 +316,21 @@ export default function InternalChat() {
                       })}
                     </div>
                   )}
-                  {msg.isMe && showSender && (
-                    <span style={{ fontSize: 10, color: "#9ca3af", marginTop: 2 }}>{formatTime(msg.createdAt)}</span>
-                  )}
+                  {msg.isMe && (() => {
+                    const rc = readReceipt(msg);
+                    const isLastMine = i === messages.length - 1;
+                    return (
+                      <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "#9ca3af", marginTop: 2 }}>
+                        {showSender && <span>{formatTime(msg.createdAt)}</span>}
+                        {rc && (
+                          <span title={rc.title} style={{ display: "inline-flex", alignItems: "center", gap: 3, color: rc.read ? GOLD : "#9ca3af", fontWeight: rc.read ? 700 : 400 }}>
+                            <span style={{ letterSpacing: "-3px", fontSize: 11 }}>{rc.read ? "✓✓" : "✓"}</span>
+                            {isLastMine && <span style={{ letterSpacing: 0 }}>{rc.label}</span>}
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })()}
                 </div>
               );
             })}

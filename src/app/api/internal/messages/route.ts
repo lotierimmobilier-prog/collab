@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
     createdAt: m.createdAt.toISOString(),
     sender: m.sender,
     isMe: m.senderId === session.user!.id,
+    readBy: m.readBy ?? [],   // accusés de lecture (« Vu »)
   })));
 }
 
@@ -138,5 +139,6 @@ export async function POST(req: NextRequest) {
     createdAt: message.createdAt.toISOString(),
     sender: message.sender,
     isMe: true,
+    readBy: message.readBy ?? [session.user.id],
   }, { status: 201 });
 }

@@ -19,8 +19,13 @@ interface NotifyOpts {
 }
 
 // Envoi best-effort : n'échoue jamais l'appelant (notification accessoire).
+// Les raisons d'échec sont journalisées (logs serveur) pour faciliter le
+// diagnostic — ex. « pourquoi tel agent n'a pas reçu l'email ».
 export async function sendNotificationEmail({ to, subject, heading, message, ctaLabel, ctaPath }: NotifyOpts): Promise<void> {
-  if (!to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return;
+  if (!to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+    console.warn(`[notify-mail] destinataire invalide ou absent : "${to}" (sujet : ${subject})`);
+    return;
+  }
   const url = emailBaseUrl() + (ctaPath.startsWith("/") ? ctaPath : `/${ctaPath}`);
   const esc = (s: string) => (s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const content = `
@@ -31,8 +36,11 @@ export async function sendNotificationEmail({ to, subject, heading, message, cta
     </p>
     <p style="margin:14px 0 0;color:#9b8e79;font-size:11px;">Vous recevez cet email car une activité vous concerne sur Collab — Lotier Immobilier.</p>`;
   try {
-    await sendMail({ to, subject, html: renderBrandedEmail({ subject, contentHtml: content, preheader: message }) });
-  } catch { /* notification accessoire : on n'échoue jamais l'appelant */ }
+    const ok = await sendMail({ to, subject, html: renderBrandedEmail({ subject, contentHtml: content, preheader: message }) });
+    if (!ok) console.warn(`[notify-mail] non envoyé à ${to} : compte SMTP de notifications désactivé ou non configuré (Administration → Configuration SMTP).`);
+  } catch (e) {
+    console.warn(`[notify-mail] échec d'envoi à ${to} :`, e instanceof Error ? e.message : String(e));
+  }
 }
 
 // Récupère l'email d'un utilisateur (best-effort).
