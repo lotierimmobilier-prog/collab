@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
   // bloque pas la réponse sur l'envoi SMTP (sinon le message « met du temps à
   // partir »). Le serveur étant persistant, la promesse se termine après coup.
   if (others.length) {
-    void (async () => {
+    after(async () => {
       try {
         const recipients = await prisma.user.findMany({
           where: { id: { in: others.map((o: { userId: string }) => o.userId) }, active: true },
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
           ctaPath: `/messagerie-interne?channel=${channelId}`,
         })));
       } catch (e) { console.warn("[notify-mail] envoi message interne échoué :", e instanceof Error ? e.message : String(e)); }
-    })();
+    });
   }
 
   return NextResponse.json({
