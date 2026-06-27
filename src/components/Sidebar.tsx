@@ -118,8 +118,8 @@ export default function Sidebar({ active }: { active: string }) {
     setAdminOpen(o => { localStorage.setItem("sidebar_admin_open", String(!o)); return !o; });
   }
 
-  /* ── MOBILE : bottom nav ───────────────────────────────────── */
-  if (bp === "mobile") {
+  /* ── MOBILE & TABLETTE : bottom nav ────────────────────────── */
+  if (bp === "mobile" || bp === "tablet") {
     return (
       <>
         {/* Overlay menu mobile */}
@@ -231,9 +231,8 @@ export default function Sidebar({ active }: { active: string }) {
     );
   }
 
-  /* ── TABLET / DESKTOP : sidebar classique ──────────────────── */
-  const forceCollapsed = bp === "tablet";
-  const isCollapsed    = forceCollapsed || (mounted && collapsed);
+  /* ── DESKTOP : sidebar classique (mobile & tablette → bottom nav) ── */
+  const isCollapsed    = mounted && collapsed;
   const w              = isCollapsed ? COLLAPSED_W : EXPANDED_W;
 
   return (
@@ -257,7 +256,7 @@ export default function Sidebar({ active }: { active: string }) {
             <span style={{ fontSize: 18, color: GOLD }}>⊟</span>
           </Link>
         )}
-        {!forceCollapsed && (
+        {(
           <button onClick={toggle} title={isCollapsed ? "Agrandir" : "Réduire"}
             style={{ background: "none", border: "none", cursor: "pointer", color: LABEL_COLOR, fontSize: 14, padding: "4px 6px", lineHeight: 1, borderRadius: 6, flexShrink: 0 }}
             onMouseEnter={e => (e.currentTarget.style.background = GOLD_BG)}
