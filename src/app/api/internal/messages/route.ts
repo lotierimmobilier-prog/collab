@@ -115,20 +115,26 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Notification par email à chaque autre membre (best-effort).
+  // Notification par email à chaque autre membre — EN TÂCHE DE FOND : on ne
+  // bloque pas la réponse sur l'envoi SMTP (sinon le message « met du temps à
+  // partir »). Le serveur étant persistant, la promesse se termine après coup.
   if (others.length) {
-    const recipients = await prisma.user.findMany({
-      where: { id: { in: others.map((o: { userId: string }) => o.userId) }, active: true },
-      select: { email: true },
-    });
-    await Promise.all(recipients.map((r: { email: string }) => sendNotificationEmail({
-      to: r.email,
-      subject: `Nouveau message de ${senderName || "votre équipe"}`,
-      heading: `Nouveau message de ${senderName || "votre équipe"}`,
-      message: `« ${preview} »`,
-      ctaLabel: "Voir la conversation",
-      ctaPath: `/messagerie-interne?channel=${channelId}`,
-    })));
+    void (async () => {
+      try {
+        const recipients = await prisma.user.findMany({
+          where: { id: { in: others.map((o: { userId: string }) => o.userId) }, active: true },
+          select: { email: true },
+        });
+        await Promise.allSettled(recipients.map((r: { email: string }) => sendNotificationEmail({
+          to: r.email,
+          subject: `Nouveau message de ${senderName || "votre équipe"}`,
+          heading: `Nouveau message de ${senderName || "votre équipe"}`,
+          message: `« ${preview} »`,
+          ctaLabel: "Voir la conversation",
+          ctaPath: `/messagerie-interne?channel=${channelId}`,
+        })));
+      } catch (e) { console.warn("[notify-mail] envoi message interne échoué :", e instanceof Error ? e.message : String(e)); }
+    })();
   }
 
   return NextResponse.json({

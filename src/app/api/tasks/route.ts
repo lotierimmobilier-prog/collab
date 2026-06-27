@@ -103,19 +103,23 @@ export async function POST(req: NextRequest) {
         link: "/taches",
       },
     });
-    // Notification par email à l'agent assigné (best-effort).
-    const u = await userEmail(assigneeId);
-    if (u) {
-      const echeance = dueDate ? `\nÉchéance : ${new Date(dueDate).toLocaleDateString("fr-FR")}` : "";
-      await sendNotificationEmail({
-        to: u.email,
-        subject: `Nouvelle tâche : ${title.trim()}`,
-        heading: "Une tâche vous a été attribuée",
-        message: `${title.trim()}${description ? `\n\n${description}` : ""}\n\nPriorité : ${priority || "moyenne"}${echeance}`,
-        ctaLabel: "Voir la tâche",
-        ctaPath: "/taches",
-      });
-    }
+    // Notification par email à l'agent assigné — EN TÂCHE DE FOND (ne bloque
+    // pas la réponse sur l'envoi SMTP).
+    void (async () => {
+      try {
+        const u = await userEmail(assigneeId);
+        if (!u) return;
+        const echeance = dueDate ? `\nÉchéance : ${new Date(dueDate).toLocaleDateString("fr-FR")}` : "";
+        await sendNotificationEmail({
+          to: u.email,
+          subject: `Nouvelle tâche : ${title.trim()}`,
+          heading: "Une tâche vous a été attribuée",
+          message: `${title.trim()}${description ? `\n\n${description}` : ""}\n\nPriorité : ${priority || "moyenne"}${echeance}`,
+          ctaLabel: "Voir la tâche",
+          ctaPath: "/taches",
+        });
+      } catch (e) { console.warn("[notify-mail] envoi tâche échoué :", e instanceof Error ? e.message : String(e)); }
+    })();
   }
 
   return NextResponse.json(formatTask(task), { status: 201 });
