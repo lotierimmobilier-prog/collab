@@ -626,29 +626,112 @@ export default function Dashboard() {
   const currentUserId = (session?.user as { id?: string })?.id;
   const refreshKey = useAutoRefresh();
 
+  const [dash, setDash] = useState<{ kpis: { label: string; value: string; sub?: string }[]; blocks: string[] } | null>(null);
+  const [showCustom, setShowCustom] = useState(false);
+  const loadDash = () => fetch("/api/dashboard/stats").then(r => r.ok ? r.json() : null).then(d => { if (d) setDash(d); }).catch(() => {});
+  useEffect(() => { loadDash(); }, [refreshKey]);
+
+  const blocks = dash?.blocks ?? ["ranking", "mails", "tasks", "agenda", "calls", "notes"];
+  const show = (id: string) => blocks.includes(id);
+  const gridBlocks = (["mails", "tasks", "agenda", "calls"] as const).filter(show);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-      {/* Bannière d'accueil — citation à gauche + météo à droite */}
-      <Banner firstName={firstName} />
+      {/* Bannière d'accueil — citation + météo + indicateurs */}
+      <Banner firstName={firstName} kpis={dash?.kpis ?? []} onCustomize={() => setShowCustom(true)} />
 
       {/* Classement du trimestre — pleine largeur */}
-      <div style={{ marginBottom: 16 }}>
-        <RankingBlock refreshKey={refreshKey} currentUserId={currentUserId} />
-      </div>
+      {show("ranking") && (
+        <div style={{ marginBottom: 16 }}>
+          <RankingBlock refreshKey={refreshKey} currentUserId={currentUserId} />
+        </div>
+      )}
 
-      {/* Grille 2×2 — mails remontés sur la première ligne */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <MailsBlock refreshKey={refreshKey} />
-        <TasksBlock refreshKey={refreshKey} />
-        <AgendaBlock refreshKey={refreshKey} />
-        <CallsBlock refreshKey={refreshKey} />
-      </div>
+      {/* Grille des blocs sélectionnés */}
+      {gridBlocks.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          {gridBlocks.map(id => (
+            <div key={id}>
+              {id === "mails" && <MailsBlock refreshKey={refreshKey} />}
+              {id === "tasks" && <TasksBlock refreshKey={refreshKey} />}
+              {id === "agenda" && <AgendaBlock refreshKey={refreshKey} />}
+              {id === "calls" && <CallsBlock refreshKey={refreshKey} />}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Notes — pleine largeur en bas */}
-      <div style={{ marginTop: 16 }}>
-        <NotesBlock refreshKey={refreshKey} />
-      </div>
+      {show("notes") && (
+        <div style={{ marginTop: 16 }}>
+          <NotesBlock refreshKey={refreshKey} />
+        </div>
+      )}
+
+      {showCustom && <CustomizePanel onClose={() => setShowCustom(false)} onSaved={() => { setShowCustom(false); loadDash(); }} />}
     </div>
+  );
+}
+
+// ─── Personnalisation du tableau de bord ────────────────────────────
+function CustomizePanel({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [kpis, setKpis] = useState<string[]>([]);
+  const [blocks, setBlocks] = useState<string[]>([]);
+  const [avKpis, setAvKpis] = useState<{ id: string; label: string }[]>([]);
+  const [avBlocks, setAvBlocks] = useState<{ id: string; label: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/me/dashboard-prefs").then(r => r.ok ? r.json() : null).then(d => {
+      if (d) { setKpis(d.kpis ?? []); setBlocks(d.blocks ?? []); setAvKpis(d.availableKpis ?? []); setAvBlocks(d.availableBlocks ?? []); }
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const toggleKpi = (id: string) => setKpis(p => p.includes(id) ? p.filter(x => x !== id) : (p.length >= 4 ? p : [...p, id]));
+  const toggleBlock = (id: string) => setBlocks(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+
+  async function save() {
+    setSaving(true);
+    await fetch("/api/me/dashboard-prefs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kpis, blocks }) }).catch(() => {});
+    setSaving(false); onSaved();
+  }
+
+  const row = (checked: boolean, label: string, onClick: () => void, dim?: boolean): React.ReactNode => (
+    <label onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 8, cursor: dim ? "not-allowed" : "pointer", background: checked ? GOLD_BG : "#fff", border: `1px solid ${checked ? GOLD : BORDER}`, opacity: dim ? 0.5 : 1 }}>
+      <span style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${checked ? GOLD : "#cbd5e1"}`, background: checked ? GOLD : "#fff", color: "#fff", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>{checked ? "✓" : ""}</span>
+      <span style={{ fontSize: 13, color: DARK }}>{label}</span>
+    </label>
+  );
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 60 }} />
+      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 520, maxWidth: "94vw", maxHeight: "88vh", overflow: "auto", background: "#fff", borderRadius: 14, zIndex: 61, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+        <div style={{ padding: "14px 18px", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontWeight: 700, fontSize: 15, color: DARK }}>⚙ Personnaliser mon tableau de bord</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>×</button>
+        </div>
+        {loading ? <div style={{ padding: 30, textAlign: "center", color: "#9ca3af" }}>Chargement…</div> : (
+          <div style={{ padding: 18 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Indicateurs (max 4) · {kpis.length}/4</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
+              {avKpis.map(k => row(kpis.includes(k.id), k.label, () => toggleKpi(k.id), !kpis.includes(k.id) && kpis.length >= 4))}
+            </div>
+
+            <div style={{ fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Blocs affichés</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {avBlocks.map(b => row(blocks.includes(b.id), b.label, () => toggleBlock(b.id)))}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 22 }}>
+              <button onClick={onClose} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 16px", fontSize: 13, cursor: "pointer" }}>Annuler</button>
+              <button onClick={save} disabled={saving} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{saving ? "Enregistrement…" : "Enregistrer"}</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -895,25 +978,18 @@ function weatherHint(code: number): string {
   return "bonne journée à vous";
 }
 
-interface DashStats { kpis: { label: string; value: string; sub?: string }[] }
-
-function Banner({ firstName }: { firstName: string }) {
+function Banner({ firstName, kpis, onCustomize }: { firstName: string; kpis: { label: string; value: string; sub?: string }[]; onCustomize: () => void }) {
   // Citation différente à chaque ouverture de page (après montage, pour éviter
   // toute incohérence d'hydratation SSR).
   const [i, setI] = useState(0);
   const [wx, setWx] = useState<{ temp: number; code: number; city: string } | null>(null);
-  const [stats, setStats] = useState<DashStats | null>(null);
   useEffect(() => { setI(Math.floor(Math.random() * QUOTES.length)); }, []);
   useEffect(() => {
     fetch("/api/weather").then(r => r.ok ? r.json() : null).then(d => {
       if (d?.current && d?.city) setWx({ temp: d.current.temp, code: d.current.code, city: d.city });
     }).catch(() => {});
-    // Indicateurs adaptés au rôle (sélectionnés côté serveur).
-    fetch("/api/dashboard/stats").then(r => r.ok ? r.json() : null).then(d => { if (Array.isArray(d?.kpis)) setStats(d); }).catch(() => {});
   }, []);
   const q = QUOTES[i];
-
-  const kpis = stats?.kpis ?? [];
 
   return (
     <div style={{
@@ -924,7 +1000,10 @@ function Banner({ firstName }: { firstName: string }) {
       <div style={{ position: "relative", display: "flex", alignItems: "stretch", justifyContent: "space-between", gap: 28, flexWrap: "wrap" }}>
         {/* Accueil + météo locale + stats + citation */}
         <div style={{ flex: "1 1 380px", minWidth: 300, display: "flex", flexDirection: "column" }}>
-          <div style={{ fontSize: 10.5, letterSpacing: "0.2em", textTransform: "uppercase", color: GOLD }}>{todayStr()}</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ fontSize: 10.5, letterSpacing: "0.2em", textTransform: "uppercase", color: GOLD }}>{todayStr()}</div>
+            <button onClick={onCustomize} title="Personnaliser mon tableau de bord" style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, color: GOLD, fontWeight: 600, cursor: "pointer" }}>⚙ Personnaliser</button>
+          </div>
           <div style={{ fontFamily: SERIF, fontSize: 30, fontWeight: 600, marginTop: 7, color: DARK }}>{greet(firstName)}</div>
 
           {/* Message de bienvenue adapté à la météo locale */}
