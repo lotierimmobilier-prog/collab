@@ -754,13 +754,29 @@ export default function MailBoard() {
 
       {/* MAIN */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        {/* Barre mobile : ouvre le tiroir des dossiers/comptes */}
-        {isMobile && (
-          <div style={{ flexShrink: 0, background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "6px 10px", display: "flex", alignItems: "center", gap: 8 }}>
-            <button onClick={() => setSidebarOpen(true)} style={{ background: "#F7F0E6", border: "1px solid #E8D9C0", borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 600, color: "#B8966A", cursor: "pointer" }}>☰ Dossiers</button>
-            <button onClick={() => setShowCompose(true)} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✏ Nouveau</button>
-          </div>
-        )}
+        {/* Barre mobile : ouvre le tiroir des dossiers/comptes + pagination */}
+        {isMobile && (() => {
+          const totalPages = Math.max(1, Math.ceil(visibleThreads.length / 15));
+          const safePage = Math.min(listPage, totalPages);
+          return (
+            <div style={{ flexShrink: 0, background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "6px 10px", display: "flex", alignItems: "center", gap: 8 }}>
+              <button onClick={() => setSidebarOpen(true)} style={{ background: "#F7F0E6", border: "1px solid #E8D9C0", borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 600, color: "#B8966A", cursor: "pointer", flexShrink: 0 }}>☰ Dossiers</button>
+              <button onClick={() => setShowCompose(true)} style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>✏ Nouveau</button>
+              {/* Sélecteur de page — toujours visible (la pagination du bas est hors écran sur mobile) */}
+              {totalPages > 1 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 3, marginLeft: "auto", overflowX: "auto", maxWidth: "52%", paddingBottom: 1 }}>
+                  <button onClick={() => { setListPage(Math.max(1, safePage - 1)); setSelectedThread(null); }} disabled={safePage <= 1}
+                    style={mPageBtn(false, safePage <= 1)}>‹</button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                    <button key={p} onClick={() => { setListPage(p); setSelectedThread(null); }} style={mPageBtn(p === safePage, false)}>{p}</button>
+                  ))}
+                  <button onClick={() => { setListPage(Math.min(totalPages, safePage + 1)); setSelectedThread(null); }} disabled={safePage >= totalPages}
+                    style={mPageBtn(false, safePage >= totalPages)}>›</button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {/* Bandeau statut sync / recherche */}
         {(syncStatus || (search && searchResults !== null)) && (
           <div style={{ background: syncing ? "#eff6ff" : syncStatus.startsWith("Erreur") ? "#fef2f2" : search ? "#F7F0E6" : "#f0fdf4", borderBottom: "1px solid #e5e7eb", padding: "7px 16px", fontSize: 12, color: syncing ? "#1e40af" : syncStatus.startsWith("Erreur") ? "#991b1b" : search ? "#92400e" : "#166534", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -919,6 +935,18 @@ function Badge({ children }: { children: React.ReactNode }) {
   return <span style={{ background: "#B8966A", color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 10 }}>{children}</span>;
 }
 function labelIcon(id: string) { return { inbox: "📥", sent: "📤", drafts: "📝", starred: "⭐", pub: "📣", trash: "🗑" }[id] ?? "📧"; }
+
+// Bouton de pagination compact (barre mobile de la messagerie).
+function mPageBtn(active: boolean, disabled: boolean): React.CSSProperties {
+  return {
+    minWidth: 26, height: 26, padding: "0 6px", flexShrink: 0,
+    border: `1px solid ${active ? "#B8966A" : "#e5e7eb"}`,
+    background: active ? "#B8966A" : "#fff",
+    color: active ? "#fff" : disabled ? "#d1d5db" : "#374151",
+    borderRadius: 6, fontSize: 12, fontWeight: active ? 700 : 500,
+    cursor: disabled ? "default" : "pointer",
+  };
+}
 function GIcon() {
   return (
     <svg width={14} height={14} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
