@@ -273,7 +273,12 @@ function AgendaBlock({ refreshKey }: { refreshKey: number }) {
   // On récupère TOUT l'agenda (comme la page Planning) puis on filtre la semaine
   // côté client : le tableau de bord affiche exactement les mêmes événements.
   useEffect(() => {
-    fetch(`/api/calendar`).then(r => r.json()).then(d => setAllEvents(Array.isArray(d) ? d : [])).catch(() => setAllEvents([])).finally(() => setLoading(false));
+    let alive = true;
+    const load = () => fetch(`/api/calendar`).then(r => r.json()).then(d => { if (alive) setAllEvents(Array.isArray(d) ? d : []); }).catch(() => { if (alive) setAllEvents([]); }).finally(() => { if (alive) setLoading(false); });
+    load();
+    // Affichage « temps réel » : rafraîchit l'agenda (dont Google) toutes les 2 min.
+    const t = setInterval(load, 120_000);
+    return () => { alive = false; clearInterval(t); };
   }, [refreshKey]);
 
   const now = new Date();

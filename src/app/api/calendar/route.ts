@@ -33,13 +33,31 @@ export async function GET(req: NextRequest) {
     return att.some(a => (a.type === "user" && a.id === uid) || (!!a.email && a.email.toLowerCase() === myEmail));
   });
 
-  return NextResponse.json(events.map(e => ({
+  const internal = events.map(e => ({
     ...e,
     start: e.start.toISOString(),
     end:   e.end.toISOString(),
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
-  })));
+  }));
+
+  // Fusion de l'agenda Google connecté (permanent, côté serveur) sur la même
+  // fenêtre → le planning ET le tableau de bord l'affichent sans reconnexion.
+  let google: unknown[] = [];
+  try {
+    const { getGoogleEvents } = await import("@/lib/googleCalendarServer");
+    const gMin = from ? new Date(from).toISOString() : new Date(Date.now() - 60 * 86400_000).toISOString();
+    const gMax = to   ? new Date(to).toISOString()   : new Date(Date.now() + 180 * 86400_000).toISOString();
+    const evs = await getGoogleEvents(uid, gMin, gMax);
+    google = evs.map(e => ({
+      id: e.id, title: e.title, start: e.start, end: e.end, color: e.color,
+      description: e.description ?? null, location: e.location ?? null,
+      type: "google", source: "google", htmlLink: e.htmlLink ?? null,
+      allDay: !e.start.includes("T"), attendees: null, createdBy: uid,
+    }));
+  } catch { /* Google non configuré / non connecté → ignore */ }
+
+  return NextResponse.json([...internal, ...google]);
 }
 
 export async function POST(req: NextRequest) {
