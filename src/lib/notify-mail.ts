@@ -29,12 +29,11 @@ export async function sendNotificationEmail({ to, subject, heading, message, cta
   const url = emailBaseUrl() + (ctaPath.startsWith("/") ? ctaPath : `/${ctaPath}`);
   const esc = (s: string) => (s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const content = `
-    <h2 style="margin:0 0 12px;color:${DARK};font-size:18px;">${esc(heading)}</h2>
-    <p style="margin:0 0 18px;color:#3f3a33;font-size:14px;line-height:1.7;">${esc(message).replace(/\n/g, "<br/>")}</p>
-    <p style="margin:0 0 4px;">
-      <a href="${url}" style="display:inline-block;background:${GOLD};color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-weight:bold;font-size:14px;">${esc(ctaLabel)}</a>
-    </p>
-    <p style="margin:14px 0 0;color:#9b8e79;font-size:11px;">Vous recevez cet email car une activité vous concerne sur Collab — Lotier Immobilier.</p>`;
+    <h2 style="margin:0 0 14px;color:${DARK};font-size:16px;font-weight:bold;">${esc(heading)}</h2>
+    <p style="margin:0 0 20px;color:#3f3a33;font-size:14px;line-height:1.6;">${esc(message).replace(/\n/g, "<br/>")}</p>
+    <p style="margin:0;">
+      <a href="${url}" style="display:inline-block;background:${GOLD};color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;font-size:14px;">${esc(ctaLabel)}</a>
+    </p>`;
   try {
     const ok = await sendMail({ to, subject, html: renderBrandedEmail({ subject, contentHtml: content, preheader: message }) });
     if (!ok) console.warn(`[notify-mail] non envoyé à ${to} : compte SMTP de notifications désactivé ou non configuré (Administration → Configuration SMTP).`);
