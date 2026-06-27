@@ -36,6 +36,7 @@ const nav: NavItem[] = [
   { id: "procedures",label: "Procédures",           icon: "📚", href: "/procedures",         group: "Agence" },
   { id: "espace",    label: "Mon espace",           icon: "🗂", href: "/mon-espace",         group: "Personnel" },
   { id: "echeances", label: "Échéances",            icon: "⏰", href: "/echeances",          group: "Personnel" },
+  { id: "rh",        label: "Congés & heures",      icon: "💼", href: "/rh",                 group: "Personnel" },
 ];
 
 const directionNav = [
