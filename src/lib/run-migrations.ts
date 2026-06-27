@@ -71,6 +71,8 @@ export async function runMigrations(): Promise<MigrationReport> {
     report.columns = {
       "users.parrainId": await columnExists("users", "parrainId"),
       "users.gedAccess": await columnExists("users", "gedAccess"),
+      "users.city": await columnExists("users", "city"),
+      "users.isEmployee": await columnExists("users", "isEmployee"),
       "competence_validations.quiz": await columnExists("competence_validations", "quiz"),
     };
     report.tables = {
@@ -78,6 +80,9 @@ export async function runMigrations(): Promise<MigrationReport> {
       training_competences: await tableExists("training_competences"),
       competence_validations: await tableExists("competence_validations"),
       training_questions: await tableExists("training_questions"),
+      mail_uploads: await tableExists("mail_uploads"),
+      google_calendar_accounts: await tableExists("google_calendar_accounts"),
+      employee_documents: await tableExists("employee_documents"),
     };
   } catch (e) {
     report.error = e instanceof Error ? e.message : String(e);

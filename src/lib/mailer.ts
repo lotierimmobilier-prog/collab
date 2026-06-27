@@ -23,11 +23,21 @@ export async function sendMail({ to, subject, html, attachments }: { to: string;
   const cfg = await getMailSettings();
   if (!cfg.enabled || !cfg.pass) return false;
 
+  // Port 465 = TLS implicite (secure). 587/25 = STARTTLS (secure:false +
+  // requireTLS). tls.rejectUnauthorized:false tolère les certificats
+  // mutualisés ; timeouts pour éviter les blocages (« Greeting never received »).
+  const port = cfg.port;
+  const isDirectSsl = port === 465;
   const transporter = nodemailer.createTransport({
     host: cfg.host,
-    port: cfg.port,
-    secure: cfg.port === 465,
+    port,
+    secure: isDirectSsl,
+    requireTLS: !isDirectSsl && port !== 25,
     auth: { user: cfg.user, pass: cfg.pass },
+    tls: { rejectUnauthorized: false },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
   });
 
   await transporter.sendMail({ from: cfg.from, to, subject, html, ...(attachments?.length ? { attachments } : {}) });
