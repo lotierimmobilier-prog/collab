@@ -30,19 +30,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ...(body.insurer         !== undefined && { insurer: body.insurer || null }),
       ...(body.insurancePolicy !== undefined && { insurancePolicy: body.insurancePolicy || null }),
       ...(body.insuranceExpiry !== undefined && { insuranceExpiry: body.insuranceExpiry ? new Date(body.insuranceExpiry) : null }),
-      ...(body.insuranceDoc    !== undefined && { insuranceDoc: body.insuranceDoc?.data ? {
+      ...(body.insuranceDoc?.data && { insuranceDoc: {
         name: String(body.insuranceDoc.name || "attestation").slice(0, 200),
         mime: body.insuranceDoc.mime ? String(body.insuranceDoc.mime) : null,
         size: body.insuranceDoc.size ? Number(body.insuranceDoc.size) : null,
         data: String(body.insuranceDoc.data),
-      } : (body.insuranceDoc === null ? null : undefined) }),
+      } }),
       ...(body.urssafExpiry !== undefined && { urssafExpiry: body.urssafExpiry ? new Date(body.urssafExpiry) : null }),
-      ...(body.urssafDoc    !== undefined && { urssafDoc: body.urssafDoc?.data ? {
+      ...(body.urssafDoc?.data && { urssafDoc: {
         name: String(body.urssafDoc.name || "attestation-urssaf").slice(0, 200),
         mime: body.urssafDoc.mime ? String(body.urssafDoc.mime) : null,
         size: body.urssafDoc.size ? Number(body.urssafDoc.size) : null,
         data: String(body.urssafDoc.data),
-      } : (body.urssafDoc === null ? null : undefined) }),
+      } }),
     },
   });
 
