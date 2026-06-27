@@ -33,6 +33,7 @@ const nav: NavItem[] = [
   { id: "ods",       label: "Ordres de service",    icon: "📋", href: "/ordres-de-service",  group: "Gestion" },
   { id: "formation", label: "Formation",            icon: "◈",  href: "/formation",          group: "Agence" },
   { id: "reseaux",   label: "Réseaux sociaux",      icon: "⌘",  href: "/reseaux-sociaux",   group: "Agence" },
+  { id: "espace",    label: "Mon espace",           icon: "🗂", href: "/mon-espace",         group: "Personnel" },
 ];
 
 const directionNav = [
@@ -55,7 +56,7 @@ const adminNav = [
   { id: "admin-auguste-logs", label: "Historique Auguste", icon: "🕘", href: "/admin/auguste-historique" },
 ];
 
-const groups = ["Principal", "Gestion", "Agence"];
+const groups = ["Principal", "Gestion", "Agence", "Personnel"];
 
 /* 6 raccourcis bottom nav mobile */
 const MOBILE_NAV = [
@@ -78,7 +79,7 @@ export default function Sidebar({ active }: { active: string }) {
   const adminActive = active.startsWith("admin");
   const [directionOpen, setDirectionOpen] = useState(true);
   const [adminOpen, setAdminOpen] = useState(true);
-  const [badges, setBadges] = useState<{ mail: { count: number; urgent: boolean }; chat: { count: number; urgent: boolean } } | null>(null);
+  const [badges, setBadges] = useState<{ mail: { count: number; urgent: boolean }; chat: { count: number; urgent: boolean }; legal?: { count: number; urgent: boolean } } | null>(null);
 
   // Pastilles du menu (messages non lus / alertes urgentes), rafraîchies périodiquement.
   useEffect(() => {
@@ -91,7 +92,7 @@ export default function Sidebar({ active }: { active: string }) {
 
   // Type de pastille pour un item : "urgent" (rouge), "normal" (doré), ou null.
   function navDot(id: string): "urgent" | "normal" | null {
-    const b = id === "mail" ? badges?.mail : id === "chat" ? badges?.chat : null;
+    const b = id === "mail" ? badges?.mail : id === "chat" ? badges?.chat : id === "espace" ? badges?.legal : null;
     if (!b || !b.count) return null;
     return b.urgent ? "urgent" : "normal";
   }
