@@ -1031,6 +1031,26 @@ model PersonalDocument {
   @@map("personal_documents")
 }
 
+/// Procédure d'entreprise (visible par tous, gérée par l'admin) : document
+/// PDF / vidéo téléversé (base64) ou lien externe (YouTube/Vimeo).
+model Procedure {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  category    String?
+  kind        String   @default("pdf") // pdf | video | link
+  fileName    String?
+  mime        String?
+  size        Int?
+  data        String?  // fichier en base64 (PDF ou vidéo téléversée)
+  url         String?  // lien externe (vidéo hébergée)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("procedures")
+}
+
 /// Drive personnel — arborescence dossiers/fichiers par utilisateur,
 /// stockée en base (fichiers en base64).
 model DriveItem {

@@ -33,6 +33,7 @@ const nav: NavItem[] = [
   { id: "ods",       label: "Ordres de service",    icon: "📋", href: "/ordres-de-service",  group: "Gestion" },
   { id: "formation", label: "Formation",            icon: "◈",  href: "/formation",          group: "Agence" },
   { id: "reseaux",   label: "Réseaux sociaux",      icon: "⌘",  href: "/reseaux-sociaux",   group: "Agence" },
+  { id: "procedures",label: "Procédures",           icon: "📚", href: "/procedures",         group: "Agence" },
   { id: "espace",    label: "Mon espace",           icon: "🗂", href: "/mon-espace",         group: "Personnel" },
   { id: "echeances", label: "Échéances",            icon: "⏰", href: "/echeances",          group: "Personnel" },
 ];
