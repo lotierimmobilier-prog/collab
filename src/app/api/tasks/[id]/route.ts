@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { nextRecurrenceDate } from "@/lib/tasks";
@@ -62,7 +62,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       data: { userId: newAssignee, type: "task", title: "Tâche assignée", body: task.title, link: "/taches" },
     }).catch(() => {});
     // Email à l'agent — EN TÂCHE DE FOND (ne bloque pas la réponse).
-    void (async () => {
+    after(async () => {
       try {
         const u = await userEmail(newAssignee);
         if (!u) return;
@@ -76,7 +76,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           ctaPath: "/taches",
         });
       } catch (e) { console.warn("[notify-mail] envoi tâche (réassignement) échoué :", e instanceof Error ? e.message : String(e)); }
-    })();
+    });
   }
 
   return NextResponse.json({

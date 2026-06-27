@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { sendNotificationEmail, userEmail } from "@/lib/notify-mail";
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     });
     // Notification par email à l'agent assigné — EN TÂCHE DE FOND (ne bloque
     // pas la réponse sur l'envoi SMTP).
-    void (async () => {
+    after(async () => {
       try {
         const u = await userEmail(assigneeId);
         if (!u) return;
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
           ctaPath: "/taches",
         });
       } catch (e) { console.warn("[notify-mail] envoi tâche échoué :", e instanceof Error ? e.message : String(e)); }
-    })();
+    });
   }
 
   return NextResponse.json(formatTask(task), { status: 201 });
