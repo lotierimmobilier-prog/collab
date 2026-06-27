@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { encryptSecret } from "@/lib/ics-crypto";
-import { exchangeCode, fetchEmail, fetchCalendarList, verifyState } from "@/lib/googleCalendarServer";
+import { exchangeCode, fetchEmail, fetchCalendarList, verifyState, baseUrl } from "@/lib/googleCalendarServer";
 
 // GET /api/google/calendar/callback — retour OAuth Google : échange le code,
 // stocke le refresh_token chiffré et la liste des agendas, puis renvoie vers
@@ -11,7 +11,9 @@ export async function GET(req: NextRequest) {
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state") || "";
   const err = url.searchParams.get("error");
-  const back = (p: string) => NextResponse.redirect(`${url.origin}/planning?gcal=${p}`);
+  // Redirige vers l'URL PUBLIQUE (NEXTAUTH_URL) et non l'origine interne du
+  // conteneur (network_mode host → req.url = http://0.0.0.0:3000).
+  const back = (p: string) => NextResponse.redirect(`${baseUrl()}/planning?gcal=${p}`);
 
   if (err) return back("refus");
   const userId = verifyState(state);

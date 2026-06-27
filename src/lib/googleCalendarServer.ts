@@ -21,7 +21,7 @@ export interface GEv {
 export function googleClientId(): string { return process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || ""; }
 export function googleClientSecret(): string { return process.env.GOOGLE_CLIENT_SECRET || ""; }
 export function googleConfigured(): boolean { return !!googleClientId() && !!googleClientSecret(); }
-function baseUrl(): string { return (process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_BASE_URL || "https://collab.lotier-immobilier.com").replace(/\/$/, ""); }
+export function baseUrl(): string { return (process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_BASE_URL || "https://collab.lotier-immobilier.com").replace(/\/$/, ""); }
 export function redirectUri(): string { return `${baseUrl()}/api/google/calendar/callback`; }
 
 // ── État signé (HMAC) pour relier le retour OAuth à l'utilisateur ──
