@@ -895,7 +895,7 @@ function weatherHint(code: number): string {
   return "bonne journée à vous";
 }
 
-interface DashStats { tasks: { doneMonth: number; avgDays: number | null; openCount: number }; ca: { month: number; prevMonth: number; deltaPct: number | null } | null }
+interface DashStats { kpis: { label: string; value: string; sub?: string }[] }
 
 function Banner({ firstName }: { firstName: string }) {
   // Citation différente à chaque ouverture de page (après montage, pour éviter
@@ -908,17 +908,12 @@ function Banner({ firstName }: { firstName: string }) {
     fetch("/api/weather").then(r => r.ok ? r.json() : null).then(d => {
       if (d?.current && d?.city) setWx({ temp: d.current.temp, code: d.current.code, city: d.city });
     }).catch(() => {});
-    fetch("/api/dashboard/stats").then(r => r.ok ? r.json() : null).then(d => { if (d?.tasks) setStats(d); }).catch(() => {});
+    // Indicateurs adaptés au rôle (sélectionnés côté serveur).
+    fetch("/api/dashboard/stats").then(r => r.ok ? r.json() : null).then(d => { if (Array.isArray(d?.kpis)) setStats(d); }).catch(() => {});
   }, []);
   const q = QUOTES[i];
 
-  const eur = (n: number) => n.toLocaleString("fr-FR") + " €";
-  const kpis: { label: string; value: string; sub?: string }[] = [];
-  if (stats) {
-    kpis.push({ label: "Tâches terminées · ce mois", value: String(stats.tasks.doneMonth), sub: stats.tasks.avgDays != null ? `≈ ${stats.tasks.avgDays} j en moyenne` : undefined });
-    kpis.push({ label: "Tâches en cours", value: String(stats.tasks.openCount), sub: stats.tasks.openCount > 0 ? "à traiter" : "tout est à jour 🎉" });
-    if (stats.ca) kpis.push({ label: "CA encaissé · ce mois", value: eur(stats.ca.month), sub: stats.ca.deltaPct != null ? `${stats.ca.deltaPct >= 0 ? "▲" : "▼"} ${Math.abs(stats.ca.deltaPct)} % vs mois préc. (${eur(stats.ca.prevMonth)})` : undefined });
-  }
+  const kpis = stats?.kpis ?? [];
 
   return (
     <div style={{
