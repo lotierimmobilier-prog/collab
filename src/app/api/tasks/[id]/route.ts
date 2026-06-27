@@ -61,18 +61,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await prisma.notification.create({
       data: { userId: newAssignee, type: "task", title: "Tâche assignée", body: task.title, link: "/taches" },
     }).catch(() => {});
-    const u = await userEmail(newAssignee);
-    if (u) {
-      const echeance = task.dueDate ? `\nÉchéance : ${task.dueDate.toLocaleDateString("fr-FR")}` : "";
-      await sendNotificationEmail({
-        to: u.email,
-        subject: `Tâche assignée : ${task.title}`,
-        heading: "Une tâche vous a été attribuée",
-        message: `${task.title}${task.description ? `\n\n${task.description}` : ""}\n\nPriorité : ${task.priority}${echeance}`,
-        ctaLabel: "Voir la tâche",
-        ctaPath: "/taches",
-      });
-    }
+    // Email à l'agent — EN TÂCHE DE FOND (ne bloque pas la réponse).
+    void (async () => {
+      try {
+        const u = await userEmail(newAssignee);
+        if (!u) return;
+        const echeance = task.dueDate ? `\nÉchéance : ${task.dueDate.toLocaleDateString("fr-FR")}` : "";
+        await sendNotificationEmail({
+          to: u.email,
+          subject: `Tâche assignée : ${task.title}`,
+          heading: "Une tâche vous a été attribuée",
+          message: `${task.title}${task.description ? `\n\n${task.description}` : ""}\n\nPriorité : ${task.priority}${echeance}`,
+          ctaLabel: "Voir la tâche",
+          ctaPath: "/taches",
+        });
+      } catch (e) { console.warn("[notify-mail] envoi tâche (réassignement) échoué :", e instanceof Error ? e.message : String(e)); }
+    })();
   }
 
   return NextResponse.json({
