@@ -40,6 +40,7 @@ const FILES = [
   "migrations_user_city.sql",
   "migrations_mail_uploads.sql",
   "migrations_user_extras.sql",
+  "migrations_user_superadmin.sql",
 ];
 
 export interface MigrationReport {

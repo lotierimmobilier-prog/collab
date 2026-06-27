@@ -3,10 +3,12 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { User, Role, ModuleAccess, Right, DEFAULT_ROLES, getInitials, avatarColor, MODULES, RIGHTS, getRightStyle } from "@/lib/admin";
+import { isSuperAdminEmail, isAdminRole } from "@/lib/superadmin";
 import UserModal from "./UserModal";
 
 export default function UsersAdmin() {
   const { data: session, update } = useSession();
+  const isSuper = session?.user?.superAdmin === true;
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [roles] = useState<Role[]>(DEFAULT_ROLES);
@@ -47,6 +49,7 @@ export default function UsersAdmin() {
           parrainId: user.parrainId ?? null,
           isEmployee: (user as { isEmployee?: boolean }).isEmployee ?? false,
           city: (user as { city?: string | null }).city ?? null,
+          superAdmin: (user as { superAdmin?: boolean }).superAdmin ?? false,
         }),
       });
       const data = await res.json();
@@ -189,11 +192,16 @@ export default function UsersAdmin() {
 
                   <div style={{ fontSize: 13, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.email}</div>
 
-                  {role ? (
-                    <span style={{ background: role.color + "18", color: role.color, borderRadius: 6, padding: "3px 10px", fontSize: 12, fontWeight: 600, width: "fit-content" }}>
-                      {role.label}
-                    </span>
-                  ) : <span style={{ color: "#9ca3af", fontSize: 12 }}>—</span>}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "flex-start" }}>
+                    {role ? (
+                      <span style={{ background: role.color + "18", color: role.color, borderRadius: 6, padding: "3px 10px", fontSize: 12, fontWeight: 600, width: "fit-content" }}>
+                        {role.label}
+                      </span>
+                    ) : <span style={{ color: "#9ca3af", fontSize: 12 }}>—</span>}
+                    {user.superAdmin && (
+                      <span title="Super administrateur" style={{ background: "#1C1A17", color: "#D8B783", borderRadius: 6, padding: "2px 8px", fontSize: 10.5, fontWeight: 700, width: "fit-content", letterSpacing: "0.02em" }}>★ Super admin</span>
+                    )}
+                  </div>
 
                   {/* Parrain */}
                   {(() => {
@@ -218,15 +226,26 @@ export default function UsersAdmin() {
                     <span style={{ fontSize: 11, color: user.active ? "#059669" : "#9ca3af" }}>{user.active ? "Actif" : "Inactif"}</span>
                   </div>
 
-                  <div style={{ display: "flex", gap: 5 }}>
-                    {session?.user?.id !== user.id && (
-                      <button onClick={() => impersonate(user)} title="Prendre la main (voir le logiciel en tant que cet utilisateur)" style={{ background: "#F7F0E6", border: "1px solid #B8966A", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#B8966A" }}>👤→</button>
-                    )}
-                    <button onClick={() => setEditing(user)} title="Modifier" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#374151" }}>✏</button>
-                    <button onClick={() => setEditingAccess(user)} title="Gérer les accès" style={{ background: user.accessOverrides?.length ? "#F7F0E6" : "none", border: `1px solid ${user.accessOverrides?.length ? "#B8966A" : "#e5e7eb"}`, borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: user.accessOverrides?.length ? "#B8966A" : "#374151" }}>🔐</button>
-                    <button onClick={() => setShowPassword(showPassword === user.id ? null : user.id)} title="Voir le mot de passe" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#374151" }}>🔑</button>
-                    <button onClick={() => deleteUser(user.id)} title="Supprimer" style={{ background: "none", border: "1px solid #fecaca", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#dc2626" }}>🗑</button>
-                  </div>
+                  {(() => {
+                    // Gouvernance : un admin non super ne gère ni les comptes admin,
+                    // ni les super admins (seul le super admin le peut).
+                    const targetGoverned = isAdminRole(user.roleId) || !!user.superAdmin;
+                    const isBootstrap = isSuperAdminEmail(user.email);
+                    const lockManage = targetGoverned && !isSuper && user.id !== session?.user?.id;
+                    const lockDelete = isBootstrap || (targetGoverned && !isSuper);
+                    const dis: React.CSSProperties = { opacity: 0.4, cursor: "not-allowed" };
+                    return (
+                      <div style={{ display: "flex", gap: 5 }}>
+                        {session?.user?.id !== user.id && !(isBootstrap && !isSuper) && (
+                          <button onClick={() => impersonate(user)} title="Prendre la main (voir le logiciel en tant que cet utilisateur)" style={{ background: "#F7F0E6", border: "1px solid #B8966A", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#B8966A" }}>👤→</button>
+                        )}
+                        <button onClick={() => !lockManage && setEditing(user)} disabled={lockManage} title={lockManage ? "Réservé au super administrateur" : "Modifier"} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#374151", ...(lockManage ? dis : {}) }}>✏</button>
+                        <button onClick={() => !lockManage && setEditingAccess(user)} disabled={lockManage} title={lockManage ? "Réservé au super administrateur" : "Gérer les accès"} style={{ background: user.accessOverrides?.length ? "#F7F0E6" : "none", border: `1px solid ${user.accessOverrides?.length ? "#B8966A" : "#e5e7eb"}`, borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: user.accessOverrides?.length ? "#B8966A" : "#374151", ...(lockManage ? dis : {}) }}>🔐</button>
+                        <button onClick={() => setShowPassword(showPassword === user.id ? null : user.id)} title="Voir le mot de passe" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#374151" }}>🔑</button>
+                        <button onClick={() => !lockDelete && deleteUser(user.id)} disabled={lockDelete} title={lockDelete ? "Réservé au super administrateur" : "Supprimer"} style={{ background: "none", border: "1px solid #fecaca", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#dc2626", ...(lockDelete ? dis : {}) }}>🗑</button>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
@@ -252,6 +271,7 @@ export default function UsersAdmin() {
           user={editing === "new" ? null : editing}
           roles={roles}
           allUsers={users}
+          isSuper={isSuper}
           onClose={() => setEditing(null)}
           onSave={saveUser}
         />

@@ -10,6 +10,7 @@ declare module "next-auth" {
       prenom: string;
       nom: string;
       roleId: string;
+      superAdmin?: boolean;             // super administrateur (gouvernance des admins)
       accessOverrides?: unknown;
       impersonatorId?: string | null;   // admin qui a « pris la main », le cas échéant
       impersonatorName?: string | null;
@@ -20,9 +21,11 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     id?: string;
+    email?: string | null;
     prenom?: unknown;
     nom?: unknown;
     roleId?: unknown;
+    superAdmin?: boolean;
     impersonatorId?: string | null;
     impersonatorName?: string | null;
   }

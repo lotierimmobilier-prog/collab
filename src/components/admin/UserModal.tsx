@@ -1,16 +1,18 @@
 "use client";
 import { useState } from "react";
 import { User, Role, ModuleAccess, Right, MODULES, RIGHTS, avatarColor, getInitials, getRightStyle, getUserRight } from "@/lib/admin";
+import { isAdminRole, isSuperAdminEmail } from "@/lib/superadmin";
 
 interface Props {
   user: User | null;
   roles: Role[];
   allUsers?: User[];
+  isSuper?: boolean;
   onClose: () => void;
   onSave: (u: User) => void;
 }
 
-export default function UserModal({ user, roles, allUsers = [], onClose, onSave }: Props) {
+export default function UserModal({ user, roles, allUsers = [], isSuper = false, onClose, onSave }: Props) {
   const [tab, setTab] = useState<"infos" | "acces">("infos");
   const [f, setF] = useState({
     prenom: user?.prenom ?? "",
@@ -23,7 +25,9 @@ export default function UserModal({ user, roles, allUsers = [], onClose, onSave 
     city: (user as { city?: string } | null)?.city ?? "",
     gedAccess: (user as { gedAccess?: string } | null)?.gedAccess ?? "",
     parrainId: (user as { parrainId?: string } | null)?.parrainId ?? "",
+    superAdmin: (user as { superAdmin?: boolean } | null)?.superAdmin ?? false,
   });
+  const bootstrapSuper = isSuperAdminEmail(user?.email);
   const [overrides, setOverrides] = useState<ModuleAccess[]>(user?.accessOverrides ?? []);
   const [showPwd, setShowPwd] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -84,6 +88,7 @@ export default function UserModal({ user, roles, allUsers = [], onClose, onSave 
       accessOverrides: overrides.length > 0 ? overrides : undefined,
       gedAccess: f.gedAccess || null,
       parrainId: f.parrainId || null,
+      superAdmin: f.superAdmin,
     } as User);
   }
 
@@ -162,11 +167,14 @@ export default function UserModal({ user, roles, allUsers = [], onClose, onSave 
 
               <F label="Rôle *" error={errors.roleId}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {roles.map(r => (
-                    <label key={r.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px", border: `1.5px solid ${f.roleId === r.id ? r.color : "#e5e7eb"}`, borderRadius: 8, cursor: "pointer", background: f.roleId === r.id ? r.color + "08" : "#fff" }}>
-                      <input type="radio" name="role" value={r.id} checked={f.roleId === r.id} onChange={() => { set("roleId", r.id); setOverrides([]); }} style={{ marginTop: 2 }} />
+                  {roles.map(r => {
+                    // Seul le super admin peut attribuer un rôle d'administrateur.
+                    const roleLocked = !isSuper && isAdminRole(r.id) && f.roleId !== r.id;
+                    return (
+                    <label key={r.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px", border: `1.5px solid ${f.roleId === r.id ? r.color : "#e5e7eb"}`, borderRadius: 8, cursor: roleLocked ? "not-allowed" : "pointer", background: f.roleId === r.id ? r.color + "08" : "#fff", opacity: roleLocked ? 0.5 : 1 }}>
+                      <input type="radio" name="role" value={r.id} disabled={roleLocked} checked={f.roleId === r.id} onChange={() => { set("roleId", r.id); setOverrides([]); }} style={{ marginTop: 2 }} />
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: f.roleId === r.id ? r.color : "#111827" }}>{r.label}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: f.roleId === r.id ? r.color : "#111827" }}>{r.label}{roleLocked && <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 400, marginLeft: 6 }}>· réservé au super admin</span>}</div>
                         <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>{r.description}</div>
                         <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 3 }}>{r.modules.filter(m => m.right !== "aucun").length} modules accessibles</div>
                       </div>
@@ -176,7 +184,8 @@ export default function UserModal({ user, roles, allUsers = [], onClose, onSave 
                         </button>
                       )}
                     </label>
-                  ))}
+                    );
+                  })}
                 </div>
               </F>
 
@@ -196,6 +205,21 @@ export default function UserModal({ user, roles, allUsers = [], onClose, onSave 
                   <span style={{ display: "block", fontSize: 11, color: "#9ca3af" }}>Ouvre le module RH (décompte d’heures, congés)</span>
                 </span>
               </label>
+
+              {/* Super administrateur — réservé au super admin (gouvernance des admins) */}
+              {isSuper && (
+                <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: bootstrapSuper ? "not-allowed" : "pointer", opacity: bootstrapSuper ? 0.6 : 1 }}>
+                  <div onClick={() => { if (!bootstrapSuper) set("superAdmin", !f.superAdmin); }} style={{ width: 40, height: 22, borderRadius: 11, background: f.superAdmin ? "#1C1A17" : "#e5e7eb", position: "relative", cursor: bootstrapSuper ? "not-allowed" : "pointer", transition: "background .2s" }}>
+                    <div style={{ position: "absolute", top: 3, left: f.superAdmin ? 21 : 3, width: 16, height: 16, borderRadius: "50%", background: f.superAdmin ? "#D8B783" : "#fff", transition: "left .2s" }} />
+                  </div>
+                  <span style={{ fontSize: 13, color: "#374151" }}>
+                    Super administrateur ★
+                    <span style={{ display: "block", fontSize: 11, color: "#9ca3af" }}>
+                      {bootstrapSuper ? "Super administrateur d’origine (statut permanent)." : "Peut créer des administrateurs et définir leurs droits."}
+                    </span>
+                  </span>
+                </label>
+              )}
 
               {/* Ville de résidence (météo du tableau de bord) */}
               <F label="Ville de résidence">

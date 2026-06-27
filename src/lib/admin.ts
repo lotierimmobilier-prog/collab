@@ -30,6 +30,7 @@ export interface User {
   accessOverrides?: ModuleAccess[]; // droits individuels qui surchargent le rôle
   gedAccess?: string | null;        // null = défaut rôle | complet | restreint | aucun
   parrainId?: string | null;        // parrain (formation par parrainage)
+  superAdmin?: boolean;             // super administrateur (gouvernance des admins)
 }
 
 export function getUserRight(user: User, role: Role | undefined, moduleId: string): Right {
