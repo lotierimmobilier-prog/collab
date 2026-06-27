@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { saveUser } from "@/lib/user-write";
+import { setExtras } from "@/lib/user-extras";
 
 // PATCH /api/users/[id] — modifier un utilisateur
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -10,6 +11,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const body = await req.json();
     const { prenom, nom, email, password, roleId, active, accessOverrides, gedAccess, parrainId, isEmployee, city } = body;
 
+    // Colonnes de base sur « users ».
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data: any = {};
     if (prenom !== undefined) data.prenom = prenom;
@@ -17,17 +19,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (email !== undefined) data.email = email.toLowerCase();
     if (roleId !== undefined) data.roleId = roleId;
     if (active !== undefined) data.active = active;
-    if (accessOverrides !== undefined) data.accessOverrides = accessOverrides ?? null;
-    if (gedAccess !== undefined) data.gedAccess = gedAccess ?? null;
-    if (parrainId !== undefined) data.parrainId = parrainId || null;
-    if (isEmployee !== undefined) data.isEmployee = !!isEmployee;
-    if (city !== undefined) data.city = city?.trim() || null;
     if (password && password !== "••••••••") {
       data.passwordHash = await bcrypt.hash(password, 12);
     }
 
+    // Attributs annexes → user_extras (table possédée par l'application).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const extras: any = {};
+    if (accessOverrides !== undefined) extras.accessOverrides = accessOverrides ?? null;
+    if (gedAccess !== undefined) extras.gedAccess = gedAccess ?? null;
+    if (parrainId !== undefined) extras.parrainId = parrainId || null;
+    if (isEmployee !== undefined) extras.isEmployee = !!isEmployee;
+    if (city !== undefined) extras.city = city?.trim() || null;
+
     const sel = { id: true, prenom: true, nom: true, email: true, roleId: true, active: true };
-    const user = await saveUser(() => prisma.user.update({ where: { id }, data, select: sel }), data);
+    const user = Object.keys(data).length
+      ? await saveUser(() => prisma.user.update({ where: { id }, data, select: sel }), data)
+      : await prisma.user.findUnique({ where: { id }, select: sel });
+    if (Object.keys(extras).length) await setExtras(id, extras);
     return NextResponse.json({ ...user, password: "••••••••" });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);

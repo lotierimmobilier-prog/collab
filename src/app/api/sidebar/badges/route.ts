@@ -16,12 +16,11 @@ export async function GET() {
 
   const result = { mail: { count: 0, urgent: false }, chat: { count: 0, urgent: false }, legal: { count: 0, urgent: false }, isEmployee: false };
 
-  // Statut salarié (ouvre le module RH) — résilient si la colonne manque.
+  // Statut salarié (ouvre le module RH) — stocké dans user_extras.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const me: any = await prisma.user.findUnique({ where: { id: uid }, select: { isEmployee: true } });
-    result.isEmployee = !!me?.isEmployee;
-  } catch { /* colonne absente → false */ }
+    const { isEmployeeExtra } = await import("@/lib/user-extras");
+    result.isEmployee = await isEmployeeExtra(uid);
+  } catch { /* table absente → false */ }
 
   // Balayages quotidiens throttlés (sans bloquer) : rappels d'expiration des
   // documents perso + relances de conformité fournisseurs + relance décompte

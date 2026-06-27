@@ -14,16 +14,20 @@ async function heal<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 // Récupère le lien de parrainage entre le filleul et l'utilisateur courant.
+// Le parrain est stocké dans user_extras (la colonne users.parrainId peut
+// ne pas exister).
 async function relationFor(currentUserId: string, isAdmin: boolean, filleulId: string) {
   const filleul = await heal(() => prisma.user.findUnique({
     where: { id: filleulId },
-    select: { id: true, prenom: true, nom: true, parrainId: true },
+    select: { id: true, prenom: true, nom: true },
   }));
   if (!filleul) return { filleul: null, isSelf: false, isParrain: false };
+  const { getExtra } = await import("@/lib/user-extras");
+  const parrainId = (await getExtra(filleulId))?.parrainId ?? null;
   return {
-    filleul,
+    filleul: { ...filleul, parrainId },
     isSelf: filleul.id === currentUserId,
-    isParrain: filleul.parrainId === currentUserId || isAdmin,
+    isParrain: parrainId === currentUserId || isAdmin,
   };
 }
 

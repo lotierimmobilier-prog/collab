@@ -166,8 +166,8 @@ export default function UsersAdmin() {
         ) : (
           <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", overflow: "hidden" }}>
             {/* Header */}
-            <div style={{ display: "grid", gridTemplateColumns: "2.3fr 1.8fr 1.1fr 0.9fr 100px 120px", padding: "10px 16px", borderBottom: "1px solid #f3f4f6", fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", gap: 12 }}>
-              <span>Utilisateur</span><span>Email</span><span>Rôle</span><span>Accès modules</span><span>Statut</span><span>Actions</span>
+            <div style={{ display: "grid", gridTemplateColumns: "2.1fr 1.5fr 0.9fr 1.1fr 0.9fr 95px 120px", padding: "10px 16px", borderBottom: "1px solid #f3f4f6", fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", gap: 12 }}>
+              <span>Utilisateur</span><span>Email</span><span>Rôle</span><span>Parrain</span><span>Accès modules</span><span>Statut</span><span>Actions</span>
             </div>
 
             {filtered.map((user, i) => {
@@ -175,7 +175,7 @@ export default function UsersAdmin() {
               const ac = avatarColor(user.id);
               const accessCount = role?.modules.filter(m => m.right !== "aucun").length ?? 0;
               return (
-                <div key={user.id} style={{ display: "grid", gridTemplateColumns: "2.3fr 1.8fr 1.1fr 0.9fr 100px 120px", padding: "12px 16px", gap: 12, alignItems: "center", borderBottom: i < filtered.length - 1 ? "1px solid #f9fafb" : "none" }}>
+                <div key={user.id} style={{ display: "grid", gridTemplateColumns: "2.1fr 1.5fr 0.9fr 1.1fr 0.9fr 95px 120px", padding: "12px 16px", gap: 12, alignItems: "center", borderBottom: i < filtered.length - 1 ? "1px solid #f9fafb" : "none" }}>
 
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div style={{ width: 36, height: 36, borderRadius: "50%", background: ac.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: ac.text, flexShrink: 0 }}>
@@ -194,6 +194,12 @@ export default function UsersAdmin() {
                       {role.label}
                     </span>
                   ) : <span style={{ color: "#9ca3af", fontSize: 12 }}>—</span>}
+
+                  {/* Parrain */}
+                  {(() => {
+                    const p = user.parrainId ? users.find(x => x.id === user.parrainId) : null;
+                    return <div style={{ fontSize: 12.5, color: p ? "#374151" : "#d1d5db", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p ? `${p.prenom} ${p.nom}` : "—"}</div>;
+                  })()}
 
                   <div style={{ fontSize: 12, color: "#6b7280" }}>
                     {accessCount}/{MODULES.length} modules
