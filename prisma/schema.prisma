@@ -913,6 +913,24 @@ model AugusteTerm {
 }
 
 /// Temps de présence quotidien par utilisateur (secondes actives).
+// Connexion Google Agenda permanente (OAuth serveur, hors-ligne).
+// Le refresh_token est stocké CHIFFRÉ ; l'access_token est mis en cache et
+// rafraîchi automatiquement → l'agenda reste affiché sans reconnexion.
+model GoogleCalendarAccount {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  googleEmail  String?
+  refreshToken String                // chiffré (AES-256-GCM)
+  accessToken  String?               // cache chiffré
+  accessExpiry DateTime?
+  selected     String[]              // ids d'agendas affichés
+  calendars    Json?                 // cache de la liste des agendas
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("google_calendar_accounts")
+}
+
 model UserPresence {
   id       String   @id @default(cuid())
   userId   String

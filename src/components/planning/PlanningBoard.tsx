@@ -1,13 +1,5 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
-import {
-  GCalendar, GEvent, GCalConfig,
-  loadToken, saveToken, clearToken, isTokenValid,
-  loadConfig, saveConfig, saveSelectedCalendars,
-  loadCalendarList, saveCalendarList, clearCalendarList,
-  loadGapiAndGis, requestToken, fetchCalendars, fetchEvents,
-} from "@/lib/googleCalendar";
 import CalendarView from "./CalendarView";
 import GoogleSyncPanel from "./GoogleSyncPanel";
 import EventModal from "./EventModal";
@@ -26,25 +18,10 @@ export interface LocalEvent {
   attendees?: { type: "user" | "contact"; id?: string; name: string; email: string }[];
 }
 
-function gEventToLocal(e: GEvent, color: string): LocalEvent {
-  return {
-    id: `g-${e.id}`,
-    title: e.summary ?? "(Sans titre)",
-    start: e.start.dateTime ?? e.start.date ?? "",
-    end:   e.end.dateTime   ?? e.end.date   ?? "",
-    color,
-    description: e.description,
-    location: e.location,
-    type: "google",
-    calendarId: e.calendarId,
-    htmlLink: e.htmlLink,
-  };
-}
+export interface GCal { id: string; summary: string; backgroundColor?: string; primary?: boolean }
+export interface GStatus { connected: boolean; email: string | null; calendars: GCal[]; selected: string[]; configured?: boolean }
 
 export default function PlanningBoard() {
-  const { data: session } = useSession();
-  const userId = (session?.user as { id?: string } | undefined)?.id;
-
   const [view, setView] = useState<"month" | "week" | "day">("week");
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [showSync, setShowSync] = useState(false);
@@ -52,25 +29,36 @@ export default function PlanningBoard() {
   const [selectedEvent, setSelectedEvent] = useState<LocalEvent | null>(null);
   const [editingEvent, setEditingEvent] = useState<LocalEvent | null>(null);
 
-  // Local events
-  const [localEvents, setLocalEvents] = useState<LocalEvent[]>([]);
-
-  // Google state
-  const [config, setConfig] = useState<GCalConfig | null>(null);
-  const [connected, setConnected] = useState(false);
-  const [calendars, setCalendars] = useState<GCalendar[]>([]);
-  const [gEvents, setGEvents] = useState<LocalEvent[]>([]);
+  // Tous les événements (internes + Google) proviennent de /api/calendar :
+  // l'agenda Google est fusionné côté serveur (connexion permanente).
+  const [events, setEvents] = useState<LocalEvent[]>([]);
+  const [gstatus, setGstatus] = useState<GStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [syncError, setSyncError] = useState<string | null>(null);
-  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ msg: string; ok: boolean } | null>(null);
 
-  // Charger les événements depuis la BDD
+  // Message de retour de la connexion Google (?gcal=...), puis on nettoie l'URL.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search).get("gcal");
+    if (!p) return;
+    const M: Record<string, { msg: string; ok: boolean }> = {
+      connecte: { msg: "Agenda Google connecté — il restera affiché en permanence.", ok: true },
+      refus: { msg: "Connexion Google annulée.", ok: false },
+      invalide: { msg: "Lien de connexion expiré, réessayez.", ok: false },
+      erreur: { msg: "Échec de la connexion Google, réessayez.", ok: false },
+      sans_refresh: { msg: "Google n'a pas renvoyé d'autorisation hors-ligne. Révoquez l'accès « Collab » dans votre compte Google puis reconnectez.", ok: false },
+    };
+    setNotice(M[p] ?? null);
+    window.history.replaceState(null, "", "/planning");
+    const t = setTimeout(() => setNotice(null), 8000);
+    return () => clearTimeout(t);
+  }, []);
+
   const fetchDbEvents = useCallback(async () => {
     try {
       const r = await fetch("/api/calendar");
       if (!r.ok) return;
       const data = await r.json();
-      const events: LocalEvent[] = (data || []).map((e: Record<string, unknown>) => ({
+      const list: LocalEvent[] = (data || []).map((e: Record<string, unknown>) => ({
         id:          e.id as string,
         title:       e.title as string,
         start:       e.start as string,
@@ -78,44 +66,21 @@ export default function PlanningBoard() {
         color:       (e.color as string) || "#B8966A",
         description: e.description as string | undefined,
         location:    e.location as string | undefined,
-        type:        "local" as const,
+        type:        (e.source === "google" || e.type === "google") ? "google" as const : "local" as const,
+        htmlLink:    e.htmlLink as string | undefined,
         attendees:   (e.attendees as LocalEvent["attendees"]) ?? [],
       }));
-      setLocalEvents(events);
+      setEvents(list);
     } catch { /* silencieux */ }
   }, []);
 
-  // Load saved config + events BDD on mount — déclenché quand userId est connu
-  useEffect(() => {
-    if (userId === undefined) return; // session pas encore chargée
-    const cfg = loadConfig(userId);
-    if (cfg) setConfig(cfg);
-    const token = loadToken(userId);
-    const valid = token && isTokenValid(token);
-    if (valid) {
-      setConnected(true);
-      // Restaurer la liste des agendas depuis le cache localStorage
-      const cached = loadCalendarList(userId);
-      if (cached.length > 0) {
-        setCalendars(cached);
-        // Auto-sync avec les agendas en cache
-        syncGoogle(token.access_token, cached);
-      } else {
-        // Aucun cache → refetch
-        fetchCalendars(token.access_token)
-          .then(cals => {
-            setCalendars(cals);
-            saveCalendarList(cals, userId);
-            syncGoogle(token.access_token, cals);
-          })
-          .catch(() => setConnected(false));
-      }
-    }
-    fetchDbEvents();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, fetchDbEvents]);
+  const loadStatus = useCallback(async () => {
+    try { const r = await fetch("/api/google/calendar/status"); if (r.ok) setGstatus(await r.json()); } catch { /* ignore */ }
+  }, []);
 
-  // Rafraîchir quand Auguste crée/modifie un événement
+  useEffect(() => { fetchDbEvents(); loadStatus(); }, [fetchDbEvents, loadStatus]);
+
+  // Rafraîchir quand Auguste crée/modifie un événement.
   useEffect(() => {
     const handler = () => fetchDbEvents();
     window.addEventListener("collab:event_created", handler);
@@ -126,99 +91,32 @@ export default function PlanningBoard() {
     };
   }, [fetchDbEvents]);
 
-  const getTimeRange = useCallback(() => {
-    const d = new Date(currentDate);
-    let min: Date, max: Date;
-    if (view === "month") {
-      min = new Date(d.getFullYear(), d.getMonth(), 1);
-      max = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
-    } else if (view === "week") {
-      const day = d.getDay();
-      min = new Date(d); min.setDate(d.getDate() - day + 1); min.setHours(0, 0, 0);
-      max = new Date(min); max.setDate(min.getDate() + 6); max.setHours(23, 59, 59);
-    } else {
-      min = new Date(d); min.setHours(0, 0, 0);
-      max = new Date(d); max.setHours(23, 59, 59);
-    }
-    return { min, max };
-  }, [currentDate, view]);
-
-  const syncGoogle = useCallback(async (token: string, cals: GCalendar[]) => {
-    setSyncing(true);
-    setSyncError(null);
-    try {
-      const { min, max } = getTimeRange();
-      const timeMin = min.toISOString();
-      const timeMax = max.toISOString();
-      const selected = cals.filter(c => c.selected);
-      const allEvents: LocalEvent[] = [];
-      for (const cal of selected) {
-        const evts = await fetchEvents(cal.id, token, timeMin, timeMax);
-        for (const e of evts) allEvents.push(gEventToLocal(e, cal.backgroundColor ?? "#B8966A"));
-      }
-      setGEvents(allEvents);
-      setLastSync(new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }));
-    } catch (err: unknown) {
-      setSyncError(err instanceof Error ? err.message : "Erreur de synchronisation");
-    } finally {
-      setSyncing(false);
-    }
-  }, [getTimeRange]);
-
-  async function handleConnect(cfg: GCalConfig) {
-    saveConfig(cfg, userId);
-    setConfig(cfg);
-    setSyncError(null);
-    try {
-      await loadGapiAndGis();
-      const token = await requestToken(cfg.clientId);
-      saveToken(token, userId);
-      setConnected(true);
-      const cals = await fetchCalendars(token.access_token);
-      setCalendars(cals);
-      saveCalendarList(cals, userId);
-      await syncGoogle(token.access_token, cals);
-    } catch (err: unknown) {
-      setSyncError(err instanceof Error ? err.message : "Connexion échouée");
-    }
-  }
+  // Rafraîchissement périodique (affichage « temps réel »).
+  useEffect(() => {
+    const t = setInterval(fetchDbEvents, 120_000);
+    return () => clearInterval(t);
+  }, [fetchDbEvents]);
 
   async function handleSync() {
-    const token = loadToken(userId);
-    if (!token || !isTokenValid(token)) {
-      if (!config) { setShowSync(true); return; }
-      try {
-        await loadGapiAndGis();
-        const newToken = await requestToken(config.clientId);
-        saveToken(newToken, userId);
-        const cals = await fetchCalendars(newToken.access_token);
-        setCalendars(cals);
-        saveCalendarList(cals, userId);
-        await syncGoogle(newToken.access_token, cals);
-      } catch (err: unknown) {
-        setSyncError(err instanceof Error ? err.message : "Reconnexion nécessaire");
-      }
-      return;
-    }
-    await syncGoogle(token.access_token, calendars);
+    if (!gstatus?.connected) { window.location.href = "/api/google/calendar/connect"; return; }
+    setSyncing(true);
+    await fetchDbEvents();
+    await loadStatus();
+    setSyncing(false);
   }
 
-  function handleDisconnect() {
-    clearToken(userId);
-    clearCalendarList(userId);
-    setConnected(false);
-    setCalendars([]);
-    setGEvents([]);
-    setLastSync(null);
+  async function handleDisconnect() {
+    await fetch("/api/google/calendar/disconnect", { method: "POST" });
+    await loadStatus();
+    await fetchDbEvents();
   }
 
   async function handleCalendarToggle(calId: string, selected: boolean) {
-    const updated = calendars.map(c => c.id === calId ? { ...c, selected } : c);
-    setCalendars(updated);
-    saveSelectedCalendars(updated.filter(c => c.selected).map(c => c.id), userId);
-    saveCalendarList(updated, userId);
-    const token = loadToken(userId);
-    if (token && isTokenValid(token)) await syncGoogle(token.access_token, updated);
+    if (!gstatus) return;
+    const next = selected ? [...gstatus.selected, calId] : gstatus.selected.filter(i => i !== calId);
+    setGstatus({ ...gstatus, selected: next });
+    await fetch("/api/google/calendar/select", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ selected: next }) });
+    await fetchDbEvents();
   }
 
   function addLocalEvent(_evt: LocalEvent) {
@@ -232,7 +130,10 @@ export default function PlanningBoard() {
     setSelectedEvent(null);
   }
 
-  const allEvents = [...localEvents, ...gEvents];
+  const connected = !!gstatus?.connected;
+  const selectedCount = gstatus?.selected.length ?? 0;
+  const googleCount = events.filter(e => e.type === "google").length;
+  const selectedCals = (gstatus?.calendars ?? []).filter(c => gstatus?.selected.includes(c.id));
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -251,16 +152,10 @@ export default function PlanningBoard() {
 
         <div style={{ flex: 1 }} />
 
-        {/* Sync status */}
+        {/* Statut de connexion */}
         {connected && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#6b7280" }}>
-            {syncing ? (
-              <span style={{ color: "#B8966A" }}>🔄 Synchronisation…</span>
-            ) : syncError ? (
-              <span style={{ color: "#dc2626" }}>⚠ {syncError}</span>
-            ) : lastSync ? (
-              <span style={{ color: "#059669" }}>✓ Sync {lastSync}</span>
-            ) : null}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#059669" }}>
+            <span>✓ Google connecté</span>
           </div>
         )}
 
@@ -276,12 +171,12 @@ export default function PlanningBoard() {
           }}
         >
           <span style={{ fontSize: 14 }}>🔄</span>
-          {connected ? "Synchroniser" : "Connecter Google"}
+          {connected ? (syncing ? "Actualisation…" : "Actualiser") : "Connecter Google"}
         </button>
 
         <button onClick={() => setShowSync(true)} style={{ ...btnSecondary, display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 14 }}>📅</span> Agendas Google
-          {connected && <span style={{ background: "#B8966A", color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 10 }}>{calendars.filter(c => c.selected).length}</span>}
+          {connected && <span style={{ background: "#B8966A", color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 10 }}>{selectedCount}</span>}
         </button>
 
         {/* View toggle */}
@@ -298,18 +193,24 @@ export default function PlanningBoard() {
         <button onClick={() => setShowNewEvent(new Date())} style={btnPrimary}>+ Événement</button>
       </div>
 
-      {/* Calendar legend */}
-      {connected && calendars.length > 0 && (
+      {notice && (
+        <div style={{ background: notice.ok ? "#f0fdf4" : "#fef2f2", borderBottom: `1px solid ${notice.ok ? "#bbf7d0" : "#fecaca"}`, color: notice.ok ? "#166534" : "#991b1b", padding: "8px 20px", fontSize: 12.5 }}>
+          {notice.ok ? "✓ " : "⚠ "}{notice.msg}
+        </div>
+      )}
+
+      {/* Légende des agendas */}
+      {connected && selectedCals.length > 0 && (
         <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "6px 20px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <span style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>AGENDAS :</span>
-          {calendars.filter(c => c.selected).map(c => (
+          {selectedCals.map(c => (
             <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: c.backgroundColor }} />
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: c.backgroundColor || "#4285F4" }} />
               <span style={{ fontSize: 11, color: "#374151" }}>{c.summary}</span>
             </div>
           ))}
           <span style={{ marginLeft: "auto", fontSize: 11, color: "#9ca3af" }}>
-            {gEvents.length} événement(s) Google · {localEvents.length} local/aux
+            {googleCount} événement(s) Google
           </span>
         </div>
       )}
@@ -318,7 +219,7 @@ export default function PlanningBoard() {
       <CalendarView
         view={view}
         currentDate={currentDate}
-        events={allEvents}
+        events={events}
         onSelectDate={(d) => setShowNewEvent(d)}
         onSelectEvent={(e) => setSelectedEvent(e)}
       />
@@ -326,12 +227,9 @@ export default function PlanningBoard() {
       {/* Panels */}
       {showSync && (
         <GoogleSyncPanel
-          config={config}
-          connected={connected}
-          calendars={calendars}
+          status={gstatus}
           syncing={syncing}
-          syncError={syncError}
-          onConnect={handleConnect}
+          onConnect={() => { window.location.href = "/api/google/calendar/connect"; }}
           onDisconnect={handleDisconnect}
           onToggleCalendar={handleCalendarToggle}
           onClose={() => setShowSync(false)}
@@ -355,7 +253,7 @@ export default function PlanningBoard() {
           onDelete={async () => {
             if (selectedEvent.type === "local") {
               await fetch(`/api/calendar/${selectedEvent.id}`, { method: "DELETE" });
-              setLocalEvents(p => p.filter(e => e.id !== selectedEvent.id));
+              setEvents(p => p.filter(e => e.id !== selectedEvent.id));
             }
             setSelectedEvent(null);
           }}
