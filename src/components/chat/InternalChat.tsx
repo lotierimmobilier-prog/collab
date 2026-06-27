@@ -83,6 +83,24 @@ export default function InternalChat() {
     ).catch(() => {});
   }, [fetchChannels, session?.user?.id]);
 
+  // Ouverture directe d'une conversation via ?channel=<id> (lien d'un email de
+  // notification). On l'ouvre dès que les channels sont chargés puis on nettoie l'URL.
+  const deepLinked = useRef(false);
+  useEffect(() => {
+    if (deepLinked.current) return;
+    const target = new URLSearchParams(window.location.search).get("channel");
+    if (!target) { deepLinked.current = true; return; }
+    if (channels.length === 0) return;
+    const ch = channels.find(c => c.id === target);
+    if (!ch) { deepLinked.current = true; return; }
+    deepLinked.current = true;
+    setActiveChannel(ch);
+    fetchMessages(ch.id);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("channel");
+    window.history.replaceState({}, "", url.toString());
+  }, [channels, fetchMessages]);
+
   // Polling messages actifs toutes les 5s
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);

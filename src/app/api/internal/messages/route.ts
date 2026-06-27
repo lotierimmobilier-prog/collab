@@ -124,9 +124,9 @@ export async function POST(req: NextRequest) {
       to: r.email,
       subject: `Nouveau message de ${senderName || "votre équipe"}`,
       heading: `Nouveau message de ${senderName || "votre équipe"}`,
-      message: preview,
-      ctaLabel: "Ouvrir la messagerie",
-      ctaPath: "/messagerie-interne",
+      message: `${senderName || "Un membre de l'équipe"} vous a écrit :\n\n« ${preview} »`,
+      ctaLabel: "Accéder à la conversation",
+      ctaPath: `/messagerie-interne?channel=${channelId}`,
     })));
   }
 
