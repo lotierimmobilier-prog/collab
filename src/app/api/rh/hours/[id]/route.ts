@@ -19,13 +19,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const action = String(body?.action ?? "");
   if (action !== "validate" && action !== "reject") return NextResponse.json({ error: "Action inconnue" }, { status: 400 });
 
-  await prisma.monthlyHours.update({
-    where: { id },
-    data: {
-      status: action === "validate" ? "valide" : "refuse",
-      validatedById: session.user.id, validatedAt: new Date(),
-      validationNote: body?.note?.trim() || null,
-    },
-  });
+  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { prenom: true, nom: true } });
+  const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || req.headers.get("x-real-ip") || null;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data: any = {
+    status: action === "validate" ? "valide" : "refuse",
+    validatedById: session.user.id, validatedAt: new Date(),
+    validationNote: body?.note?.trim() || null,
+  };
+  // La validation vaut signature de l'employeur (preuve : nom, horodatage, IP).
+  if (action === "validate") {
+    data.directionSignedAt = new Date();
+    data.directionSignatureName = `${me?.prenom ?? ""} ${me?.nom ?? ""}`.trim() || null;
+    data.directionSignatureIp = ip;
+  }
+
+  await prisma.monthlyHours.update({ where: { id }, data });
   return NextResponse.json({ ok: true });
 }

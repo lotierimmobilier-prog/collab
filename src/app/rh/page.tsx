@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import Sidebar from "@/components/Sidebar";
+import { monthDays, dayHours, totals, round2, OBS_OPTIONS, PRIME_MOTIFS, ACOMPTE_MODES, type DayEntry } from "@/lib/decompte";
 
 const GOLD = "#B8966A"; const DARK = "#1C1A17"; const BORDER = "#E6E1D9"; const GOLD_BG = "#F7F0E6";
 const RED = "#DC2626"; const AMBER = "#B45309"; const GREEN = "#2F855A"; const BLUE = "#2563EB";
@@ -139,12 +140,16 @@ function LeaveForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
   );
 }
 
-// ── Mes heures ─────────────────────────────────────────────────────
+// ── Mes heures — décompte au format légal ──────────────────────────
 function HeuresTab() {
-  const [list, setList] = useState<Hours[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [list, setList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
-  const [hours, setHours] = useState(""); const [note, setNote] = useState("");
+  const [entries, setEntries] = useState<Record<number, DayEntry>>({});
+  const [hebdo, setHebdo] = useState(""); const [note, setNote] = useState("");
+  const [avNat, setAvNat] = useState(""); const [acompte, setAcompte] = useState(""); const [acMode, setAcMode] = useState("");
+  const [primeMotif, setPrimeMotif] = useState(""); const [primeMontant, setPrimeMontant] = useState("");
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState("");
 
   const load = useCallback(async () => { setLoading(true); const r = await fetch("/api/rh/hours?scope=mine"); if (r.ok) setList(await r.json()); setLoading(false); }, []);
@@ -153,57 +158,122 @@ function HeuresTab() {
   const current = list.find(h => h.month === month);
   const locked = current?.status === "valide";
 
-  // Pré-remplit le formulaire quand on change de mois.
-  useEffect(() => { const c = list.find(h => h.month === month); setHours(c?.totalHours != null ? String(c.totalHours) : ""); setNote(c?.note ?? ""); }, [month, list]);
+  // Pré-remplit depuis l'enregistrement du mois sélectionné.
+  useEffect(() => {
+    const c = list.find(h => h.month === month);
+    const map: Record<number, DayEntry> = {};
+    if (Array.isArray(c?.entries)) for (const e of c.entries) if (e?.d) map[e.d] = e;
+    setEntries(map);
+    setHebdo(c?.heureHebdo != null ? String(c.heureHebdo) : "");
+    setNote(c?.note ?? ""); setAvNat(c?.avantageNature ?? ""); setAcompte(c?.acompte != null ? String(c.acompte) : "");
+    setAcMode(c?.acompteMode ?? ""); setPrimeMotif(c?.primeMotif ?? ""); setPrimeMontant(c?.primeMontant != null ? String(c.primeMontant) : "");
+  }, [month, list]);
+
+  const days = monthDays(month);
+  const entriesArr = days.map(({ d }) => ({ ...(entries[d] || {}), d }));
+  const t = totals(month, entriesArr);
+
+  function setDay(d: number, k: keyof DayEntry, v: string | boolean | number) {
+    setEntries(p => ({ ...p, [d]: { ...(p[d] || { d }), d, [k]: v } }));
+  }
 
   async function save(sign: boolean) {
-    if (sign && !confirm(`Vous signez votre relevé d'heures de ${month} (${hours || 0} h). Cette signature électronique fait foi. Continuer ?`)) return;
+    if (sign && !confirm(`Vous signez votre décompte d'heures de ${fmtMonth(month)} (${t.monthTotal} h). Cette signature électronique fait foi. Continuer ?`)) return;
     setSaving(true); setMsg("");
-    const r = await fetch("/api/rh/hours", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ month, totalHours: hours, note, sign }) });
+    const payload = {
+      month, entries: entriesArr.filter(e => e.m1 || e.a1 || e.s1 || e.nuit || e.panier || e.obs),
+      heureHebdo: hebdo, note, avantageNature: avNat, acompte, acompteMode: acMode, primeMotif, primeMontant, sign,
+    };
+    const r = await fetch("/api/rh/hours", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const d = await r.json().catch(() => ({}));
     setSaving(false);
-    if (r.ok) { setMsg(sign ? "✓ Relevé signé et transmis à la direction." : "✓ Enregistré (brouillon)."); await load(); }
+    if (r.ok) { setMsg(sign ? "✓ Décompte signé et transmis à la direction." : "✓ Enregistré (brouillon)."); await load(); }
     else setMsg(d.error || "Échec.");
   }
 
+  const tin: React.CSSProperties = { width: 52, border: `1px solid ${BORDER}`, borderRadius: 5, padding: "3px 4px", fontSize: 11, outline: "none", background: locked ? "#f3f4f6" : "#fff" };
+
   return (
-    <div style={{ maxWidth: 820 }}>
-      <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, padding: 18, marginBottom: 18 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: DARK, marginBottom: 12 }}>Saisir mon relevé d'heures</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <L label="Mois"><input type="month" value={month} onChange={e => setMonth(e.target.value)} style={inp} /></L>
-          <L label="Total d'heures"><input type="number" step="0.5" value={hours} onChange={e => setHours(e.target.value)} style={inp} placeholder="ex. 151.67" disabled={locked} /></L>
-        </div>
-        <L label="Remarque (facultatif)"><textarea value={note} onChange={e => setNote(e.target.value)} rows={2} style={{ ...inp, height: "auto", padding: "8px 10px" }} disabled={locked} /></L>
-        {current && <div style={{ fontSize: 12, marginTop: 4 }}>Statut : <b style={{ color: (HOURS_ST[current.status] ?? HOURS_ST.brouillon).color }}>{(HOURS_ST[current.status] ?? HOURS_ST.brouillon).label}</b>{current.agentSignedAt ? ` · signé le ${new Date(current.agentSignedAt).toLocaleDateString("fr-FR")}` : ""}{current.validationNote ? ` · Direction : ${current.validationNote}` : ""}</div>}
-        {!locked && (
-          <div style={{ display: "flex", gap: 10, marginTop: 14, alignItems: "center", flexWrap: "wrap" }}>
-            <button onClick={() => save(false)} disabled={saving} style={btnLight}>Enregistrer (brouillon)</button>
-            <button onClick={() => save(true)} disabled={saving || !hours} style={btnGold}>✍ Signer et transmettre</button>
-            {msg && <span style={{ fontSize: 12.5, color: msg.startsWith("✓") ? GREEN : RED }}>{msg}</span>}
+    <div>
+      <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, marginBottom: 16 }}>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 6 }}>
+          <L label="Mois"><input type="month" value={month} onChange={e => setMonth(e.target.value)} style={{ ...inp, width: 160 }} /></L>
+          <L label="Heure hebdo. (contrat)"><input type="number" step="0.5" value={hebdo} onChange={e => setHebdo(e.target.value)} style={{ ...inp, width: 130 }} placeholder="ex. 35" disabled={locked} /></L>
+          <div style={{ flex: 1 }} />
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 11, color: "#9ca3af" }}>Total du mois</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: GOLD }}>{t.monthTotal} h</div>
           </div>
-        )}
-        {locked && <div style={{ fontSize: 12.5, color: GREEN, marginTop: 12 }}>✓ Relevé validé par la direction — verrouillé.</div>}
-        <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 10 }}>La signature enregistre votre nom, la date/heure et votre adresse IP comme preuve.</div>
+        </div>
+        {current && <div style={{ fontSize: 12 }}>Statut : <b style={{ color: (HOURS_ST[current.status] ?? HOURS_ST.brouillon).color }}>{(HOURS_ST[current.status] ?? HOURS_ST.brouillon).label}</b>
+          {current.agentSignedAt ? ` · vous : ${new Date(current.agentSignedAt).toLocaleDateString("fr-FR")}` : ""}
+          {current.directionSignedAt ? ` · employeur : ${new Date(current.directionSignedAt).toLocaleDateString("fr-FR")}` : ""}
+          {current.id && <a href={`/api/rh/hours/${current.id}/pdf`} target="_blank" rel="noreferrer" style={{ marginLeft: 10, color: GOLD }}>📄 PDF</a>}</div>}
       </div>
 
-      <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7280", marginBottom: 8 }}>HISTORIQUE</div>
-      {loading ? <Empty t="Chargement…" /> : list.length === 0 ? <Empty t="Aucun relevé pour le moment." /> : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {list.map(h => { const st = HOURS_ST[h.status] ?? HOURS_ST.brouillon; return (
-            <div key={h.id} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderLeft: `4px solid ${st.color}`, borderRadius: 10, padding: "10px 14px", display: "flex", gap: 12, alignItems: "center" }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 13.5, color: DARK }}>{fmtMonth(h.month)} · {h.totalHours ?? "—"} h</div>
-                {h.note && <div style={{ fontSize: 12, color: "#6b7280" }}>{h.note}</div>}
-              </div>
-              <span style={{ background: st.color + "20", color: st.color, borderRadius: 6, padding: "2px 9px", fontSize: 11.5, fontWeight: 600 }}>{st.label}</span>
-            </div>
-          ); })}
+      {/* Grille quotidienne */}
+      <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, padding: 12, marginBottom: 16, overflowX: "auto" }}>
+        <table style={{ borderCollapse: "collapse", fontSize: 11, width: "100%", minWidth: 720 }}>
+          <thead>
+            <tr style={{ background: GOLD_BG, color: DARK }}>
+              <th style={th}>Jour</th><th style={th} colSpan={2}>Matin</th><th style={th} colSpan={2}>Après-midi</th><th style={th} colSpan={2}>Soir</th>
+              <th style={th}>Nuit</th><th style={th}>Pan.</th><th style={th}>Observation</th><th style={th}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {days.map(({ d, weekday, dow }, i) => {
+              const e = entries[d] || { d };
+              const wk = dow === 0 || dow === 6;
+              const dh = dayHours({ ...e, d });
+              const weekEnd = (i + 1) % 7 === 0;
+              return (
+                <tr key={d} style={{ background: wk ? "#fafafa" : "#fff", borderBottom: weekEnd ? `2px solid ${GOLD}` : `1px solid #f1f1f1` }}>
+                  <td style={{ ...td, whiteSpace: "nowrap", color: wk ? "#9ca3af" : DARK }}>{String(d).padStart(2, "0")} {weekday.slice(0, 3)}</td>
+                  <td style={td}><input type="time" value={e.m1 ?? ""} onChange={ev => setDay(d, "m1", ev.target.value)} style={tin} disabled={locked} /></td>
+                  <td style={td}><input type="time" value={e.m2 ?? ""} onChange={ev => setDay(d, "m2", ev.target.value)} style={tin} disabled={locked} /></td>
+                  <td style={td}><input type="time" value={e.a1 ?? ""} onChange={ev => setDay(d, "a1", ev.target.value)} style={tin} disabled={locked} /></td>
+                  <td style={td}><input type="time" value={e.a2 ?? ""} onChange={ev => setDay(d, "a2", ev.target.value)} style={tin} disabled={locked} /></td>
+                  <td style={td}><input type="time" value={e.s1 ?? ""} onChange={ev => setDay(d, "s1", ev.target.value)} style={tin} disabled={locked} /></td>
+                  <td style={td}><input type="time" value={e.s2 ?? ""} onChange={ev => setDay(d, "s2", ev.target.value)} style={tin} disabled={locked} /></td>
+                  <td style={td}><input type="number" step="0.5" value={e.nuit ?? ""} onChange={ev => setDay(d, "nuit", ev.target.value ? Number(ev.target.value) : 0)} style={{ ...tin, width: 38 }} disabled={locked} /></td>
+                  <td style={{ ...td, textAlign: "center" }}><input type="checkbox" checked={!!e.panier} onChange={ev => setDay(d, "panier", ev.target.checked)} disabled={locked} /></td>
+                  <td style={td}>
+                    <select value={e.obs ?? ""} onChange={ev => setDay(d, "obs", ev.target.value)} style={{ ...tin, width: 150 }} disabled={locked}>
+                      {OBS_OPTIONS.map(o => <option key={o} value={o}>{o || "—"}</option>)}
+                    </select>
+                  </td>
+                  <td style={{ ...td, fontWeight: 700, color: dh ? GREEN : "#d1d5db", textAlign: "right" }}>{dh ? round2(dh).toFixed(2) : "—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <div style={{ fontSize: 11, color: "#6b7280", marginTop: 8 }}>Totaux hebdo. : {t.weeks.map((w, i) => `S${i + 1} ${w.hours}h`).join("  ·  ")} — Nuit {t.nuitTotal}h · Paniers {t.paniers}</div>
+      </div>
+
+      {/* Avantages / prime / acompte */}
+      <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, marginBottom: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+        <L label="Avantage en nature"><input value={avNat} onChange={e => setAvNat(e.target.value)} style={inp} disabled={locked} placeholder="nature…" /></L>
+        <L label="Prime — motif"><select value={primeMotif} onChange={e => setPrimeMotif(e.target.value)} style={inp} disabled={locked}>{PRIME_MOTIFS.map(p => <option key={p} value={p}>{p || "—"}</option>)}</select></L>
+        <L label="Prime — montant (€)"><input type="number" value={primeMontant} onChange={e => setPrimeMontant(e.target.value)} style={inp} disabled={locked} /></L>
+        <L label="Acompte (€)"><input type="number" value={acompte} onChange={e => setAcompte(e.target.value)} style={inp} disabled={locked} /></L>
+        <L label="Acompte — mode"><select value={acMode} onChange={e => setAcMode(e.target.value)} style={inp} disabled={locked}>{ACOMPTE_MODES.map(m => <option key={m} value={m}>{m || "—"}</option>)}</select></L>
+        <L label="Remarque"><input value={note} onChange={e => setNote(e.target.value)} style={inp} disabled={locked} /></L>
+      </div>
+
+      {!locked ? (
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <button onClick={() => save(false)} disabled={saving} style={btnLight}>Enregistrer (brouillon)</button>
+          <button onClick={() => save(true)} disabled={saving || t.monthTotal === 0} style={btnGold}>✍ Signer et transmettre</button>
+          {msg && <span style={{ fontSize: 12.5, color: msg.startsWith("✓") ? GREEN : RED }}>{msg}</span>}
+          <span style={{ fontSize: 11, color: "#9ca3af" }}>La signature enregistre nom, date/heure et IP comme preuve.</span>
         </div>
-      )}
+      ) : <div style={{ fontSize: 12.5, color: GREEN }}>✓ Décompte validé et signé par l'employeur — verrouillé. <a href={`/api/rh/hours/${current.id}/pdf`} target="_blank" rel="noreferrer" style={{ color: GOLD }}>Télécharger le PDF</a></div>}
     </div>
   );
 }
+const th: React.CSSProperties = { padding: "5px 4px", fontSize: 10, fontWeight: 700, textAlign: "center", borderBottom: "1px solid #e5e7eb" };
+const td: React.CSSProperties = { padding: "2px 4px", textAlign: "center" };
 
 // ── Validation (direction) ─────────────────────────────────────────
 function ValidationTab() {
@@ -252,7 +322,8 @@ function ValidationTab() {
               <div style={{ fontWeight: 600, fontSize: 13.5, color: DARK }}>{h.who} — {fmtMonth(h.month)} · {h.totalHours ?? "—"} h</div>
               <div style={{ fontSize: 11.5, color: "#9ca3af" }}>Signé par {h.agentSignatureName || h.who}{h.agentSignedAt ? ` le ${new Date(h.agentSignedAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}` : ""}{h.note ? ` · ${h.note}` : ""}</div>
             </div>
-            <button onClick={() => decideHours(h, "validate")} style={btnGreen}>✓ Valider</button>
+            <a href={`/api/rh/hours/${h.id}/pdf`} target="_blank" rel="noreferrer" style={{ ...miniBtn, textDecoration: "none", color: GOLD }}>📄 PDF</a>
+            <button onClick={() => decideHours(h, "validate")} style={btnGreen}>✓ Valider (signer)</button>
             <button onClick={() => decideHours(h, "reject")} style={btnRed}>✕ Refuser</button>
           </div>
         ))}

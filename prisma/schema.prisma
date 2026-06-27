@@ -1080,18 +1080,31 @@ model MonthlyHours {
   userId             String
   month              String    // "2026-06"
   totalHours         Float?
-  entries            Json?     // détail optionnel : [{date, hours, note}]
+  entries            Json?     // décompte quotidien : [{d, m1,m2,a1,a2,s1,s2, nuit, panier, obs}]
   note               String?
+  // ── En-tête du décompte (format légal L.143-14) ──
+  societe            String?
+  employe            String?
+  heureHebdo         Float?    // heure hebdomadaire contractuelle
+  avantageNature     String?
+  acompte            Float?
+  acompteMode        String?   // chèque | espèce | virement
+  primeMotif         String?
+  primeMontant       Float?
   // ── Signature de l'agent (preuve : nom, horodatage, IP) ──
   agentSigned        Boolean   @default(false)
   agentSignedAt      DateTime?
   agentSignatureName String?
   agentSignatureIp   String?
-  // ── Validation direction ──
+  // ── Signature / validation direction (employeur) ──
   status             String    @default("brouillon") // brouillon | signe | valide | refuse
   validatedById      String?
   validatedAt        DateTime?
   validationNote     String?
+  directionSignedAt      DateTime?
+  directionSignatureName String?
+  directionSignatureIp   String?
+  sentToAccountantAt DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
