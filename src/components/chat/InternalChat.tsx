@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 const GOLD    = "#B8966A";
 const GOLD_BG = "#F7F0E6";
@@ -30,6 +31,11 @@ function humanSize(bytes: number) {
 
 export default function InternalChat() {
   const { data: session } = useSession();
+  const bp = useBreakpoint();
+  // Sur mobile/tablette, la barre de navigation du bas (fixe) recouvre le bas
+  // de l'écran : on réserve de la place sous la zone de saisie pour qu'elle
+  // reste visible et utilisable.
+  const hasBottomNav = bp === "mobile" || bp === "tablet";
   const [channels, setChannels]           = useState<Channel[]>([]);
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
   const [messages, setMessages]           = useState<Message[]>([]);
@@ -338,7 +344,7 @@ export default function InternalChat() {
           </div>
 
           {/* Saisie */}
-          <div style={{ padding: "10px 20px 12px", borderTop: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ padding: "10px 20px 12px", borderTop: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", gap: 6, background: "#fff", ...(hasBottomNav ? { paddingBottom: "calc(74px + env(safe-area-inset-bottom))" } : {}) }}>
             {/* Pièces jointes en attente */}
             {pending.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
