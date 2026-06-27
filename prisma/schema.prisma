@@ -1039,6 +1039,7 @@ model Procedure {
   description String?
   category    String?
   kind        String   @default("pdf") // pdf | video | link
+  roles       String[] @default([])    // rôles destinataires (vide = tout le monde)
   fileName    String?
   mime        String?
   size        Int?

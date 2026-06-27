@@ -5,15 +5,20 @@ import { prisma } from "@/lib/prisma";
 export const maxDuration = 60;
 const MAX_BYTES = 50 * 1024 * 1024; // 50 Mo (vidéos courtes ; sinon utiliser un lien)
 
-// GET /api/procedures — liste des procédures (visible par tous les connectés,
-// sans le binaire ; juste un indicateur de présence de fichier).
+// GET /api/procedures — liste des procédures.
+// Cloisonnement par rôle : chacun voit les procédures « tout le monde » (roles
+// vide) + celles ciblant son rôle ; l'admin voit tout (avec les rôles ciblés).
 export async function GET() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  const role = session.user.roleId ?? "";
+  const isAdmin = role === "admin";
 
   try {
+    const where = isAdmin ? {} : { OR: [{ roles: { isEmpty: true } }, { roles: { has: role } }] };
     const rows = await prisma.procedure.findMany({
-      select: { id: true, title: true, description: true, category: true, kind: true, fileName: true, mime: true, size: true, url: true, createdAt: true, updatedAt: true },
+      where,
+      select: { id: true, title: true, description: true, category: true, kind: true, roles: true, fileName: true, mime: true, size: true, url: true, createdAt: true, updatedAt: true },
       orderBy: [{ category: "asc" }, { title: "asc" }],
     });
     return NextResponse.json(rows.map(p => ({
@@ -23,7 +28,7 @@ export async function GET() {
       hasFile: !!p.fileName,
     })));
   } catch {
-    return NextResponse.json([]); // table pas encore migrée
+    return NextResponse.json([]); // table/colonne pas encore migrée
   }
 }
 
@@ -45,11 +50,13 @@ export async function POST(req: NextRequest) {
   const url = body?.url ? String(body.url).trim() : null;
   const kind = body?.kind === "video" ? "video" : body?.kind === "link" ? "link" : file?.data ? (String(file.mime || "").startsWith("video/") ? "video" : "pdf") : url ? "link" : "pdf";
 
+  const roles = Array.isArray(body?.roles) ? body.roles.map((r: unknown) => String(r)).filter(Boolean).slice(0, 20) : [];
   const data = {
     title,
     description: body?.description?.trim() || null,
     category: body?.category?.trim() || null,
     kind,
+    roles,
     fileName: file?.name ? String(file.name).slice(0, 200) : null,
     mime: file?.mime ? String(file.mime) : null,
     size: file?.size ? Number(file.size) : null,

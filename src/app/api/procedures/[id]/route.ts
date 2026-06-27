@@ -36,6 +36,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (body.title !== undefined) { const t = String(body.title).trim(); if (!t) return NextResponse.json({ error: "Titre requis." }, { status: 400 }); data.title = t; }
   if (body.description !== undefined) data.description = body.description?.trim() || null;
   if (body.category !== undefined) data.category = body.category?.trim() || null;
+  if (body.roles !== undefined) data.roles = Array.isArray(body.roles) ? body.roles.map((r: unknown) => String(r)).filter(Boolean).slice(0, 20) : [];
   if (body.url !== undefined) data.url = body.url ? String(body.url).trim() : null;
   if (body.file?.data) {
     const bytes = Math.ceil((String(body.file.data).length * 3) / 4);
