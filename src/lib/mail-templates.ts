@@ -112,6 +112,29 @@ Cordialement,
       { name: "agence_nom", hint: "Nom de l'agence" },
     ],
   },
+  {
+    id: "supplier_conformite",
+    label: "Fournisseur — demande de justificatifs (assurance / URSSAF)",
+    description: "Relance envoyée au fournisseur pour qu'il dépose son assurance et son attestation URSSAF à jour.",
+    subject: "Vos justificatifs à jour — {{agence_nom}}",
+    body: `Bonjour,
+
+Pour continuer à vous confier des interventions, nous devons disposer de vos justificatifs à jour :
+{{manquants}}
+
+Merci de les déposer en quelques clics via votre espace sécurisé :
+{{lien}}
+
+Vous pouvez aussi simplement répondre à cet email en joignant vos attestations.
+
+Cordialement,
+{{agence_nom}}`,
+    variables: [
+      { name: "manquants", hint: "Liste des documents à fournir/renouveler" },
+      { name: "lien", hint: "Lien de l'espace fournisseur" },
+      { name: "agence_nom", hint: "Nom de l'agence" },
+    ],
+  },
 ];
 
 export function defaultTemplate(id: string): MailTemplate | undefined {

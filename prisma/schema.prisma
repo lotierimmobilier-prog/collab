@@ -346,6 +346,12 @@ model Supplier {
   insurancePolicy String?               // n° de police
   insuranceExpiry DateTime?             // fin de validité de l'attestation
   insuranceDoc    Json?                 // attestation : {name,mime,size,data}
+  // ── Attestation de vigilance URSSAF ──
+  urssafExpiry    DateTime?             // fin de validité de l'attestation URSSAF
+  urssafDoc       Json?                 // attestation URSSAF : {name,mime,size,data}
+  // ── Espace fournisseur (dépôt des justificatifs par lien) ──
+  portalToken     String?  @unique      // jeton du lien espace fournisseur
+  lastConfReminderAt DateTime?          // dernière relance « documents à jour »
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -12,14 +12,17 @@ export async function GET() {
   });
 
   return NextResponse.json(suppliers.map(s => {
-    // On ne renvoie pas le binaire de l'attestation dans la liste (juste un flag).
-    const { insuranceDoc, _count, ...rest } = s;
+    // On ne renvoie pas le binaire des attestations dans la liste (juste un flag).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { insuranceDoc, urssafDoc, _count, ...rest } = s as any;
     return {
       ...rest,
       createdAt: s.createdAt.toISOString(),
       updatedAt: s.updatedAt.toISOString(),
       insuranceExpiry: s.insuranceExpiry ? s.insuranceExpiry.toISOString() : null,
+      urssafExpiry: (s as { urssafExpiry?: Date | null }).urssafExpiry ? new Date((s as { urssafExpiry: Date }).urssafExpiry).toISOString() : null,
       hasInsuranceDoc: !!insuranceDoc,
+      hasUrssafDoc: !!urssafDoc,
       ordersCount: _count.orders,
     };
   }));

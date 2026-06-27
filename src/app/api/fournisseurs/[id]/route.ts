@@ -9,9 +9,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = await req.json();
 
   const MAX = 20 * 1024 * 1024;
-  if (body.insuranceDoc?.data) {
-    const bytes = Math.ceil((String(body.insuranceDoc.data).length * 3) / 4);
-    if (bytes > MAX) return NextResponse.json({ error: "Attestation trop volumineuse (max 20 Mo)." }, { status: 413 });
+  for (const k of ["insuranceDoc", "urssafDoc"] as const) {
+    if (body[k]?.data && Math.ceil((String(body[k].data).length * 3) / 4) > MAX)
+      return NextResponse.json({ error: "Attestation trop volumineuse (max 20 Mo)." }, { status: 413 });
   }
 
   const supplier = await prisma.supplier.update({
@@ -36,11 +36,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         size: body.insuranceDoc.size ? Number(body.insuranceDoc.size) : null,
         data: String(body.insuranceDoc.data),
       } : (body.insuranceDoc === null ? null : undefined) }),
+      ...(body.urssafExpiry !== undefined && { urssafExpiry: body.urssafExpiry ? new Date(body.urssafExpiry) : null }),
+      ...(body.urssafDoc    !== undefined && { urssafDoc: body.urssafDoc?.data ? {
+        name: String(body.urssafDoc.name || "attestation-urssaf").slice(0, 200),
+        mime: body.urssafDoc.mime ? String(body.urssafDoc.mime) : null,
+        size: body.urssafDoc.size ? Number(body.urssafDoc.size) : null,
+        data: String(body.urssafDoc.data),
+      } : (body.urssafDoc === null ? null : undefined) }),
     },
   });
 
-  const { insuranceDoc, ...rest } = supplier;
-  return NextResponse.json({ ...rest, hasInsuranceDoc: !!insuranceDoc, createdAt: supplier.createdAt.toISOString(), updatedAt: supplier.updatedAt.toISOString(), insuranceExpiry: supplier.insuranceExpiry ? supplier.insuranceExpiry.toISOString() : null });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { insuranceDoc, urssafDoc, ...rest } = supplier as any;
+  return NextResponse.json({
+    ...rest,
+    hasInsuranceDoc: !!insuranceDoc, hasUrssafDoc: !!urssafDoc,
+    createdAt: supplier.createdAt.toISOString(), updatedAt: supplier.updatedAt.toISOString(),
+    insuranceExpiry: supplier.insuranceExpiry ? supplier.insuranceExpiry.toISOString() : null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    urssafExpiry: (supplier as any).urssafExpiry ? new Date((supplier as any).urssafExpiry).toISOString() : null,
+  });
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
