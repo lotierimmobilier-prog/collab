@@ -1054,6 +1054,30 @@ model Procedure {
 }
 
 /// RH — demande de congé (circuit de validation par la direction).
+// Dossier du salarié (côté entreprise/direction) : contrats, fiche de suivi
+// annuel, RDV médecine du travail, complémentaire santé…
+model EmployeeDocument {
+  id          String    @id @default(cuid())
+  userId      String    // salarié concerné
+  category    String    // contrat | suivi_annuel | medecine_travail | mutuelle | autre
+  label       String?
+  issuer      String?   // organisme (mutuelle, service de santé au travail…)
+  number      String?   // n° contrat / adhérent
+  issuedAt    DateTime? // date du document / de la visite
+  expiresAt   DateTime? // prochaine échéance (visite médicale, renouvellement…)
+  fileName    String?
+  mime        String?
+  size        Int?
+  data        String?   // fichier en base64
+  note        String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId, category])
+  @@map("employee_documents")
+}
+
 model LeaveRequest {
   id           String    @id @default(cuid())
   userId       String
