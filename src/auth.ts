@@ -49,13 +49,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     updateAge: 60 * 60,            // renouvellement du token toutes les heures
   },
 
-  // Cookies sécurisés en production (HTTPS uniquement, SameSite strict)
+  // Cookies sécurisés en production (HTTPS uniquement).
+  // Le cookie de session est en SameSite=Lax (et non Strict) : Strict empêche
+  // le navigateur de renvoyer la session au retour d'un site externe (Google
+  // OAuth) → la connexion Google échouait (« Non authentifié ») et l'utilisateur
+  // était rebondi vers le login. Lax autorise ce retour (navigation GET de
+  // premier niveau) tout en bloquant les requêtes cross-site (protection CSRF).
   cookies: process.env.NODE_ENV === "production" ? {
     sessionToken: {
       name: "__Secure-authjs.session-token",
       options: {
         httpOnly: true,
-        sameSite: "strict" as const,
+        sameSite: "lax" as const,
         path: "/",
         secure: true,
       },
