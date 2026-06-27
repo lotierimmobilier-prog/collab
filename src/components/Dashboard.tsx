@@ -895,48 +895,72 @@ function weatherHint(code: number): string {
   return "bonne journée à vous";
 }
 
+interface DashStats { tasks: { doneMonth: number; avgDays: number | null; openCount: number }; ca: { month: number; prevMonth: number; deltaPct: number | null } | null }
+
 function Banner({ firstName }: { firstName: string }) {
   // Citation différente à chaque ouverture de page (après montage, pour éviter
   // toute incohérence d'hydratation SSR).
   const [i, setI] = useState(0);
   const [wx, setWx] = useState<{ temp: number; code: number; city: string } | null>(null);
+  const [stats, setStats] = useState<DashStats | null>(null);
   useEffect(() => { setI(Math.floor(Math.random() * QUOTES.length)); }, []);
   useEffect(() => {
     fetch("/api/weather").then(r => r.ok ? r.json() : null).then(d => {
       if (d?.current && d?.city) setWx({ temp: d.current.temp, code: d.current.code, city: d.city });
     }).catch(() => {});
+    fetch("/api/dashboard/stats").then(r => r.ok ? r.json() : null).then(d => { if (d?.tasks) setStats(d); }).catch(() => {});
   }, []);
   const q = QUOTES[i];
 
+  const eur = (n: number) => n.toLocaleString("fr-FR") + " €";
+  const kpis: { label: string; value: string; sub?: string }[] = [];
+  if (stats) {
+    kpis.push({ label: "Tâches terminées · ce mois", value: String(stats.tasks.doneMonth), sub: stats.tasks.avgDays != null ? `≈ ${stats.tasks.avgDays} j en moyenne` : undefined });
+    kpis.push({ label: "Tâches en cours", value: String(stats.tasks.openCount), sub: stats.tasks.openCount > 0 ? "à traiter" : "tout est à jour 🎉" });
+    if (stats.ca) kpis.push({ label: "CA encaissé · ce mois", value: eur(stats.ca.month), sub: stats.ca.deltaPct != null ? `${stats.ca.deltaPct >= 0 ? "▲" : "▼"} ${Math.abs(stats.ca.deltaPct)} % vs mois préc. (${eur(stats.ca.prevMonth)})` : undefined });
+  }
+
   return (
     <div style={{
-      position: "relative", overflow: "hidden", borderRadius: 16, padding: "24px 32px", marginBottom: 20,
-      background: "linear-gradient(120deg, #1C1A17 0%, #3A3024 50%, #8A6A42 100%)", color: "#F7F0E6",
-      boxShadow: "0 12px 32px rgba(28,26,23,0.28)", border: "1px solid rgba(184,150,106,0.35)",
+      position: "relative", overflow: "hidden", borderRadius: 16, padding: "22px 28px", marginBottom: 20,
+      background: "#FCFAF6", color: DARK,
+      boxShadow: "0 6px 22px rgba(28,26,23,0.06)", border: `1px solid ${BORDER}`,
     }}>
-      {/* Lueur dorée discrète */}
-      <div style={{ position: "absolute", right: 40, top: -60, width: 220, height: 220, borderRadius: "50%", background: "radial-gradient(circle, rgba(216,183,131,0.18), transparent 70%)", pointerEvents: "none" }} />
-
-      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 28, flexWrap: "wrap" }}>
-        {/* Accueil + météo locale + citation (colonne centrée verticalement) */}
-        <div style={{ flex: "1 1 360px", minWidth: 280 }}>
-          <div style={{ fontSize: 10.5, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(247,240,230,0.6)" }}>{todayStr()}</div>
-          <div style={{ fontFamily: SERIF, fontSize: 30, fontWeight: 600, marginTop: 7, letterSpacing: "0.01em" }}>{greet(firstName)}</div>
+      <div style={{ position: "relative", display: "flex", alignItems: "stretch", justifyContent: "space-between", gap: 28, flexWrap: "wrap" }}>
+        {/* Accueil + météo locale + stats + citation */}
+        <div style={{ flex: "1 1 380px", minWidth: 300, display: "flex", flexDirection: "column" }}>
+          <div style={{ fontSize: 10.5, letterSpacing: "0.2em", textTransform: "uppercase", color: GOLD }}>{todayStr()}</div>
+          <div style={{ fontFamily: SERIF, fontSize: 30, fontWeight: 600, marginTop: 7, color: DARK }}>{greet(firstName)}</div>
 
           {/* Message de bienvenue adapté à la météo locale */}
           {wx && (
-            <div style={{ fontSize: 13.5, color: "rgba(247,240,230,0.9)", marginTop: 8 }}>
-              {wmo(wx.code).icon} Il fait <b style={{ color: "#F7F0E6" }}>{wx.temp}°</b> à <b style={{ color: "#D8B783" }}>{wx.city}</b> — {weatherHint(wx.code)}.
+            <div style={{ fontSize: 13.5, color: "#6b7280", marginTop: 8 }}>
+              {wmo(wx.code).icon} Il fait <b style={{ color: DARK }}>{wx.temp}°</b> à <b style={{ color: GOLD }}>{wx.city}</b> — {weatherHint(wx.code)}.
             </div>
           )}
 
-          <div style={{ width: 48, height: 1, background: "linear-gradient(90deg, #D8B783, transparent)", margin: "16px 0 13px" }} />
+          {/* Indicateurs */}
+          {kpis.length > 0 && (
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+              {kpis.map((k, n) => (
+                <div key={n} style={{ flex: "1 1 150px", minWidth: 140, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "11px 14px" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.04em" }}>{k.label}</div>
+                  <div style={{ fontSize: 21, fontWeight: 800, color: DARK, marginTop: 3 }}>{k.value}</div>
+                  {k.sub && <div style={{ fontSize: 10.5, color: GOLD, marginTop: 2 }}>{k.sub}</div>}
+                </div>
+              ))}
+            </div>
+          )}
 
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 560 }}>
-            <span style={{ fontFamily: SERIF, fontSize: 38, lineHeight: 0.7, color: "rgba(216,183,131,0.85)", marginTop: 8, flexShrink: 0 }}>“</span>
+          <div style={{ flex: 1 }} />
+
+          <div style={{ width: 48, height: 1, background: "linear-gradient(90deg, #D8B783, transparent)", margin: "16px 0 12px" }} />
+
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 600 }}>
+            <span style={{ fontFamily: SERIF, fontSize: 36, lineHeight: 0.7, color: GOLD, marginTop: 7, flexShrink: 0 }}>“</span>
             <div>
-              <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 16, lineHeight: 1.5, color: "rgba(247,240,230,0.96)" }}>{q.text}</div>
-              <div style={{ fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "#D8B783", marginTop: 9 }}>— {q.author}</div>
+              <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 15.5, lineHeight: 1.5, color: "#3a342c" }}>{q.text}</div>
+              <div style={{ fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: GOLD, marginTop: 8 }}>— {q.author}</div>
             </div>
           </div>
         </div>
