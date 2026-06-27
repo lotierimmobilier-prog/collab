@@ -31,12 +31,23 @@ export async function GET() {
     }));
     return NextResponse.json(users.map(fmt));
   } catch (e) {
-    // Repli : colonnes de base uniquement (compatibilité bases non migrées).
+    // Repli résilient : on ne sélectionne QUE les colonnes réellement présentes
+    // en base (déterminées dynamiquement), pour toujours renvoyer parrainId /
+    // city / isEmployee / gedAccess quand elles existent — au lieu de les
+    // perdre et de faire « disparaître » le parrain de la fiche.
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rows: any[] = await prisma.$queryRaw`
-        SELECT id, prenom, nom, email, "roleId", active, "createdAt", "lastLogin"
-        FROM users ORDER BY "createdAt" DESC`;
+      const colRows: any[] = await prisma.$queryRawUnsafe(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'users'`,
+      );
+      const have = new Set(colRows.map(c => c.column_name));
+      const base = ['id', 'prenom', 'nom', 'email', '"roleId"', 'active', '"createdAt"', '"lastLogin"'];
+      const optional = ['parrainId', 'gedAccess', 'city', 'isEmployee', 'accessOverrides', 'avatar'];
+      const cols = base.concat(optional.filter(c => have.has(c)).map(c => `"${c}"`));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows: any[] = await prisma.$queryRawUnsafe(
+        `SELECT ${cols.join(', ')} FROM users ORDER BY "createdAt" DESC`,
+      );
       return NextResponse.json(rows.map(fmt));
     } catch (e2) {
       return NextResponse.json({ error: String(e), fallbackError: String(e2) }, { status: 500 });
