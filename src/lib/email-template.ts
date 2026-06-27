@@ -5,8 +5,8 @@
 const GOLD = "#B8966A";
 const DARK = "#1C1A17";
 const BORDER = "#E6E1D9";
-const PAGE_BG = "#F3F1EC";
-const FOOT_BG = "#FAF7F2";
+const PAGE_BG = "#ffffff";
+const FOOT_BG = "#ffffff";
 const MUTED = "#9b8e79";
 
 export function emailBaseUrl(): string {
@@ -48,13 +48,11 @@ export function renderBrandedEmail({ subject, contentHtml, viewUrl, senderName, 
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${PAGE_BG};padding:20px 12px;">
     <tr><td align="center">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border:1px solid ${BORDER};border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
-        <tr><td style="background:${DARK};padding:22px 28px;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-            <td style="font-family:Georgia,'Times New Roman',serif;color:#ffffff;font-size:21px;letter-spacing:3px;font-weight:bold;">LOTIER<span style="color:${GOLD};font-weight:normal;"> IMMOBILIER</span></td>
-            <td align="right" style="font-family:Arial,sans-serif;color:${GOLD};font-size:10px;letter-spacing:1.5px;text-transform:uppercase;">Votre agence de confiance</td>
-          </tr></table>
+        <tr><td align="center" style="background:#ffffff;padding:28px 28px 14px;">
+          <img src="${site}/logo.png" alt="Lotier Immobilier" width="200" style="display:inline-block;width:200px;max-width:62%;height:auto;border:0;" />
+          <div style="font-family:Arial,sans-serif;color:${GOLD};font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-top:12px;">Votre agence de confiance</div>
         </td></tr>
-        <tr><td style="height:3px;background:${GOLD};line-height:3px;font-size:0;">&nbsp;</td></tr>
+        <tr><td style="height:2px;background:${GOLD};line-height:2px;font-size:0;">&nbsp;</td></tr>
         <tr><td style="padding:28px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:${DARK};">
           ${contentHtml}
         </td></tr>
