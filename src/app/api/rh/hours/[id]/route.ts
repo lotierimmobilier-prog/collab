@@ -36,5 +36,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   await prisma.monthlyHours.update({ where: { id }, data });
+
+  // Validé (signé des deux parties) → envoi automatique au comptable + drive agence.
+  if (action === "validate") {
+    const { sendDecompteToAccountant } = await import("@/lib/rh-automation");
+    void sendDecompteToAccountant(id);
+  }
   return NextResponse.json({ ok: true });
 }

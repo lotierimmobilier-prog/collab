@@ -17,9 +17,11 @@ export async function GET() {
   const result = { mail: { count: 0, urgent: false }, chat: { count: 0, urgent: false }, legal: { count: 0, urgent: false } };
 
   // Balayages quotidiens throttlés (sans bloquer) : rappels d'expiration des
-  // documents perso + relances de conformité fournisseurs (assurance/URSSAF).
+  // documents perso + relances de conformité fournisseurs + relance décompte
+  // d'heures le 25 du mois.
   void runDueLegalReminders();
   void runDueSupplierConfReminders();
+  import("@/lib/rh-automation").then(m => m.runMonthlyHoursReminder()).catch(() => {});
 
   // ── Emails non lus (boîte de réception, cloisonné à l'utilisateur) ──
   try {

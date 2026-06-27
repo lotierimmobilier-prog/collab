@@ -135,6 +135,50 @@ Cordialement,
       { name: "agence_nom", hint: "Nom de l'agence" },
     ],
   },
+  {
+    id: "hours_reminder_collab",
+    label: "Décompte des heures — relance collaborateur (le 25)",
+    description: "Envoyé le 25 de chaque mois à chaque collaborateur salarié pour qu'il complète et signe son décompte des heures.",
+    subject: "Votre décompte des heures de {{mois}} à compléter et signer",
+    body: `Bonjour,
+
+Merci de compléter et de signer votre décompte des heures du mois de {{mois}}, directement dans votre espace :
+{{lien}}
+
+Pourquoi ce document ? Le Code du travail impose un document mensuel, signé par le salarié et l'employeur, annexé au bulletin de paie. Il récapitule vos heures de travail (quotidiennement par heures de début/fin, et par semaine). Votre signature et celle de l'employeur le rendent valable ; il nous protège tous deux en cas de litige (ex. réclamation d'heures supplémentaires).
+
+Une fois signé de votre côté, la direction le validera et le transmettra au cabinet comptable pour l'établissement de votre bulletin de salaire.
+
+Cordialement,
+{{agence_nom}}`,
+    variables: [
+      { name: "mois", hint: "Mois concerné (ex. juin 2026)" },
+      { name: "lien", hint: "Lien vers le décompte à remplir/signer" },
+      { name: "agence_nom", hint: "Nom de l'agence" },
+    ],
+  },
+  {
+    id: "hours_accountant",
+    label: "Décompte des heures — envoi au comptable (après signatures)",
+    description: "Envoyé automatiquement au cabinet comptable une fois le décompte signé par le salarié ET l'employeur, avec le PDF en pièce jointe.",
+    subject: "Décompte des heures signé — {{employe}} — {{mois}}",
+    body: `Bonjour,
+
+Veuillez trouver ci-joint le décompte des heures de {{employe}} pour le mois de {{mois}}, signé par le salarié et l'employeur, pour l'établissement du bulletin de salaire.
+
+Ce document mensuel signé des deux parties est annexé au bulletin de paie conformément au Code du travail.
+
+Lien de téléchargement : {{lien}}
+
+Cordialement,
+{{agence_nom}}`,
+    variables: [
+      { name: "employe", hint: "Nom du salarié" },
+      { name: "mois", hint: "Mois concerné" },
+      { name: "lien", hint: "Lien de téléchargement du décompte" },
+      { name: "agence_nom", hint: "Nom de l'agence" },
+    ],
+  },
 ];
 
 export function defaultTemplate(id: string): MailTemplate | undefined {
