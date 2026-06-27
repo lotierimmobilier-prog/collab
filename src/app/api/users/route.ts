@@ -25,7 +25,7 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
       select: {
         id: true, prenom: true, nom: true, email: true,
-        roleId: true, active: true, accessOverrides: true, gedAccess: true,
+        roleId: true, active: true, isEmployee: true, accessOverrides: true, gedAccess: true,
         createdAt: true, lastLogin: true, avatar: true, parrainId: true,
       },
     }));
@@ -48,7 +48,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { prenom, nom, email, password, roleId, active, accessOverrides, gedAccess, parrainId } = body;
+    const { prenom, nom, email, password, roleId, active, accessOverrides, gedAccess, parrainId, isEmployee } = body;
     if (!prenom || !nom || !email || !password || !roleId) {
       return NextResponse.json({ error: "Champs obligatoires manquants" }, { status: 400 });
     }
@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
     };
     if (gedAccess) data.gedAccess = gedAccess;
     if (parrainId) data.parrainId = parrainId;
+    if (typeof isEmployee === "boolean") data.isEmployee = isEmployee;
 
     const sel = { id: true, prenom: true, nom: true, email: true, roleId: true, active: true };
     const user = await saveUser(() => prisma.user.create({ data, select: sel }), data);

@@ -8,7 +8,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   try {
     const body = await req.json();
-    const { prenom, nom, email, password, roleId, active, accessOverrides, gedAccess, parrainId } = body;
+    const { prenom, nom, email, password, roleId, active, accessOverrides, gedAccess, parrainId, isEmployee } = body;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data: any = {};
@@ -20,6 +20,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (accessOverrides !== undefined) data.accessOverrides = accessOverrides ?? null;
     if (gedAccess !== undefined) data.gedAccess = gedAccess ?? null;
     if (parrainId !== undefined) data.parrainId = parrainId || null;
+    if (isEmployee !== undefined) data.isEmployee = !!isEmployee;
     if (password && password !== "••••••••") {
       data.passwordHash = await bcrypt.hash(password, 12);
     }

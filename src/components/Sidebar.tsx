@@ -74,9 +74,6 @@ const MOBILE_NAV = [
 export default function Sidebar({ active }: { active: string }) {
   const { data: session } = useSession();
   const isAdmin = session?.user?.roleId === "admin";
-  const isAgent = session?.user?.roleId === "agent";
-  // Le module RH (congés & heures) est réservé aux collaborateurs salariés.
-  const visibleNav = nav.filter(n => !(n.id === "rh" && isAgent));
   const isDirection = ["admin", "direction", "dirigeant"].includes(session?.user?.roleId ?? "");
   const bp = useBreakpoint();
   const [collapsed, setCollapsed]   = useState(false);
@@ -86,7 +83,12 @@ export default function Sidebar({ active }: { active: string }) {
   const adminActive = active.startsWith("admin");
   const [directionOpen, setDirectionOpen] = useState(true);
   const [adminOpen, setAdminOpen] = useState(true);
-  const [badges, setBadges] = useState<{ mail: { count: number; urgent: boolean }; chat: { count: number; urgent: boolean }; legal?: { count: number; urgent: boolean } } | null>(null);
+  const [badges, setBadges] = useState<{ mail: { count: number; urgent: boolean }; chat: { count: number; urgent: boolean }; legal?: { count: number; urgent: boolean }; isEmployee?: boolean } | null>(null);
+
+  // Le module RH (congés & heures) est réservé aux collaborateurs salariés ;
+  // la direction y accède aussi pour valider les relevés.
+  const isEmployee = badges?.isEmployee ?? false;
+  const visibleNav = nav.filter(n => !(n.id === "rh" && !isEmployee && !isDirection));
 
   // Pastilles du menu (messages non lus / alertes urgentes), rafraîchies périodiquement.
   useEffect(() => {

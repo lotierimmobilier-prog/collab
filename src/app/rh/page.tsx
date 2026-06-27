@@ -32,17 +32,34 @@ export default function RhPage() {
   const { data: session } = useSession();
   const role = session?.user?.roleId ?? "";
   const isValidator = ["admin", "dirigeant", "direction"].includes(role);
-  const isAgent = role === "agent";
+  const [isEmployee, setIsEmployee] = useState<boolean | null>(null);
   const [tab, setTab] = useState<"conges" | "heures" | "validation">("conges");
 
-  if (isAgent) return (
+  // Statut salarié (ouvre les onglets personnels). La direction garde l'accès
+  // à la validation même si elle n'est pas elle-même salariée.
+  useEffect(() => {
+    fetch("/api/sidebar/badges").then(r => r.ok ? r.json() : null).then(d => {
+      const emp = !!d?.isEmployee;
+      setIsEmployee(emp);
+      if (!emp && isValidator) setTab("validation");
+    }).catch(() => setIsEmployee(false));
+  }, [isValidator]);
+
+  // En attente de la réponse statut → on évite tout clignotement.
+  if (isEmployee === null) return (
+    <div style={{ display: "flex", height: "100vh", background: "#f9fafb", fontFamily: "'Inter', sans-serif" }}>
+      <Sidebar active="rh" />
+    </div>
+  );
+
+  if (!isEmployee && !isValidator) return (
     <div style={{ display: "flex", height: "100vh", background: "#f9fafb", fontFamily: "'Inter', sans-serif" }}>
       <Sidebar active="rh" />
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 24 }}>
         <div>
           <div style={{ fontSize: 40, marginBottom: 12 }}>💼</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: DARK }}>Module réservé aux collaborateurs</div>
-          <div style={{ fontSize: 13, color: "#6b7280", marginTop: 6, maxWidth: 360 }}>Les congés et relevés d'heures concernent les collaborateurs salariés, pas les agents commerciaux.</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: DARK }}>Module réservé aux salariés</div>
+          <div style={{ fontSize: 13, color: "#6b7280", marginTop: 6, maxWidth: 360 }}>Les congés et relevés d'heures concernent les collaborateurs salariés de l'agence. Contactez la direction si votre statut doit être ajusté.</div>
         </div>
       </div>
     </div>
@@ -57,13 +74,13 @@ export default function RhPage() {
           <p style={{ fontSize: 12, color: "#6b7280", margin: "2px 0 0" }}>Vos demandes de congés et vos relevés d'heures mensuels.</p>
         </div>
         <div style={{ background: "#fff", borderBottom: `1px solid ${BORDER}`, padding: "0 24px", display: "flex", gap: 4 }}>
-          <Tab label="Mes congés" active={tab === "conges"} onClick={() => setTab("conges")} />
-          <Tab label="Mes heures" active={tab === "heures"} onClick={() => setTab("heures")} />
+          {isEmployee && <Tab label="Mes congés" active={tab === "conges"} onClick={() => setTab("conges")} />}
+          {isEmployee && <Tab label="Mes heures" active={tab === "heures"} onClick={() => setTab("heures")} />}
           {isValidator && <Tab label="Validation" active={tab === "validation"} onClick={() => setTab("validation")} />}
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
-          {tab === "conges" && <CongesTab />}
-          {tab === "heures" && <HeuresTab />}
+          {tab === "conges" && isEmployee && <CongesTab />}
+          {tab === "heures" && isEmployee && <HeuresTab />}
           {tab === "validation" && isValidator && <ValidationTab />}
         </div>
       </div>
@@ -151,6 +168,9 @@ function HeuresTab() {
   const [avNat, setAvNat] = useState(""); const [acompte, setAcompte] = useState(""); const [acMode, setAcMode] = useState("");
   const [primeMotif, setPrimeMotif] = useState(""); const [primeMontant, setPrimeMontant] = useState("");
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState("");
+  // Horaire « type » servant au pré-remplissage (modifiable).
+  const [tplM1, setTplM1] = useState("09:00"); const [tplM2, setTplM2] = useState("12:30");
+  const [tplA1, setTplA1] = useState("14:00"); const [tplA2, setTplA2] = useState("17:30");
 
   const load = useCallback(async () => { setLoading(true); const r = await fetch("/api/rh/hours?scope=mine"); if (r.ok) setList(await r.json()); setLoading(false); }, []);
   useEffect(() => { load(); }, [load]);
@@ -175,6 +195,20 @@ function HeuresTab() {
 
   function setDay(d: number, k: keyof DayEntry, v: string | boolean | number) {
     setEntries(p => ({ ...p, [d]: { ...(p[d] || { d }), d, [k]: v } }));
+  }
+
+  // Pré-choix « mois standard » : remplit chaque jour ouvré (lundi→vendredi)
+  // avec l'horaire type, sans absence ni congé. Les week-ends restent vides.
+  function fillStandardMonth() {
+    if (locked) return;
+    if (!confirm("Pré-remplir le mois en semaine type (lundi→vendredi), sans absence ni congé ? Les saisies existantes seront remplacées.")) return;
+    const map: Record<number, DayEntry> = {};
+    for (const { d, dow } of days) {
+      if (dow === 0 || dow === 6) continue; // week-end : non travaillé
+      map[d] = { d, m1: tplM1, m2: tplM2, a1: tplA1, a2: tplA2 };
+    }
+    setEntries(map);
+    setMsg("✓ Mois pré-rempli en semaine type — ajustez les jours d'absence ou de congé si besoin.");
   }
 
   async function save(sign: boolean) {
@@ -210,6 +244,27 @@ function HeuresTab() {
           {current.directionSignedAt ? ` · employeur : ${new Date(current.directionSignedAt).toLocaleDateString("fr-FR")}` : ""}
           {current.id && <a href={`/api/rh/hours/${current.id}/pdf`} target="_blank" rel="noreferrer" style={{ marginLeft: 10, color: GOLD }}>📄 PDF</a>}</div>}
       </div>
+
+      {/* Pré-choix : mois standard sans absence ni congé */}
+      {!locked && (
+        <div style={{ background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "12px 16px", marginBottom: 16, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div style={{ flex: "1 1 240px" }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: DARK }}>Pré-remplissage rapide</div>
+            <div style={{ fontSize: 11.5, color: "#6b7280", marginTop: 2 }}>Remplit chaque jour ouvré (lundi→vendredi) avec l'horaire type, sans absence ni congé. Vous ajustez ensuite les jours concernés.</div>
+          </div>
+          <L label="Matin"><span style={{ display: "flex", gap: 4, alignItems: "center" }}>
+            <input type="time" value={tplM1} onChange={e => setTplM1(e.target.value)} style={{ ...inp, width: 92 }} />
+            <span style={{ color: "#9ca3af" }}>→</span>
+            <input type="time" value={tplM2} onChange={e => setTplM2(e.target.value)} style={{ ...inp, width: 92 }} />
+          </span></L>
+          <L label="Après-midi"><span style={{ display: "flex", gap: 4, alignItems: "center" }}>
+            <input type="time" value={tplA1} onChange={e => setTplA1(e.target.value)} style={{ ...inp, width: 92 }} />
+            <span style={{ color: "#9ca3af" }}>→</span>
+            <input type="time" value={tplA2} onChange={e => setTplA2(e.target.value)} style={{ ...inp, width: 92 }} />
+          </span></L>
+          <button onClick={fillStandardMonth} style={btnGold}>Mois standard (sans absence ni congé)</button>
+        </div>
+      )}
 
       {/* Grille quotidienne */}
       <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, padding: 12, marginBottom: 16, overflowX: "auto" }}>

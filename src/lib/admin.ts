@@ -22,6 +22,7 @@ export interface User {
   password: string;
   roleId: string;
   active: boolean;
+  isEmployee?: boolean;             // salarié de l'agence (module RH)
   createdAt: string;
   lastLogin?: string;
   avatar?: string;
