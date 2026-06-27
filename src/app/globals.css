@@ -82,3 +82,50 @@ body {
     grid-template-columns: repeat(4, 1fr) !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Adaptation mobile & tablette (≤ 1099px) — l'app utilise des styles
+   en ligne : on cible donc les motifs `style="…"` produits par React.
+   La barre de navigation du bas (Sidebar) fait 64px.
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 1099px) {
+  /* Jamais de défilement horizontal parasite */
+  html, body { overflow-x: hidden; }
+
+  /* Conteneurs plein écran : réserver la place de la barre du bas.
+     box-sizing:border-box (global) → le contenu se cale au-dessus. */
+  [style*="height: 100vh"],
+  [style*="min-height: 100vh"] {
+    padding-bottom: 64px !important;
+  }
+
+  /* Panneaux latéraux (drawers) → plein écran */
+  [style*="position: fixed"][style*="width: 420px"],
+  [style*="position: fixed"][style*="width: 440px"],
+  [style*="position: fixed"][style*="width: 460px"],
+  [style*="position: fixed"][style*="width: 480px"],
+  [style*="position: fixed"][style*="width: 500px"],
+  [style*="position: fixed"][style*="width: 520px"],
+  [style*="position: fixed"][style*="width: 540px"],
+  [style*="position: fixed"][style*="width: 560px"],
+  [style*="position: fixed"][style*="width: 580px"],
+  [style*="position: fixed"][style*="width: 600px"],
+  [style*="position: fixed"][style*="width: 620px"],
+  [style*="position: fixed"][style*="width: 640px"] {
+    width: 100vw !important;
+    max-width: 100vw !important;
+  }
+
+  /* Tableaux larges : défilement horizontal au lieu de déborder */
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
+
+/* Téléphone (≤ 640px) : grilles de cartes en une colonne */
+@media (max-width: 640px) {
+  [style*="grid-template-columns: repeat(auto-fill"],
+  [style*="grid-template-columns: repeat(auto-fit"],
+  [style*="grid-template-columns: repeat(2"],
+  [style*="grid-template-columns: repeat(3"] {
+    grid-template-columns: 1fr !important;
+  }
+}
