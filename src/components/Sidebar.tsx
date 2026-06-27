@@ -44,7 +44,9 @@ const directionNav = [
   { id: "dir-locaux",     label: "Locaux",                    icon: "🏢", href: "/direction?tab=locaux" },
   { id: "dir-cartes",     label: "Cartes professionnelles",   icon: "🪪", href: "/direction?tab=cartes" },
   { id: "dir-assurances", label: "Assurances",                icon: "🛡", href: "/direction?tab=assurances" },
+  { id: "dir-salaries",   label: "Dossiers salariés",         icon: "👥", href: "/direction?tab=dossiers-salaries" },
   { id: "dir-cr",         label: "Comptes rendus de réunion", icon: "📝", href: "/direction?tab=comptes-rendus" },
+  { id: "drive-agence",   label: "Drive d'agence",            icon: "🗄", href: "/drive-agence" },
   { id: "comptabilite",   label: "Comptabilité",              icon: "💶", href: "/comptabilite/banque" },
   { id: "ics",            label: "Connecteur ICS",            icon: "⇄", href: "/ics" },
 ];
@@ -79,7 +81,7 @@ export default function Sidebar({ active }: { active: string }) {
   const [collapsed, setCollapsed]   = useState(false);
   const [mounted, setMounted]       = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const directionActive = ["direction", "comptabilite", "ics"].includes(active);
+  const directionActive = ["direction", "comptabilite", "ics", "drive-agence"].includes(active);
   const adminActive = active.startsWith("admin");
   const [directionOpen, setDirectionOpen] = useState(true);
   const [adminOpen, setAdminOpen] = useState(true);
