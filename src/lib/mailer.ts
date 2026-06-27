@@ -19,29 +19,39 @@ export async function getMailSettings() {
 
 export interface MailAttachment { filename: string; content: Buffer; contentType?: string }
 
+// Combinaisons (port, secure) à tenter : le port configuré d'abord, puis les
+// ports SMTP standards (465 SSL, 587 STARTTLS) en repli — utile si l'on a saisi
+// un port de réception (993/143 IMAP, 995/110 POP) au lieu d'un port d'envoi.
+function smtpCombos(port: number): { port: number; secure: boolean }[] {
+  const list: { port: number; secure: boolean }[] = [{ port, secure: port === 465 }];
+  for (const c of [{ port: 465, secure: true }, { port: 587, secure: false }]) {
+    if (!list.some(x => x.port === c.port)) list.push(c);
+  }
+  return list;
+}
+
 export async function sendMail({ to, subject, html, attachments }: { to: string; subject: string; html: string; attachments?: MailAttachment[] }): Promise<boolean> {
   const cfg = await getMailSettings();
   if (!cfg.enabled || !cfg.pass) return false;
 
-  // Port 465 = TLS implicite (secure). 587/25 = STARTTLS (secure:false +
-  // requireTLS). tls.rejectUnauthorized:false tolère les certificats
-  // mutualisés ; timeouts pour éviter les blocages (« Greeting never received »).
-  const port = cfg.port;
-  const isDirectSsl = port === 465;
-  const transporter = nodemailer.createTransport({
-    host: cfg.host,
-    port,
-    secure: isDirectSsl,
-    requireTLS: !isDirectSsl && port !== 25,
-    auth: { user: cfg.user, pass: cfg.pass },
-    tls: { rejectUnauthorized: false },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 20000,
-  });
-
-  await transporter.sendMail({ from: cfg.from, to, subject, html, ...(attachments?.length ? { attachments } : {}) });
-  return true;
+  const message = { from: cfg.from, to, subject, html, ...(attachments?.length ? { attachments } : {}) };
+  let lastErr: unknown = null;
+  for (const { port, secure } of smtpCombos(cfg.port)) {
+    try {
+      // 465 = TLS implicite ; 587/25 = STARTTLS. rejectUnauthorized:false tolère
+      // les certificats mutualisés ; timeouts pour éviter les blocages.
+      const transporter = nodemailer.createTransport({
+        host: cfg.host, port, secure,
+        requireTLS: !secure && port !== 25,
+        auth: { user: cfg.user, pass: cfg.pass },
+        tls: { rejectUnauthorized: false },
+        connectionTimeout: 12000, greetingTimeout: 12000, socketTimeout: 20000,
+      });
+      await transporter.sendMail(message);
+      return true;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 export function eventMailHtml({ title, start, end, location, description, attendees }: {
