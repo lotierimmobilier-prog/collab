@@ -64,13 +64,16 @@ const adminNav = [
 
 const groups = ["Principal", "Gestion", "Agence", "Personnel"];
 
-/* 6 raccourcis bottom nav mobile */
+/* Raccourcis bottom nav mobile/tablette, par ordre de priorité. On en affiche
+   autant que la largeur de l'écran le permet ; le reste va dans « Plus ». */
 const MOBILE_NAV = [
   { id: "dashboard", label: "Accueil",    icon: "⊟",  href: "/" },
   { id: "tasks",     label: "Tâches",     icon: "✓",  href: "/taches" },
   { id: "mail",      label: "Mails",      icon: "@",  href: "/messagerie" },
+  { id: "chat",      label: "Messages",   icon: "💬", href: "/messagerie-interne" },
   { id: "planning",  label: "Planning",   icon: "▦",  href: "/planning" },
   { id: "gestion",   label: "Gestion",    icon: "🏠", href: "/gestion" },
+  { id: "annuaire",  label: "Annuaire",   icon: "▤",  href: "/annuaire" },
 ];
 
 export default function Sidebar({ active }: { active: string }) {
@@ -86,6 +89,16 @@ export default function Sidebar({ active }: { active: string }) {
   const [directionOpen, setDirectionOpen] = useState(true);
   const [adminOpen, setAdminOpen] = useState(true);
   const [badges, setBadges] = useState<{ mail: { count: number; urgent: boolean }; chat: { count: number; urgent: boolean }; legal?: { count: number; urgent: boolean }; isEmployee?: boolean } | null>(null);
+  const [winW, setWinW] = useState(0);
+
+  // Largeur de l'écran : la barre du bas s'adapte (nombre de raccourcis +
+  // texte ou icône seule sur les petits écrans).
+  useEffect(() => {
+    const u = () => setWinW(window.innerWidth);
+    u();
+    window.addEventListener("resize", u);
+    return () => window.removeEventListener("resize", u);
+  }, []);
 
   // Le module RH (congés & heures) est réservé aux collaborateurs salariés ;
   // la direction y accède aussi pour valider les relevés.
@@ -131,6 +144,15 @@ export default function Sidebar({ active }: { active: string }) {
 
   /* ── MOBILE & TABLETTE : bottom nav ────────────────────────── */
   if (bp === "mobile" || bp === "tablet") {
+    // Barre du bas adaptative : sous 380px → icônes seules ; on affiche autant
+    // de raccourcis que la largeur le permet, le reste va dans « Plus ».
+    const vw = winW || 768;
+    const iconOnly = vw < 380;
+    const navH = iconOnly ? 56 : 64;
+    const perCell = iconOnly ? 50 : 70;
+    const maxCells = Math.max(4, Math.min(MOBILE_NAV.length + 1, Math.floor(vw / perCell)));
+    const quickCount = Math.max(3, maxCells - 1);
+    const quickItems = MOBILE_NAV.slice(0, quickCount);
     return (
       <>
         {/* Overlay menu mobile */}
@@ -139,7 +161,7 @@ export default function Sidebar({ active }: { active: string }) {
             <div onClick={() => setMobileOpen(false)}
               style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200 }} />
             <div style={{
-              position: "fixed", bottom: 64, left: 0, right: 0, zIndex: 201,
+              position: "fixed", bottom: navH, left: 0, right: 0, zIndex: 201,
               background: "#fff", borderRadius: "20px 20px 0 0",
               borderTop: `1px solid ${BORDER}`, boxShadow: "0 -8px 32px rgba(0,0,0,0.15)",
               maxHeight: "70vh", overflowY: "auto", paddingBottom: 8,
@@ -199,43 +221,46 @@ export default function Sidebar({ active }: { active: string }) {
           </>
         )}
 
-        {/* Bottom navigation bar */}
+        {/* Bottom navigation bar — adaptative selon la largeur de l'écran. */}
         <nav style={{
           position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
           background: "#fff", borderTop: `1px solid ${BORDER}`,
           display: "flex", alignItems: "stretch",
-          height: 64, boxShadow: "0 -2px 12px rgba(0,0,0,0.08)",
+          height: navH, boxShadow: "0 -2px 12px rgba(0,0,0,0.08)",
+          paddingBottom: "env(safe-area-inset-bottom)",
         }}>
-          {MOBILE_NAV.map(item => {
+          {quickItems.map(item => {
             const isActive = active === item.id;
             const d = navDot(item.id);
             return (
-              <Link key={item.id} href={item.href} style={{ flex: 1, textDecoration: "none" }}>
+              <Link key={item.id} href={item.href} style={{ flex: 1, minWidth: 0, textDecoration: "none" }}>
                 <div style={{
                   display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                  height: "100%", gap: 3,
+                  height: "100%", gap: iconOnly ? 0 : 3, padding: "0 2px",
                   color: isActive ? GOLD : LABEL_COLOR,
                   borderTop: isActive ? `2px solid ${GOLD}` : "2px solid transparent",
                   background: isActive ? GOLD_BG : "transparent",
                   transition: "all 0.15s",
                 }}>
-                  <span style={{ fontSize: 18, position: "relative" }}>
+                  <span style={{ fontSize: 18, position: "relative", lineHeight: 1 }}>
                     {item.icon}
                     {d && <span style={{ position: "absolute", top: -2, right: -6, width: 8, height: 8, borderRadius: "50%", background: d === "urgent" ? RED : GOLD, border: "1.5px solid #fff" }} />}
                   </span>
-                  <span style={{ fontSize: 9, fontWeight: isActive ? 700 : 500, letterSpacing: "0.02em" }}>{item.label}</span>
+                  {!iconOnly && (
+                    <span style={{ fontSize: 9, fontWeight: isActive ? 700 : 500, letterSpacing: "0.02em", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
+                  )}
                 </div>
               </Link>
             );
           })}
           {/* Bouton "Plus" */}
-          <button onClick={() => setMobileOpen(true)} style={{
-            flex: 1, background: "none", border: "none", cursor: "pointer",
+          <button onClick={() => setMobileOpen(true)} aria-label="Plus de menus" style={{
+            flex: 1, minWidth: 0, background: "none", border: "none", cursor: "pointer",
             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            gap: 3, color: LABEL_COLOR, borderTop: "2px solid transparent",
+            gap: iconOnly ? 0 : 3, color: LABEL_COLOR, borderTop: "2px solid transparent",
           }}>
-            <span style={{ fontSize: 18 }}>☰</span>
-            <span style={{ fontSize: 9, fontWeight: 500 }}>Plus</span>
+            <span style={{ fontSize: 18, lineHeight: 1 }}>☰</span>
+            {!iconOnly && <span style={{ fontSize: 9, fontWeight: 500 }}>Plus</span>}
           </button>
         </nav>
       </>
