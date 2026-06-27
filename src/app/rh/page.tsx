@@ -29,8 +29,23 @@ interface Hours { id: string; userId: string; month: string; totalHours?: number
 
 export default function RhPage() {
   const { data: session } = useSession();
-  const isValidator = ["admin", "dirigeant", "direction"].includes(session?.user?.roleId ?? "");
+  const role = session?.user?.roleId ?? "";
+  const isValidator = ["admin", "dirigeant", "direction"].includes(role);
+  const isAgent = role === "agent";
   const [tab, setTab] = useState<"conges" | "heures" | "validation">("conges");
+
+  if (isAgent) return (
+    <div style={{ display: "flex", height: "100vh", background: "#f9fafb", fontFamily: "'Inter', sans-serif" }}>
+      <Sidebar active="rh" />
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 24 }}>
+        <div>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>💼</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: DARK }}>Module réservé aux collaborateurs</div>
+          <div style={{ fontSize: 13, color: "#6b7280", marginTop: 6, maxWidth: 360 }}>Les congés et relevés d'heures concernent les collaborateurs salariés, pas les agents commerciaux.</div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "#f9fafb", fontFamily: "'Inter', sans-serif" }}>

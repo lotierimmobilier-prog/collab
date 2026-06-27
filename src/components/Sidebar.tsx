@@ -74,6 +74,9 @@ const MOBILE_NAV = [
 export default function Sidebar({ active }: { active: string }) {
   const { data: session } = useSession();
   const isAdmin = session?.user?.roleId === "admin";
+  const isAgent = session?.user?.roleId === "agent";
+  // Le module RH (congés & heures) est réservé aux collaborateurs salariés.
+  const visibleNav = nav.filter(n => !(n.id === "rh" && isAgent));
   const isDirection = ["admin", "direction", "dirigeant"].includes(session?.user?.roleId ?? "");
   const bp = useBreakpoint();
   const [collapsed, setCollapsed]   = useState(false);
@@ -148,7 +151,7 @@ export default function Sidebar({ active }: { active: string }) {
               {groups.map(group => (
                 <div key={group}>
                   <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: LABEL_COLOR, padding: "10px 20px 4px", fontWeight: 600 }}>{group}</div>
-                  {nav.filter(n => n.group === group).map(item => (
+                  {visibleNav.filter(n => n.group === group).map(item => (
                     <MobileMenuItem key={item.id} item={item} active={active} onClose={() => setMobileOpen(false)} dot={navDot(item.id)} />
                   ))}
                 </div>
@@ -272,7 +275,7 @@ export default function Sidebar({ active }: { active: string }) {
       {/* Navigation */}
       <nav style={{ flex: 1, overflowY: "auto", overflowX: "hidden", paddingTop: 8, paddingBottom: 8 }}>
         {groups.map(group => {
-          const items = nav.filter(n => n.group === group);
+          const items = visibleNav.filter(n => n.group === group);
           return (
             <div key={group} style={{ marginBottom: 4 }}>
               {!isCollapsed && <NavLabel>{group}</NavLabel>}

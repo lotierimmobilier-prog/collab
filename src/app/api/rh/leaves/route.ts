@@ -43,6 +43,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  // Réservé aux collaborateurs salariés (pas les agents commerciaux).
+  if (session.user.roleId === "agent") return NextResponse.json({ error: "Module réservé aux collaborateurs." }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));
   if (!body?.startDate || !body?.endDate) return NextResponse.json({ error: "Dates requises." }, { status: 400 });
