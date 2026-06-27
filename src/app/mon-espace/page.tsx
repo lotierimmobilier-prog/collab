@@ -149,7 +149,7 @@ function DocsTab() {
   );
 }
 
-function DocForm({ doc, onClose, onSaved }: { doc: Doc | null; onClose: () => void; onSaved: () => void }) {
+function DocForm({ doc, onClose, onSaved, admin }: { doc: Doc | null; onClose: () => void; onSaved: () => void; admin?: { userId: string } }) {
   const [f, setF] = useState({
     kind: doc?.kind ?? "carte_pro", label: doc?.label ?? "", number: doc?.number ?? "", issuer: doc?.issuer ?? "",
     issuedAt: doc?.issuedAt ? doc.issuedAt.slice(0, 10) : "", expiresAt: doc?.expiresAt ? doc.expiresAt.slice(0, 10) : "",
@@ -163,9 +163,12 @@ function DocForm({ doc, onClose, onSaved }: { doc: Doc | null; onClose: () => vo
   async function submit() {
     setSaving(true);
     const payload = { ...f, alurHours: f.alurHours || undefined, file: file || undefined };
+    // Côté agent : /api/me/* ; côté admin : endpoints admin (même table → synchro).
+    const editUrl = admin ? `/api/admin/legal-documents/${doc?.id}` : `/api/me/legal-documents/${doc?.id}`;
+    const createUrl = admin ? `/api/admin/users/${admin.userId}/legal-documents` : "/api/me/legal-documents";
     const r = doc
-      ? await fetch(`/api/me/legal-documents/${doc.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
-      : await fetch("/api/me/legal-documents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      ? await fetch(editUrl, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+      : await fetch(createUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     setSaving(false);
     if (r.ok) onSaved();
     else { const d = await r.json().catch(() => ({})); alert(d.error || "Échec."); }
@@ -312,25 +315,28 @@ interface CompRow { user: { id: string; prenom: string; nom: string; email: stri
 function ComplianceTab() {
   const [rows, setRows] = useState<CompRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [openUser, setOpenUser] = useState<CompRow["user"] | null>(null);
   const TRACK = ["carte_pro", "assurance_pro", "alur"];
 
-  useEffect(() => { (async () => {
+  const load = useCallback(async () => {
     const r = await fetch("/api/admin/legal-compliance");
     if (r.ok) { const d = await r.json(); setRows(d.users); }
     setLoading(false);
-  })(); }, []);
+  }, []);
+  useEffect(() => { load(); }, [load]);
 
   if (loading) return <div style={{ color: "#9ca3af", padding: 40, textAlign: "center" }}>Chargement…</div>;
 
   return (
     <div style={{ maxWidth: 980 }}>
-      <p style={{ fontSize: 13, color: "#6b7280", marginTop: 0 }}>Suivi de la validité des documents légaux de l'équipe. Cliquez sur 📎 pour consulter un justificatif.</p>
+      <p style={{ fontSize: 13, color: "#6b7280", marginTop: 0 }}>Suivi de la validité des documents légaux de l'équipe. Cliquez sur un collaborateur pour voir le détail et compléter ses documents (la saisie est partagée avec l'agent).</p>
       <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 1fr 1fr", background: GOLD_BG, padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-          <div>Collaborateur</div><div>Carte pro</div><div>Assurance pro</div><div>ALUR</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 1fr 1fr 28px", background: GOLD_BG, padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          <div>Collaborateur</div><div>Carte pro</div><div>Assurance pro</div><div>ALUR</div><div></div>
         </div>
         {rows.map(row => (
-          <div key={row.user.id} style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 1fr 1fr", padding: "10px 14px", borderTop: `1px solid ${BORDER}`, alignItems: "center" }}>
+          <div key={row.user.id} onClick={() => setOpenUser(row.user)}
+            style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 1fr 1fr 28px", padding: "10px 14px", borderTop: `1px solid ${BORDER}`, alignItems: "center", cursor: "pointer" }}>
             <div>
               <div style={{ fontWeight: 600, fontSize: 13, color: DARK }}>{row.user.prenom} {row.user.nom}</div>
               <div style={{ fontSize: 11, color: "#9ca3af" }}>{row.user.roleId}</div>
@@ -343,14 +349,94 @@ function ComplianceTab() {
                 <div key={kind} style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <span style={{ background: ui.color + "20", color: ui.color, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>{ui.label}</span>
                   {d?.expiresAt && <span style={{ fontSize: 10.5, color: "#9ca3af" }}>{new Date(d.expiresAt).toLocaleDateString("fr-FR")}</span>}
-                  {d?.hasFile && <a href={`/api/admin/legal-documents/${d.id}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, textDecoration: "none" }} title="Voir le justificatif">📎</a>}
                 </div>
               );
             })}
+            <div style={{ color: "#9ca3af", textAlign: "right" }}>›</div>
           </div>
         ))}
       </div>
+
+      {openUser && <AgentDetailDrawer user={openUser} onClose={() => setOpenUser(null)} onChanged={load} />}
     </div>
+  );
+}
+
+// Détail d'un agent (côté admin) : infos + documents éditables. Les documents
+// sont les mêmes enregistrements que côté agent → synchronisation automatique.
+function AgentDetailDrawer({ user, onClose, onChanged }: { user: CompRow["user"] & { phone?: string; lastLogin?: string | null }; onClose: () => void; onChanged: () => void }) {
+  const [docs, setDocs] = useState<Doc[]>([]);
+  const [info, setInfo] = useState<{ email?: string; phone?: string; lastLogin?: string | null } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<Doc | null>(null);
+  const [showForm, setShowForm] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const r = await fetch(`/api/admin/users/${user.id}/legal-documents`);
+    if (r.ok) { const d = await r.json(); setDocs(d.docs); setInfo(d.user); }
+    setLoading(false);
+  }, [user.id]);
+  useEffect(() => { load(); }, [load]);
+
+  async function remove(id: string) {
+    if (!confirm("Supprimer ce document ?")) return;
+    await fetch(`/api/admin/legal-documents/${id}`, { method: "DELETE" });
+    await load(); onChanged();
+  }
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 40 }} />
+      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 560, maxWidth: "100vw", background: "#fff", zIndex: 45, display: "flex", flexDirection: "column", boxShadow: "-4px 0 24px rgba(0,0,0,0.1)" }}>
+        <div style={{ padding: "16px 20px", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: DARK }}>{user.prenom} {user.nom}</div>
+            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 3 }}>
+              {user.roleId}{info?.email ? ` · ${info.email}` : ""}{info?.phone ? ` · ${info.phone}` : ""}
+            </div>
+            {info?.lastLogin && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>Dernière connexion : {new Date(info.lastLogin).toLocaleDateString("fr-FR")}</div>}
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer" }}>×</button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: DARK }}>Documents administratifs</div>
+            <button onClick={() => { setEditing(null); setShowForm(true); }} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 12.5, fontWeight: 500, cursor: "pointer" }}>+ Ajouter</button>
+          </div>
+
+          {loading ? <div style={{ color: "#9ca3af", padding: 30, textAlign: "center" }}>Chargement…</div>
+           : docs.length === 0 ? <div style={{ color: "#9ca3af", padding: 30, textAlign: "center", fontSize: 13 }}>Aucun document pour ce collaborateur.</div>
+           : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {docs.map(d => {
+                const ki = kindInfo(d.kind); const st = statusOf(d.expiresAt); const su = STATUS_UI[st];
+                return (
+                  <div key={d.id} style={{ background: "#FBFAF8", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 12px", display: "flex", gap: 10, alignItems: "center" }}>
+                    <span style={{ fontSize: 18 }}>{ki.icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: DARK }}>{ki.label}{d.label ? ` — ${d.label}` : ""}</div>
+                      <div style={{ fontSize: 11.5, color: "#6b7280", display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        {d.number && <span>N° {d.number}</span>}
+                        {d.alurHours != null && <span>{d.alurHours} h</span>}
+                        {d.expiresAt && <span>Validité : {new Date(d.expiresAt).toLocaleDateString("fr-FR")}</span>}
+                      </div>
+                    </div>
+                    {d.expiresAt && <span style={{ background: su.color + "20", color: su.color, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>{su.label}</span>}
+                    {d.hasFile && <a href={`/api/admin/legal-documents/${d.id}`} target="_blank" rel="noreferrer" style={{ ...miniBtn, textDecoration: "none", color: GOLD }} title="Voir">📎</a>}
+                    <button onClick={() => { setEditing(d); setShowForm(true); }} style={miniBtn}>✏</button>
+                    <button onClick={() => remove(d.id)} style={{ ...miniBtn, color: RED, borderColor: "#fecaca" }}>✕</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showForm && <DocForm doc={editing} admin={{ userId: user.id }} onClose={() => { setShowForm(false); setEditing(null); }} onSaved={async () => { setShowForm(false); setEditing(null); await load(); onChanged(); }} />}
+    </>
   );
 }
 
