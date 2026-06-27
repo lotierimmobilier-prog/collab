@@ -4,7 +4,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { PERF_TYPES } from "@/lib/performance";
 
-const GOLD = "#B8966A"; const GOLD_BG = "#F7F0E6"; const BORDER = "#E6E1D9";
+const GOLD = "#B8966A"; const GOLD_BG = "#F7F0E6"; const BORDER = "#E6E1D9"; const DARK = "#1C1A17";
 
 const DAYS   = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
 const MONTHS = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
@@ -628,8 +628,11 @@ export default function Dashboard() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-      {/* Bannière d'accueil — version luxe + citation inspirante + météo */}
+      {/* Bannière d'accueil — version luxe + citation inspirante */}
       <Banner firstName={firstName} />
+
+      {/* Météo locale façon Google (jour + jours suivants + courbe horaire) */}
+      <WeatherCard />
 
       {/* Classement du trimestre — pleine largeur */}
       <div style={{ marginBottom: 16 }}>
@@ -653,7 +656,13 @@ export default function Dashboard() {
 }
 
 // ─── Météo locale + prévisions 3 jours ─────────────────────────────
-interface WeatherData { city: string | null; needsCity?: boolean; error?: string; current?: { temp: number; code: number }; daily?: { date: string; code: number; tmin: number; tmax: number }[] }
+interface WeatherData {
+  city: string | null; region?: string | null; timezone?: string | null; time?: string | null;
+  needsCity?: boolean; error?: string;
+  current?: { temp: number; code: number; wind?: number; isDay?: boolean };
+  daily?: { date: string; code: number; tmin: number; tmax: number }[];
+  hourly?: { time: string; temp: number; code: number }[];
+}
 
 // Codes météo WMO → icône + libellé.
 function wmo(code: number): { icon: string; label: string } {
@@ -679,99 +688,178 @@ function weatherJoke(daily?: WeatherData["daily"]): string {
   return "🗓️ Un œil sur le ciel pour caler vos visites au bon moment — un bien se vend mieux sous un joli ciel !";
 }
 
-function weekdayShort(iso: string): string {
+
+// Météo intégrée au bandeau (thème sombre, à droite de la citation).
+function dayLabelFull(iso: string): string {
   const d = new Date(iso + "T00:00:00");
   const t = new Date(); t.setHours(0, 0, 0, 0);
   const diff = Math.round((+new Date(d.getFullYear(), d.getMonth(), d.getDate()) - +t) / 86_400_000);
-  if (diff === 0) return "Auj.";
-  if (diff === 1) return "Demain";
-  return DAYS[d.getDay()].slice(0, 3);
+  if (diff === 0) return "Aujourd'hui";
+  return `${DAYS[d.getDay()].slice(0, 3).toLowerCase()}. ${d.getDate()}`;
 }
 
-// Météo intégrée au bandeau (thème sombre, à droite de la citation).
-function WeatherInline() {
+// Carte météo façon « Google » : ville + heure, température, conditions,
+// jours défilables et courbe horaire. Bascule °C/°F. Ville modifiable.
+function WeatherCard() {
   const [w, setW] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
   const [cityInput, setCityInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [err, setErr] = useState("");
+  const [unit, setUnit] = useState<"C" | "F">("C");
 
   const load = () => { setLoading(true); fetch("/api/weather").then(r => r.json()).then(d => setW(d)).catch(() => setW({ city: null, error: "indisponible" })).finally(() => setLoading(false)); };
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   const currentCity = w?.city ?? null;
+  const conv = (c: number) => unit === "C" ? c : Math.round(c * 9 / 5 + 32);
 
-  function startEdit() { setCityInput(currentCity ?? ""); setEditing(true); }
+  function startEdit() { setCityInput(currentCity ?? ""); setErr(""); setEditing(true); }
   async function saveCity() {
     if (!cityInput.trim()) return;
-    setSaving(true);
-    const r = await fetch("/api/me/city", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ city: cityInput.trim() }) }).catch(() => null);
-    setSaving(false); setEditing(false);
-    if (r && r.ok) load();
+    setSaving(true); setErr("");
+    let ok = false, msg = "";
+    try {
+      const r = await fetch("/api/me/city", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ city: cityInput.trim() }) });
+      const d = await r.json().catch(() => ({}));
+      ok = r.ok; if (!ok) msg = d?.error || "Échec de l'enregistrement.";
+    } catch { msg = "Erreur réseau."; }
+    setSaving(false);
+    if (ok) { setEditing(false); load(); } else setErr(msg);
   }
 
-  const tile: React.CSSProperties = { textAlign: "center", background: "rgba(247,240,230,0.10)", border: "1px solid rgba(247,240,230,0.18)", borderRadius: 10, padding: "7px 10px", minWidth: 58 };
-  const editLink: React.CSSProperties = { background: "none", border: "none", color: "#D8B783", fontSize: 11, cursor: "pointer", padding: 0, textDecoration: "underline" };
+  const card: React.CSSProperties = { background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 16, padding: "18px 22px", marginBottom: 16, boxShadow: "0 4px 16px rgba(28,26,23,0.05)" };
 
   // Saisie / modification de la ville.
   if (editing || (!loading && w?.needsCity)) {
     return (
-      <div style={{ minWidth: 230, maxWidth: 320 }}>
-        <div style={{ fontSize: 12, color: "rgba(247,240,230,0.85)", marginBottom: 8 }}>🌦️ {currentCity ? "Changer de ville pour la météo :" : "Votre ville pour afficher la météo et caler les visites :"}</div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <input value={cityInput} onChange={e => setCityInput(e.target.value)} onKeyDown={e => e.key === "Enter" && saveCity()} placeholder="ex. Bordeaux" autoFocus style={{ flex: 1, height: 32, border: "1px solid rgba(247,240,230,0.3)", borderRadius: 8, padding: "0 10px", fontSize: 12.5, outline: "none", background: "rgba(247,240,230,0.12)", color: "#F7F0E6" }} />
-          <button onClick={saveCity} disabled={saving} style={{ background: "#D8B783", color: "#1C1A17", border: "none", borderRadius: 8, padding: "0 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{saving ? "…" : "OK"}</button>
-          {currentCity && <button onClick={() => setEditing(false)} style={{ background: "none", border: "1px solid rgba(247,240,230,0.3)", color: "rgba(247,240,230,0.8)", borderRadius: 8, padding: "0 10px", fontSize: 12.5, cursor: "pointer" }}>Annuler</button>}
+      <div style={card}>
+        <div style={{ fontSize: 13.5, fontWeight: 600, color: DARK, marginBottom: 4 }}>🌦️ Météo locale</div>
+        <div style={{ fontSize: 12.5, color: "#6b7280", marginBottom: 10 }}>{currentCity ? "Changer la ville affichée :" : "Indiquez votre ville pour afficher la météo et caler vos visites."}</div>
+        <div style={{ display: "flex", gap: 8, maxWidth: 420 }}>
+          <input value={cityInput} onChange={e => setCityInput(e.target.value)} onKeyDown={e => e.key === "Enter" && saveCity()} placeholder="ex. Carcassonne" autoFocus style={{ flex: 1, height: 36, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 12px", fontSize: 13, outline: "none" }} />
+          <button onClick={saveCity} disabled={saving} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "0 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{saving ? "…" : "Valider"}</button>
+          {currentCity && <button onClick={() => { setEditing(false); setErr(""); }} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 14px", fontSize: 13, cursor: "pointer" }}>Annuler</button>}
         </div>
+        {err && <div style={{ fontSize: 12, color: "#dc2626", marginTop: 8 }}>{err}</div>}
       </div>
     );
   }
 
-  if (loading) return <div style={{ fontSize: 12, color: "rgba(247,240,230,0.6)", minWidth: 180, textAlign: "right" }}>Météo…</div>;
+  if (loading) return <div style={{ ...card, color: "#9ca3af", fontSize: 12.5 }}>Météo en cours de chargement…</div>;
 
-  // Ville renseignée mais météo indisponible → on affiche la ville + « changer ».
   if (!w || w.error || !w.current) {
     return (
-      <div style={{ minWidth: 180, textAlign: "right" }}>
-        <div style={{ fontSize: 12.5, color: "rgba(247,240,230,0.85)" }}>📍 <b style={{ color: "#D8B783" }}>{currentCity ?? "Ville non définie"}</b></div>
-        <div style={{ fontSize: 11, color: "rgba(247,240,230,0.55)", margin: "3px 0 6px" }}>Météo momentanément indisponible</div>
-        <button onClick={startEdit} style={editLink}>✎ changer de ville</button>
+      <div style={card}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: DARK }}>📍 {currentCity ?? "Ville non définie"}</div>
+            <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 3 }}>Météo momentanément indisponible{w?.error ? ` (${w.error})` : ""}.</div>
+          </div>
+          <button onClick={startEdit} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "6px 12px", fontSize: 12.5, color: GOLD, cursor: "pointer", fontWeight: 600 }}>✎ Changer de ville</button>
+        </div>
       </div>
     );
   }
 
   const cur = wmo(w.current.code);
+  const windy = (w.current.wind ?? 0) >= 30;
+  const condition = windy ? `${cur.label}/Venteux` : cur.label;
+  const today = w.daily?.[0];
+  const localHM = w.time ? w.time.slice(11, 16) : "";
+
+  const unitBtn = (u: "C" | "F"): React.CSSProperties => ({
+    background: unit === u ? "#1C1A17" : "transparent", color: unit === u ? "#fff" : "#6b7280",
+    border: "none", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+  });
+
   return (
-    <div style={{ minWidth: 250 }} title={weatherJoke(w.daily)}>
-      {/* Actuel */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "flex-end" }}>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 30, fontWeight: 800, color: "#F7F0E6", lineHeight: 1 }}>{w.current.temp}°</div>
-          <div style={{ fontSize: 11.5, color: "rgba(247,240,230,0.75)", marginTop: 3 }}>{cur.label} · <b style={{ color: "#D8B783" }}>{w.city}</b></div>
+    <div style={card}>
+      {/* En-tête : ville + heure + bascule unité */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: DARK }}>
+            {w.city}{w.region ? `, ${w.region}` : ""}{localHM ? <span style={{ color: "#6b7280", fontWeight: 600 }}>  {localHM}</span> : null}
+          </div>
+          <div style={{ fontSize: 11.5, color: "#9ca3af", marginTop: 2 }}>Mis à jour à l'instant</div>
         </div>
-        <div style={{ fontSize: 40, lineHeight: 1 }}>{cur.icon}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button onClick={startEdit} title="Changer de ville" style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "4px 9px", fontSize: 12, color: GOLD, cursor: "pointer", fontWeight: 600 }}>✎ ville</button>
+          <div style={{ display: "flex", background: "#f3f4f6", borderRadius: 9, padding: 2 }}>
+            <button onClick={() => setUnit("F")} style={unitBtn("F")}>°F</button>
+            <button onClick={() => setUnit("C")} style={unitBtn("C")}>°C</button>
+          </div>
+        </div>
       </div>
 
-      {/* Prévisions 3 jours */}
-      <div style={{ display: "flex", gap: 7, marginTop: 12, justifyContent: "flex-end" }}>
-        {(w.daily ?? []).map(d => {
+      {/* Conditions actuelles */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, margin: "12px 0 4px" }}>
+        <div style={{ fontSize: 54, lineHeight: 1 }}>{cur.icon}</div>
+        <div style={{ fontSize: 46, fontWeight: 800, color: DARK, lineHeight: 1 }}>{conv(w.current.temp)}<span style={{ fontSize: 22, verticalAlign: "super" }}>°{unit}</span></div>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: DARK }}>{condition}</div>
+          {today && <div style={{ fontSize: 12.5, color: "#6b7280", marginTop: 3 }}>Max. {conv(today.tmax)}° &nbsp; Min. {conv(today.tmin)}°</div>}
+        </div>
+      </div>
+
+      {/* Jours (défilables) */}
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: "10px 0 6px", borderTop: `1px solid ${BORDER}`, marginTop: 10 }}>
+        {(w.daily ?? []).map((d, i) => {
           const wi = wmo(d.code);
           return (
-            <div key={d.date} style={tile}>
-              <div style={{ fontSize: 9.5, fontWeight: 700, color: "rgba(247,240,230,0.6)", textTransform: "uppercase" }}>{weekdayShort(d.date)}</div>
-              <div style={{ fontSize: 19, margin: "1px 0" }}>{wi.icon}</div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#F7F0E6" }}>{d.tmax}°<span style={{ color: "rgba(247,240,230,0.55)", fontWeight: 500 }}> / {d.tmin}°</span></div>
+            <div key={d.date} style={{ textAlign: "center", minWidth: 62, padding: "6px 6px", borderRadius: 12, background: i === 0 ? GOLD_BG : "transparent", flexShrink: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: i === 0 ? GOLD : "#6b7280" }}>{dayLabelFull(d.date)}</div>
+              <div style={{ fontSize: 26, margin: "3px 0" }}>{wi.icon}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: DARK }}>{conv(d.tmax)}°<span style={{ color: "#9ca3af", fontWeight: 500 }}> {conv(d.tmin)}°</span></div>
             </div>
           );
         })}
       </div>
 
-      {/* Blague « organisation des visites » + changer de ville */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, marginTop: 9 }}>
-        <span style={{ fontSize: 10.5, color: "#D8B783", textAlign: "right", lineHeight: 1.4, maxWidth: 250 }}>{weatherJoke(w.daily)}</span>
-        <button onClick={startEdit} style={editLink}>✎ ville</button>
-      </div>
+      {/* Courbe horaire */}
+      <HourlyGraph hourly={w.hourly} conv={conv} />
+
+      {/* Note « organisation des visites » */}
+      <div style={{ fontSize: 11.5, color: "#8A6D44", background: GOLD_BG, borderRadius: 8, padding: "8px 12px", marginTop: 10 }}>{weatherJoke(w.daily)}</div>
     </div>
+  );
+}
+
+// Courbe horaire (SVG) façon Google : aire dégradée + repères de température.
+function HourlyGraph({ hourly, conv }: { hourly?: { time: string; temp: number; code: number }[]; conv: (c: number) => number }) {
+  if (!hourly || hourly.length < 2) return null;
+  const pts = hourly.slice(0, 24);
+  const temps = pts.map(p => conv(p.temp));
+  const min = Math.min(...temps), max = Math.max(...temps);
+  const span = Math.max(1, max - min);
+  const W = 600, H = 132, padX = 14, padTop = 26, padBot = 26;
+  const x = (i: number) => padX + (i * (W - 2 * padX)) / (pts.length - 1);
+  const y = (t: number) => padTop + (1 - (t - min) / span) * (H - padTop - padBot);
+  const line = temps.map((t, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(t).toFixed(1)}`).join(" ");
+  const area = `${line} L${x(pts.length - 1).toFixed(1)},${(H - padBot).toFixed(1)} L${x(0).toFixed(1)},${(H - padBot).toFixed(1)} Z`;
+  const every = 3; // un repère toutes les 3 h
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", marginTop: 6 }} preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <linearGradient id="wgrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#F0A98C" stopOpacity="0.45" />
+          <stop offset="100%" stopColor="#F0A98C" stopOpacity="0.03" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill="url(#wgrad)" />
+      <path d={line} fill="none" stroke="#D98E6A" strokeWidth={2} strokeLinejoin="round" />
+      {/* repère « maintenant » */}
+      <line x1={x(0)} y1={padTop - 8} x2={x(0)} y2={H - padBot} stroke="#9ca3af" strokeWidth={1} strokeDasharray="3 3" />
+      <circle cx={x(0)} cy={y(temps[0])} r={3.5} fill="#D98E6A" />
+      {pts.map((p, i) => (i % every === 0 ? (
+        <g key={i}>
+          <text x={x(i)} y={y(temps[i]) - 8} textAnchor="middle" fontSize={11} fontWeight={700} fill="#374151">{temps[i]}°</text>
+          <text x={x(i)} y={H - 8} textAnchor="middle" fontSize={10} fill="#9ca3af">{p.time.slice(11, 16)}</text>
+        </g>
+      ) : null))}
+    </svg>
   );
 }
 
@@ -816,25 +904,19 @@ function Banner({ firstName }: { firstName: string }) {
       {/* Lueur dorée discrète */}
       <div style={{ position: "absolute", right: 40, top: -60, width: 220, height: 220, borderRadius: "50%", background: "radial-gradient(circle, rgba(216,183,131,0.18), transparent 70%)", pointerEvents: "none" }} />
 
-      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 28, flexWrap: "wrap" }}>
-        {/* Accueil + citation */}
-        <div style={{ flex: 1, minWidth: 280 }}>
-          <div style={{ fontSize: 10.5, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(247,240,230,0.6)" }}>{todayStr()}</div>
-          <div style={{ fontFamily: SERIF, fontSize: 28, fontWeight: 600, marginTop: 7, letterSpacing: "0.01em" }}>{greet(firstName)}</div>
+      <div style={{ position: "relative" }}>
+        <div style={{ fontSize: 10.5, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(247,240,230,0.6)" }}>{todayStr()}</div>
+        <div style={{ fontFamily: SERIF, fontSize: 28, fontWeight: 600, marginTop: 7, letterSpacing: "0.01em" }}>{greet(firstName)}</div>
 
-          <div style={{ width: 48, height: 1, background: "linear-gradient(90deg, #D8B783, transparent)", margin: "15px 0 13px" }} />
+        <div style={{ width: 48, height: 1, background: "linear-gradient(90deg, #D8B783, transparent)", margin: "15px 0 13px" }} />
 
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 620 }}>
-            <span style={{ fontFamily: SERIF, fontSize: 38, lineHeight: 0.7, color: "rgba(216,183,131,0.85)", marginTop: 8, flexShrink: 0 }}>“</span>
-            <div>
-              <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 16, lineHeight: 1.5, color: "rgba(247,240,230,0.96)" }}>{q.text}</div>
-              <div style={{ fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "#D8B783", marginTop: 9 }}>— {q.author}</div>
-            </div>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 700 }}>
+          <span style={{ fontFamily: SERIF, fontSize: 38, lineHeight: 0.7, color: "rgba(216,183,131,0.85)", marginTop: 8, flexShrink: 0 }}>“</span>
+          <div>
+            <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 16, lineHeight: 1.5, color: "rgba(247,240,230,0.96)" }}>{q.text}</div>
+            <div style={{ fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "#D8B783", marginTop: 9 }}>— {q.author}</div>
           </div>
         </div>
-
-        {/* Météo (jour + 3 prochains jours) */}
-        <WeatherInline />
       </div>
     </div>
   );
