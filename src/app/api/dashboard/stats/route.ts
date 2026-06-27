@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { canAccessCompta } from "@/lib/comptabilite";
+import { getDashPrefs, defaultKpis, DASH_BLOCK_IDS } from "@/lib/dashboard-prefs";
 
-// GET /api/dashboard/stats — indicateurs du bandeau, ADAPTÉS AU RÔLE.
-//   Renvoie { kpis: [{ label, value, sub? }] } déjà sélectionnés côté serveur.
+// GET /api/dashboard/stats — indicateurs + blocs du tableau de bord, selon les
+// préférences de l'utilisateur (sinon par défaut selon le rôle).
+//   Renvoie { kpis: [{ label, value, sub? }], blocks: string[] }
 interface Kpi { label: string; value: string; sub?: string }
 
 export async function GET() {
@@ -62,20 +64,22 @@ export async function GET() {
     } catch { /* ignore */ }
   }
 
-  // ── Briques d'indicateurs ──
-  const T_DONE: Kpi = { label: "Tâches terminées · ce mois", value: String(tasksDone), ...(avgDays != null ? { sub: `≈ ${avgDays} j en moyenne` } : {}) };
-  const T_OPEN: Kpi = { label: "Tâches en cours", value: String(tasksOpen), sub: tasksOpen > 0 ? "à traiter" : "tout est à jour 🎉" };
-  const MAILS: Kpi = { label: "Mails non lus", value: String(mailsUnread), sub: mailsUnread > 0 ? "dans votre boîte" : "boîte à jour 🎉" };
-  const ODS: Kpi = { label: "ODS en cours", value: String(odsOpen), sub: odsOpen > 0 ? "interventions" : "rien en attente" };
-  const RDV: Kpi = { label: "RDV cette semaine", value: String(rdvWeek), sub: rdvWeek > 0 ? "à votre agenda" : "agenda libre" };
-  const CA: Kpi | null = ca ? { label: "CA encaissé · ce mois", value: eur(ca.month), ...(ca.deltaPct != null ? { sub: `${ca.deltaPct >= 0 ? "▲" : "▼"} ${Math.abs(ca.deltaPct)} % vs mois préc.` } : {}) } : null;
+  // ── Indicateurs par identifiant ──
+  const pool: Record<string, Kpi> = {
+    tasks_done: { label: "Tâches terminées · ce mois", value: String(tasksDone), ...(avgDays != null ? { sub: `≈ ${avgDays} j en moyenne` } : {}) },
+    tasks_open: { label: "Tâches en cours", value: String(tasksOpen), sub: tasksOpen > 0 ? "à traiter" : "tout est à jour 🎉" },
+    mails_unread: { label: "Mails non lus", value: String(mailsUnread), sub: mailsUnread > 0 ? "dans votre boîte" : "boîte à jour 🎉" },
+    ods_open: { label: "ODS en cours", value: String(odsOpen), sub: odsOpen > 0 ? "interventions" : "rien en attente" },
+    rdv_week: { label: "RDV cette semaine", value: String(rdvWeek), sub: rdvWeek > 0 ? "à votre agenda" : "agenda libre" },
+  };
+  if (ca) pool.ca_month = { label: "CA encaissé · ce mois", value: eur(ca.month), ...(ca.deltaPct != null ? { sub: `${ca.deltaPct >= 0 ? "▲" : "▼"} ${Math.abs(ca.deltaPct)} % vs mois préc.` } : {}) };
 
-  // ── Sélection par rôle ──
-  let kpis: Kpi[];
-  if (canAccessCompta(role)) kpis = [CA, ODS, T_OPEN].filter(Boolean) as Kpi[];        // admin / dirigeant / direction
-  else if (role === "gestionnaire" || role === "syndic") kpis = [ODS, T_OPEN, MAILS];   // gestion / syndic
-  else if (role === "agent") kpis = [RDV, T_OPEN, MAILS];                               // agent commercial
-  else kpis = [T_DONE, T_OPEN, MAILS];                                                  // autres
+  // ── Sélection (préférences utilisateur, sinon défaut du rôle) ──
+  const prefs = await getDashPrefs(uid);
+  const selectedIds = (prefs.kpis && prefs.kpis.length ? prefs.kpis : defaultKpis(role)).slice(0, 4);
+  const kpis = selectedIds.map(id => pool[id]).filter(Boolean) as Kpi[];
 
-  return NextResponse.json({ kpis });
+  const blocks = (prefs.blocks && prefs.blocks.length ? prefs.blocks : DASH_BLOCK_IDS).filter(b => DASH_BLOCK_IDS.includes(b));
+
+  return NextResponse.json({ kpis, blocks });
 }
