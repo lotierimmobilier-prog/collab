@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { sendNotificationEmail, userEmail } from "@/lib/notify-mail";
 
 const ASSIGNEE_COLORS = ["#B8966A","#059669","#2563EB","#7C3AED","#DC2626","#D97706"];
 function colorForId(id: string) {
@@ -102,6 +103,19 @@ export async function POST(req: NextRequest) {
         link: "/taches",
       },
     });
+    // Notification par email à l'agent assigné (best-effort).
+    const u = await userEmail(assigneeId);
+    if (u) {
+      const echeance = dueDate ? `\nÉchéance : ${new Date(dueDate).toLocaleDateString("fr-FR")}` : "";
+      await sendNotificationEmail({
+        to: u.email,
+        subject: `Nouvelle tâche : ${title.trim()}`,
+        heading: "Une tâche vous a été attribuée",
+        message: `${title.trim()}${description ? `\n\n${description}` : ""}\n\nPriorité : ${priority || "moyenne"}${echeance}`,
+        ctaLabel: "Voir la tâche",
+        ctaPath: "/taches",
+      });
+    }
   }
 
   return NextResponse.json(formatTask(task), { status: 201 });

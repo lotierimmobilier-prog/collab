@@ -41,6 +41,7 @@ const FILES = [
   "migrations_mail_uploads.sql",
   "migrations_user_extras.sql",
   "migrations_user_superadmin.sql",
+  "migrations_mail_public_views.sql",
 ];
 
 export interface MigrationReport {
