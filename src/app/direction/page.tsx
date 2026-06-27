@@ -9,6 +9,7 @@ import MeetingsSection from "@/components/direction/MeetingsSection";
 
 const GOLD = "#B8966A"; const DARK = "#1C1A17"; const BORDER = "#E6E1D9";
 const MEETINGS_TAB = "comptes-rendus";
+const EMPLOYEES_TAB = "dossiers-salaries";
 
 type FieldType = "text" | "date" | "number" | "select" | "textarea";
 interface Field { key: string; label: string; type: FieldType; options?: { value: string; label: string }[]; full?: boolean }
@@ -121,7 +122,7 @@ function DirectionPageInner() {
   // Ouverture directe d'un onglet via ?tab= (liens du menu Direction).
   useEffect(() => {
     const t = searchParams.get("tab");
-    if (t && (SECTIONS.some(s => s.id === t) || t === MEETINGS_TAB)) setTab(t);
+    if (t && (SECTIONS.some(s => s.id === t) || t === MEETINGS_TAB || t === EMPLOYEES_TAB)) setTab(t);
   }, [searchParams]);
 
   return (
@@ -144,6 +145,10 @@ function DirectionPageInner() {
                     {s.title}
                   </button>
                 ))}
+                <button onClick={() => setTab(EMPLOYEES_TAB)}
+                  style={{ display: "flex", alignItems: "center", gap: 6, border: `1px solid ${tab === EMPLOYEES_TAB ? GOLD : BORDER}`, background: tab === EMPLOYEES_TAB ? "#F7F0E6" : "#fff", color: tab === EMPLOYEES_TAB ? GOLD : "#6b7280", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  Dossiers salariés
+                </button>
                 <button onClick={() => setTab(MEETINGS_TAB)}
                   style={{ display: "flex", alignItems: "center", gap: 6, border: `1px solid ${tab === MEETINGS_TAB ? GOLD : BORDER}`, background: tab === MEETINGS_TAB ? "#F7F0E6" : "#fff", color: tab === MEETINGS_TAB ? GOLD : "#6b7280", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   Comptes rendus de réunion
@@ -151,6 +156,8 @@ function DirectionPageInner() {
               </div>
               {tab === MEETINGS_TAB
                 ? <MeetingsSection />
+                : tab === EMPLOYEES_TAB
+                ? <EmployeeDossiers />
                 : section && <DirectionSection key={section.id} section={section} />}
             </div>
           </div>
@@ -300,3 +307,204 @@ function RecordForm({ section, record, onClose, onSaved }: { section: Section; r
 
 const inp: React.CSSProperties = { width: "100%", height: 38, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 10px", fontSize: 13, outline: "none", background: "#f9fafb", fontFamily: "inherit", boxSizing: "border-box" };
 const txtBtn: React.CSSProperties = { background: "none", border: "none", color: GOLD, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "2px 4px", textDecoration: "none" };
+
+// ── Dossiers salariés (contrats, suivi annuel, médecine du travail, mutuelle) ──
+interface Employee { id: string; name: string; email: string; roleId: string; docCount: number; nextExpiry: string | null }
+interface EmpDoc { id: string; category: string; label?: string; issuer?: string; number?: string; issuedAt?: string | null; expiresAt?: string | null; note?: string; fileName?: string; hasFile?: boolean; updatedAt: string }
+
+const DOC_CATS: { id: string; label: string; hint: string; hasExpiry?: boolean }[] = [
+  { id: "contrat", label: "Contrat de travail", hint: "CDI/CDD, avenants" },
+  { id: "suivi_annuel", label: "Fiche de suivi annuel", hint: "Entretien annuel / professionnel" },
+  { id: "medecine_travail", label: "Médecine du travail", hint: "Visites médicales", hasExpiry: true },
+  { id: "mutuelle", label: "Complémentaire santé", hint: "Mutuelle d'entreprise", hasExpiry: true },
+  { id: "autre", label: "Autres documents", hint: "Divers" },
+];
+const catLabel = (id: string) => DOC_CATS.find(c => c.id === id)?.label ?? id;
+
+function EmployeeDossiers() {
+  const [list, setList] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sel, setSel] = useState<Employee | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { const r = await fetch("/api/direction/employees"); const d = await r.json(); setList(d.items ?? []); }
+    catch { setList([]); } finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  if (sel) return <EmployeeDetail employee={sel} onBack={() => { setSel(null); load(); }} />;
+
+  return (
+    <div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: DARK, marginBottom: 4 }}>Dossiers salariés <span style={{ color: "#9ca3af", fontWeight: 400 }}>({list.length})</span></div>
+      <div style={{ fontSize: 12.5, color: "#6b7280", marginBottom: 14 }}>Salariés de l'agence (statut « salarié » dans la fiche utilisateur). Contrats, suivi annuel, médecine du travail et complémentaire santé.</div>
+      {loading ? (
+        <div style={{ color: "#9ca3af", fontSize: 13, textAlign: "center", padding: 40 }}>Chargement…</div>
+      ) : list.length === 0 ? (
+        <div style={{ color: "#9ca3af", fontSize: 13, textAlign: "center", padding: 40, background: "#fff", borderRadius: 10, border: `1px solid ${BORDER}` }}>Aucun salarié. Activez le statut « Salarié de l'agence » dans la fiche d'un utilisateur (Administration).</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {list.map(e => {
+            const st = expiryStyle(daysUntil(e.nextExpiry));
+            return (
+              <div key={e.id} onClick={() => setSel(e)} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: DARK }}>{e.name}</div>
+                  <div style={{ fontSize: 12, color: "#6b7280" }}>{e.email}</div>
+                </div>
+                {e.nextExpiry && st && <span style={{ background: st.bg, color: st.color, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>Échéance : {fmtDate(e.nextExpiry)} · {st.label}</span>}
+                <span style={{ fontSize: 12, color: "#9ca3af" }}>{e.docCount} doc{e.docCount > 1 ? "s" : ""}</span>
+                <span style={{ ...txtBtn }}>Ouvrir →</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmployeeDetail({ employee, onBack }: { employee: Employee; onBack: () => void }) {
+  const [docs, setDocs] = useState<EmpDoc[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState<{ category: string; doc: EmpDoc | null } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { const r = await fetch(`/api/direction/employee-docs?userId=${employee.id}`); const d = await r.json(); setDocs(d.items ?? []); }
+    catch { setDocs([]); } finally { setLoading(false); }
+  }, [employee.id]);
+  useEffect(() => { load(); }, [load]);
+
+  async function remove(id: string) {
+    if (!confirm("Supprimer ce document ?")) return;
+    await fetch(`/api/direction/employee-docs?id=${id}`, { method: "DELETE" });
+    setDocs(p => p.filter(d => d.id !== id));
+  }
+
+  return (
+    <div>
+      <button onClick={onBack} style={{ ...txtBtn, marginBottom: 10 }}>← Tous les salariés</button>
+      <div style={{ fontSize: 16, fontWeight: 700, color: DARK }}>{employee.name}</div>
+      <div style={{ fontSize: 12.5, color: "#6b7280", marginBottom: 16 }}>{employee.email}</div>
+
+      {DOC_CATS.map(cat => {
+        const items = docs.filter(d => d.category === cat.id);
+        return (
+          <div key={cat.id} style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: DARK }}>{cat.label}</span>
+                <span style={{ fontSize: 11.5, color: "#9ca3af", marginLeft: 8 }}>{cat.hint}</span>
+              </div>
+              <button onClick={() => setForm({ category: cat.id, doc: null })} style={{ ...txtBtn }}>+ Ajouter</button>
+            </div>
+            {loading ? null : items.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: "#9ca3af", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 12px" }}>Aucun document.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {items.map(d => {
+                  const st = cat.hasExpiry ? expiryStyle(daysUntil(d.expiresAt)) : null;
+                  return (
+                    <div key={d.id} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: DARK }}>{d.label || cat.label}</div>
+                        <div style={{ fontSize: 11.5, color: "#6b7280", display: "flex", gap: 10, flexWrap: "wrap", marginTop: 2 }}>
+                          {d.issuer && <span>{d.issuer}</span>}
+                          {d.number && <span>n° {d.number}</span>}
+                          {d.issuedAt && <span>Daté du {fmtDate(d.issuedAt)}</span>}
+                          {d.expiresAt && <span>Échéance {fmtDate(d.expiresAt)}</span>}
+                        </div>
+                        {d.note && <div style={{ fontSize: 11.5, color: "#9ca3af", marginTop: 3 }}>{d.note}</div>}
+                      </div>
+                      {st && d.expiresAt && <span style={{ background: st.bg, color: st.color, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>{st.label}</span>}
+                      {d.hasFile && <a href={`/api/direction/employee-docs/${d.id}/file`} target="_blank" rel="noreferrer" style={txtBtn}>📄 Fichier</a>}
+                      <button onClick={() => setForm({ category: cat.id, doc: d })} style={txtBtn}>Modifier</button>
+                      <button onClick={() => remove(d.id)} style={{ ...txtBtn, color: "#9B2C2C" }}>Suppr.</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {form && <EmpDocForm userId={employee.id} category={form.category} doc={form.doc} onClose={() => setForm(null)} onSaved={() => { setForm(null); load(); }} />}
+    </div>
+  );
+}
+
+function EmpDocForm({ userId, category, doc, onClose, onSaved }: { userId: string; category: string; doc: EmpDoc | null; onClose: () => void; onSaved: () => void }) {
+  const cat = DOC_CATS.find(c => c.id === category);
+  const [form, setForm] = useState({
+    label: doc?.label ?? "", issuer: doc?.issuer ?? "", number: doc?.number ?? "", note: doc?.note ?? "",
+    issuedAt: doc?.issuedAt ? doc.issuedAt.slice(0, 10) : "", expiresAt: doc?.expiresAt ? doc.expiresAt.slice(0, 10) : "",
+  });
+  const [file, setFile] = useState<{ name: string; mime: string; size: number; data: string } | null>(null);
+  const [saving, setSaving] = useState(false); const [err, setErr] = useState("");
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  async function pickFile(f: File | undefined) {
+    if (!f) { setFile(null); return; }
+    if (f.size > 20 * 1024 * 1024) { setErr("Fichier trop volumineux (max 20 Mo)."); return; }
+    const data = await new Promise<string>((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(String(fr.result).split(",")[1] ?? "");
+      fr.onerror = rej; fr.readAsDataURL(f);
+    });
+    setFile({ name: f.name, mime: f.type || "application/octet-stream", size: f.size, data });
+    setErr("");
+  }
+
+  async function save() {
+    setSaving(true); setErr("");
+    try {
+      const payload = { ...form, category, userId, ...(doc ? { id: doc.id } : {}), ...(file ? { file } : {}) };
+      const r = await fetch("/api/direction/employee-docs", {
+        method: doc ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { setErr(d.error || "Erreur"); return; }
+      onSaved();
+    } catch { setErr("Erreur réseau"); } finally { setSaving(false); }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 14, width: 520, maxWidth: "94vw", maxHeight: "90vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+        <div style={{ background: DARK, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ color: "#fff", fontWeight: 600, fontSize: 14 }}>{doc ? "Modifier" : "Ajouter"} — {cat?.label}</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: 20, cursor: "pointer" }}>×</button>
+        </div>
+        <div style={{ padding: 18, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Field full label="Intitulé"><input value={form.label} onChange={e => set("label", e.target.value)} style={inp} placeholder={cat?.label} /></Field>
+          <Field label="Organisme"><input value={form.issuer} onChange={e => set("issuer", e.target.value)} style={inp} placeholder="mutuelle, service de santé…" /></Field>
+          <Field label="N° contrat / adhérent"><input value={form.number} onChange={e => set("number", e.target.value)} style={inp} /></Field>
+          <Field label="Date du document"><input type="date" value={form.issuedAt} onChange={e => set("issuedAt", e.target.value)} style={inp} /></Field>
+          <Field label={cat?.hasExpiry ? "Prochaine échéance" : "Échéance (facultatif)"}><input type="date" value={form.expiresAt} onChange={e => set("expiresAt", e.target.value)} style={inp} /></Field>
+          <Field full label="Note"><textarea value={form.note} onChange={e => set("note", e.target.value)} rows={2} style={{ ...inp, height: "auto", padding: "8px 10px", resize: "vertical" }} /></Field>
+          <Field full label="Fichier (PDF, image — max 20 Mo)">
+            <input type="file" onChange={e => pickFile(e.target.files?.[0])} style={{ fontSize: 12.5 }} />
+            {doc?.hasFile && !file && <div style={{ fontSize: 11.5, color: "#9ca3af", marginTop: 4 }}>Fichier actuel : {doc.fileName}. Choisissez-en un nouveau pour le remplacer.</div>}
+          </Field>
+          {err && <div style={{ gridColumn: "1 / -1", color: "#dc2626", fontSize: 12 }}>{err}</div>}
+          <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button onClick={onClose} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 16px", fontSize: 13, cursor: "pointer" }}>Annuler</button>
+            <button onClick={save} disabled={saving} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{saving ? "Enregistrement…" : "Enregistrer"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
+  return (
+    <div style={{ gridColumn: full ? "1 / -1" : "auto" }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
+      {children}
+    </div>
+  );
+}
