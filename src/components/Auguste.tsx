@@ -46,6 +46,28 @@ export default function Auguste() {
   const inputRef  = useRef<HTMLInputElement>(null);
   const drag      = useRef<{ ox: number; oy: number; dx: number; dy: number; moved: boolean } | null>(null);
 
+  // ── Voix : dictée (navigateur) + synthèse vocale (ElevenLabs, mode dialogue) ──
+  const [ttsEnabled, setTtsEnabled] = useState(false);   // synthèse vocale dispo (clé serveur)
+  const [sttSupported, setSttSupported] = useState(false); // dictée dispo (navigateur)
+  const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking]   = useState(false);
+  const [dialog, setDialog]       = useState(false);     // mode dialogue mains-libres
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recogRef  = useRef<any>(null);
+  const audioRef  = useRef<HTMLAudioElement | null>(null);
+  const dialogRef = useRef(false);
+  const loadingRef = useRef(false);
+  useEffect(() => { dialogRef.current = dialog; }, [dialog]);
+  useEffect(() => { loadingRef.current = loading; }, [loading]);
+
+  // Détection des capacités vocales au montage.
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SR = (typeof window !== "undefined") && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+    setSttSupported(!!SR);
+    fetch("/api/voice/config").then(r => r.json()).then(d => setTtsEnabled(!!d.ttsEnabled)).catch(() => {});
+  }, []);
+
   // Avatar configuré côté admin (photo d'un assistant réel)
   useEffect(() => {
     fetch("/api/auguste-config").then(r => r.json()).then(d => setLogoUrl(d.logoUrl || "")).catch(() => {});
@@ -109,10 +131,95 @@ export default function Auguste() {
     if (open) setTimeout(() => inputRef.current?.focus(), 100);
   }, [open]);
 
+  // Fermeture du panneau → on coupe micro et voix.
+  useEffect(() => {
+    if (!open) {
+      setDialog(false); dialogRef.current = false;
+      stopListening(); stopSpeaking();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Synthèse vocale d'un texte via ElevenLabs (renvoie à la fin de la lecture).
+  function speak(text: string): Promise<void> {
+    return new Promise(resolve => {
+      if (!ttsEnabled || !text.trim()) { resolve(); return; }
+      // On retire le markdown (liens/gras) pour une lecture naturelle.
+      const clean = text.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/\*\*(.+?)\*\*/g, "$1");
+      fetch("/api/voice/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: clean }) })
+        .then(r => r.ok ? r.blob() : Promise.reject())
+        .then(blob => {
+          const url = URL.createObjectURL(blob);
+          if (audioRef.current) { audioRef.current.pause(); }
+          const audio = new Audio(url);
+          audioRef.current = audio;
+          setSpeaking(true);
+          const done = () => { setSpeaking(false); URL.revokeObjectURL(url); resolve(); };
+          audio.onended = done;
+          audio.onerror = done;
+          audio.play().catch(done);
+        })
+        .catch(() => { setSpeaking(false); resolve(); });
+    });
+  }
+
+  function stopSpeaking() {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    setSpeaking(false);
+  }
+
+  // Démarre la dictée. autoSend = envoyer automatiquement à la fin (mode dialogue).
+  function startListening(autoSend: boolean) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR || loadingRef.current) return;
+    try { recogRef.current?.stop(); } catch { /* ignore */ }
+    const rec = new SR();
+    rec.lang = "fr-FR";
+    rec.interimResults = true;
+    rec.continuous = false;
+    let finalText = "";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalText += t; else interim += t;
+      }
+      setInput((finalText + interim).trim());
+    };
+    rec.onerror = () => { setListening(false); };
+    rec.onend = () => {
+      setListening(false);
+      const said = finalText.trim();
+      if (said && autoSend) { setInput(""); send(said); }
+    };
+    recogRef.current = rec;
+    setListening(true);
+    try { rec.start(); } catch { setListening(false); }
+  }
+
+  function stopListening() {
+    try { recogRef.current?.stop(); } catch { /* ignore */ }
+    setListening(false);
+  }
+
+  // Active/désactive le mode dialogue mains-libres.
+  function toggleDialog() {
+    if (dialog) {
+      setDialog(false); dialogRef.current = false;
+      stopListening(); stopSpeaking();
+    } else {
+      setDialog(true); dialogRef.current = true;
+      startListening(true);
+    }
+  }
+
   async function send(text?: string) {
     const content = (text ?? input).trim();
     if (!content || loading) return;
     setInput("");
+    stopSpeaking();
     const newMsgs: Msg[] = [...msgs, { role: "user", content }];
     setMsgs(newMsgs);
     setLoading(true);
@@ -136,6 +243,12 @@ export default function Auguste() {
         }
         // Event générique pour tout module qui voudrait écouter
         window.dispatchEvent(new CustomEvent("collab:refresh", { detail: data.sideEffects }));
+      }
+
+      // Mode dialogue : Auguste lit sa réponse à voix haute puis se remet à l'écoute.
+      if (ttsEnabled) {
+        await speak(reply);
+        if (dialogRef.current) startListening(true);
       }
     } catch {
       setMsgs(prev => [...prev, { role: "assistant", content: "Impossible de contacter Auguste. Vérifiez votre connexion." }]);
@@ -238,9 +351,16 @@ export default function Auguste() {
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 15, color: "#fff" }}>Auguste</div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>
-                {loading ? (action ?? "Réflexion en cours…") : "Assistant IA · Lotier Immobilier"}
+                {dialog ? (speaking ? "🔊 Auguste parle…" : listening ? "🎙 À l'écoute…" : "Mode dialogue actif")
+                  : loading ? (action ?? "Réflexion en cours…") : "Assistant IA · Lotier Immobilier"}
               </div>
             </div>
+            {ttsEnabled && sttSupported && (
+              <button onClick={toggleDialog} title={dialog ? "Quitter le mode dialogue vocal" : "Mode dialogue vocal (mains-libres)"}
+                style={{ background: dialog ? GOLD : "rgba(255,255,255,0.1)", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: dialog ? "#fff" : "rgba(255,255,255,0.7)", fontSize: 13 }}>
+                {dialog ? "■" : "🎙"}
+              </button>
+            )}
             <button onClick={clear} title="Nouvelle conversation" style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: "rgba(255,255,255,0.7)", fontSize: 11 }}>
               ↺
             </button>
@@ -274,6 +394,12 @@ export default function Auguste() {
                     <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3 }}>
                       <div style={{ width: 20, height: 20, borderRadius: "50%", background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff" }}>✦</div>
                       <span style={{ fontSize: 11, fontWeight: 600, color: GOLD }}>Auguste</span>
+                      {ttsEnabled && (
+                        <button onClick={() => (speaking ? stopSpeaking() : speak(m.content))} title={speaking ? "Arrêter la lecture" : "Lire à voix haute"}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "#c4b9a6", fontSize: 12, padding: 0, lineHeight: 1 }}>
+                          {speaking ? "■" : "🔊"}
+                        </button>
+                      )}
                     </div>
                   )}
                   <div style={{
@@ -313,14 +439,22 @@ export default function Auguste() {
 
           {/* Saisie */}
           <div style={{ padding: "10px 12px", borderTop: `1px solid ${BORDER}`, display: "flex", gap: 8, background: "#fafaf8" }}>
+            {sttSupported && (
+              <button
+                onClick={() => (listening ? stopListening() : startListening(dialog))}
+                disabled={loading}
+                title={listening ? "Arrêter la dictée" : "Dicter (saisie vocale)"}
+                style={{ width: 38, height: 38, borderRadius: 10, flexShrink: 0, border: `1px solid ${listening ? GOLD : BORDER}`, cursor: loading ? "default" : "pointer", background: listening ? GOLD : "#fff", color: listening ? "#fff" : "#6b7280", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s" }}
+              >{listening ? "●" : "🎤"}</button>
+            )}
             <input
               ref={inputRef}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
-              placeholder="Demandez à Auguste…"
+              placeholder={listening ? "Parlez…" : "Demandez à Auguste…"}
               disabled={loading}
-              style={{ flex: 1, height: 38, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "0 12px", fontSize: 13, outline: "none", fontFamily: "inherit", background: loading ? "#f3f4f6" : "#fff" }}
+              style={{ flex: 1, height: 38, border: `1px solid ${listening ? GOLD : BORDER}`, borderRadius: 10, padding: "0 12px", fontSize: 13, outline: "none", fontFamily: "inherit", background: loading ? "#f3f4f6" : "#fff" }}
             />
             <button
               onClick={() => send()}
