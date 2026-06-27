@@ -51,6 +51,7 @@ export default function Auguste() {
   const [sttSupported, setSttSupported] = useState(false); // dictée dispo (navigateur)
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking]   = useState(false);
+  const [refining, setRefining]   = useState(false);     // analyse IA du texte dicté
   const [dialog, setDialog]       = useState(false);     // mode dialogue mains-libres
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recogRef  = useRef<any>(null);
@@ -168,6 +169,15 @@ export default function Auguste() {
     setSpeaking(false);
   }
 
+  // Analyse IA d'une instruction dictée → texte précis (repli : texte brut).
+  async function refineText(raw: string): Promise<string> {
+    try {
+      const r = await fetch("/api/voice/refine", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: raw }) });
+      const d = await r.json();
+      return (typeof d?.text === "string" && d.text.trim()) ? d.text.trim() : raw;
+    } catch { return raw; }
+  }
+
   // Démarre la dictée. autoSend = envoyer automatiquement à la fin (mode dialogue).
   function startListening(autoSend: boolean) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -192,7 +202,15 @@ export default function Auguste() {
     rec.onend = () => {
       setListening(false);
       const said = finalText.trim();
-      if (said && autoSend) { setInput(""); send(said); }
+      if (!said) return;
+      // Analyse IA : on rend la dictée précise (ponctuation, chiffres, noms,
+      // erreurs de reconnaissance) avant de remplir le champ ou d'envoyer.
+      setRefining(true);
+      refineText(said).then(refined => {
+        setRefining(false);
+        if (autoSend) { setInput(""); send(refined); }
+        else { setInput(refined); setTimeout(() => inputRef.current?.focus(), 50); }
+      });
     };
     recogRef.current = rec;
     setListening(true);
@@ -351,15 +369,24 @@ export default function Auguste() {
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 15, color: "#fff" }}>Auguste</div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>
-                {dialog ? (speaking ? "🔊 Auguste parle…" : listening ? "🎙 À l'écoute…" : "Mode dialogue actif")
+                {refining ? "✨ Analyse de la dictée…"
+                  : listening ? "🎙 À l'écoute…"
+                  : dialog ? (speaking ? "🔊 Auguste parle…" : "Mode dialogue actif")
                   : loading ? (action ?? "Réflexion en cours…") : "Assistant IA · Lotier Immobilier"}
               </div>
             </div>
-            {ttsEnabled && sttSupported && (
-              <button onClick={toggleDialog} title={dialog ? "Quitter le mode dialogue vocal" : "Mode dialogue vocal (mains-libres)"}
-                style={{ background: dialog ? GOLD : "rgba(255,255,255,0.1)", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: dialog ? "#fff" : "rgba(255,255,255,0.7)", fontSize: 13 }}>
-                {dialog ? "■" : "🎙"}
-              </button>
+            {sttSupported && (
+              ttsEnabled ? (
+                <button onClick={toggleDialog} title={dialog ? "Quitter le mode dialogue vocal" : "Mode dialogue vocal (mains-libres)"}
+                  style={{ background: dialog ? GOLD : "rgba(255,255,255,0.1)", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: dialog ? "#fff" : "rgba(255,255,255,0.7)", fontSize: 13 }}>
+                  {dialog ? "■" : "🎙"}
+                </button>
+              ) : (
+                <span title="Mode dialogue vocal (Auguste vous répond à voix haute) — bientôt disponible"
+                  style={{ background: "rgba(255,255,255,0.08)", borderRadius: 6, padding: "3px 7px", color: "rgba(255,255,255,0.45)", fontSize: 11, display: "flex", alignItems: "center", gap: 4, cursor: "default", whiteSpace: "nowrap" }}>
+                  🎙 <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.02em" }}>bientôt</span>
+                </span>
+              )
             )}
             <button onClick={clear} title="Nouvelle conversation" style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: "rgba(255,255,255,0.7)", fontSize: 11 }}>
               ↺
@@ -442,9 +469,9 @@ export default function Auguste() {
             {sttSupported && (
               <button
                 onClick={() => (listening ? stopListening() : startListening(dialog))}
-                disabled={loading}
-                title={listening ? "Arrêter la dictée" : "Dicter (saisie vocale)"}
-                style={{ width: 38, height: 38, borderRadius: 10, flexShrink: 0, border: `1px solid ${listening ? GOLD : BORDER}`, cursor: loading ? "default" : "pointer", background: listening ? GOLD : "#fff", color: listening ? "#fff" : "#6b7280", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s" }}
+                disabled={loading || refining}
+                title={listening ? "Arrêter la dictée" : "Dicter (saisie vocale, corrigée par l'IA)"}
+                style={{ width: 38, height: 38, borderRadius: 10, flexShrink: 0, border: `1px solid ${listening ? GOLD : BORDER}`, cursor: (loading || refining) ? "default" : "pointer", background: listening ? GOLD : "#fff", color: listening ? "#fff" : "#6b7280", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s" }}
               >{listening ? "●" : "🎤"}</button>
             )}
             <input
@@ -452,9 +479,9 @@ export default function Auguste() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
-              placeholder={listening ? "Parlez…" : "Demandez à Auguste…"}
-              disabled={loading}
-              style={{ flex: 1, height: 38, border: `1px solid ${listening ? GOLD : BORDER}`, borderRadius: 10, padding: "0 12px", fontSize: 13, outline: "none", fontFamily: "inherit", background: loading ? "#f3f4f6" : "#fff" }}
+              placeholder={refining ? "Analyse de la dictée…" : listening ? "Parlez…" : "Demandez à Auguste…"}
+              disabled={loading || refining}
+              style={{ flex: 1, height: 38, border: `1px solid ${(listening || refining) ? GOLD : BORDER}`, borderRadius: 10, padding: "0 12px", fontSize: 13, outline: "none", fontFamily: "inherit", background: (loading || refining) ? "#f3f4f6" : "#fff" }}
             />
             <button
               onClick={() => send()}
