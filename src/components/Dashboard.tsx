@@ -21,7 +21,7 @@ function isToday(iso: string) { return new Date(iso).toDateString() === new Date
 // ─── Types ─────────────────────────────────────────────────────
 interface Task { id: string; title: string; status: string; priority: string; dueDate?: string; familyId?: string; family?: { name: string; color: string } }
 interface MailThread { id: string; threadId?: string; subject: string; read: boolean; fromEmail: string; fromName: string | null; date: string; accountId: string }
-interface CalEvent { id: string; title: string; start: string; end: string; color?: string; location?: string }
+interface CalEvent { id: string; title: string; start: string; end: string; color?: string; location?: string; source?: string; allDay?: boolean }
 interface PhoneCall { id: string; contact: string; phone?: string; direction: string; status: string; subject?: string; notes?: string; createdAt: string }
 interface Note { id: string; content: string; color: string; pinned: boolean; updatedAt: string }
 
@@ -288,55 +288,108 @@ function AgendaBlock({ refreshKey }: { refreshKey: number }) {
   const events = allEvents.filter(e => new Date(e.start) <= weekEnd && new Date(e.end ?? e.start) >= weekStart);
 
   const today = new Date().toDateString();
-  const todayEvents = events.filter(e => new Date(e.start).toDateString() === today);
-  const otherEvents = events.filter(e => new Date(e.start).toDateString() !== today);
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
 
-  // Jours de la semaine avec leurs événements
+  // Jours de la semaine (bandeau) avec le nombre d'événements.
   const weekDays = Array.from({ length: 5 }, (_, i) => {
     const d = new Date(); d.setDate(d.getDate() - d.getDay() + 1 + i);
-    return { date: d, label: DAYS[d.getDay()].slice(0, 3), num: d.getDate(), isToday: d.toDateString() === today, events: events.filter(e => new Date(e.start).toDateString() === d.toDateString()) };
+    return { date: d, label: DAYS[d.getDay()].slice(0, 3), num: d.getDate(), isToday: d.toDateString() === today, count: events.filter(e => new Date(e.start).toDateString() === d.toDateString()).length };
   });
+
+  // Événements à venir (d'aujourd'hui jusqu'à la fin de semaine), triés et
+  // regroupés par jour pour une lecture claire.
+  const upcoming = events
+    .filter(e => new Date(e.end ?? e.start) >= startOfToday)
+    .sort((a, b) => +new Date(a.start) - +new Date(b.start));
+  const groups: { key: string; date: Date; events: CalEvent[] }[] = [];
+  for (const e of upcoming) {
+    const k = new Date(e.start).toDateString();
+    let g = groups.find(x => x.key === k);
+    if (!g) { g = { key: k, date: new Date(e.start), events: [] }; groups.push(g); }
+    g.events.push(e);
+  }
+
+  // On limite l'affichage à ~7 lignes, le reste renvoie au planning.
+  const MAX = 7;
+  let shown = 0;
+  const visibleGroups = groups.map(g => {
+    if (shown >= MAX) return null;
+    const slice = g.events.slice(0, MAX - shown);
+    shown += slice.length;
+    return { ...g, events: slice };
+  }).filter(Boolean) as typeof groups;
+  const hiddenCount = upcoming.length - shown;
 
   return (
     <Block title="Agenda de la semaine" count={events.length || undefined} href="/planning" loading={loading} empty={false} emptyMsg="">
-      {/* Mini-calendrier semaine */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
+      {/* Bandeau des jours de la semaine */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 14 }}>
         {weekDays.map(d => (
-          <div key={d.num} style={{ flex: 1, textAlign: "center", padding: "6px 2px", borderRadius: 8, background: d.isToday ? GOLD : "#f9fafb", border: `1px solid ${d.isToday ? GOLD : BORDER}` }}>
-            <div style={{ fontSize: 9, fontWeight: 600, color: d.isToday ? "#fff" : "#9ca3af", textTransform: "uppercase" }}>{d.label}</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: d.isToday ? "#fff" : "#374151" }}>{d.num}</div>
-            {d.events.length > 0 && <div style={{ width: 5, height: 5, borderRadius: "50%", background: d.isToday ? "rgba(255,255,255,0.7)" : GOLD, margin: "2px auto 0" }} />}
+          <div key={d.num} style={{ flex: 1, textAlign: "center", padding: "7px 2px", borderRadius: 9, background: d.isToday ? GOLD : "#f9fafb", border: `1px solid ${d.isToday ? GOLD : BORDER}` }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: d.isToday ? "#fff" : "#9ca3af", textTransform: "uppercase", letterSpacing: "0.03em" }}>{d.label}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: d.isToday ? "#fff" : "#374151" }}>{d.num}</div>
+            <div style={{ height: 16, marginTop: 2 }}>
+              {d.count > 0 && (
+                <span style={{ display: "inline-block", minWidth: 16, fontSize: 9.5, fontWeight: 700, lineHeight: "15px", borderRadius: 8, padding: "0 4px", background: d.isToday ? "rgba(255,255,255,0.25)" : GOLD_BG, color: d.isToday ? "#fff" : GOLD }}>{d.count}</span>
+              )}
+            </div>
           </div>
         ))}
       </div>
 
-      {events.length === 0 && <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 12, padding: "16px 0" }}>Aucun événement cette semaine</div>}
-
-      {todayEvents.length > 0 && (
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Aujourd'hui</div>
-          {todayEvents.map(e => <EventRow key={e.id} event={e} highlight />)}
-        </div>
+      {upcoming.length === 0 ? (
+        <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 12, padding: "20px 0" }}>Aucun rendez-vous à venir cette semaine</div>
+      ) : (
+        visibleGroups.map(g => (
+          <div key={g.key} style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>{dayHeading(g.date)}</div>
+            {g.events.map(e => <EventRow key={e.id} event={e} />)}
+          </div>
+        ))
       )}
-      {otherEvents.slice(0, 4).map(e => <EventRow key={e.id} event={e} />)}
+
+      {hiddenCount > 0 && (
+        <div style={{ fontSize: 11, color: "#9ca3af", textAlign: "center", marginTop: 2 }}>+ {hiddenCount} autre{hiddenCount > 1 ? "s" : ""} rendez-vous</div>
+      )}
 
       <Link href="/planning" style={{ display: "block", textAlign: "center", marginTop: 8, fontSize: 11, color: GOLD, textDecoration: "none", fontWeight: 600 }}>Voir tout le planning →</Link>
     </Block>
   );
 }
 
-function EventRow({ event, highlight }: { event: CalEvent; highlight?: boolean }) {
+// En-tête de groupe de jour : « Aujourd'hui », « Demain » ou « Mardi 23 ».
+function dayHeading(d: Date): string {
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const dd = new Date(d); dd.setHours(0, 0, 0, 0);
+  const diff = Math.round((+dd - +t) / 86_400_000);
+  if (diff === 0) return "Aujourd'hui";
+  if (diff === 1) return "Demain";
+  return `${DAYS[dd.getDay()]} ${dd.getDate()}`;
+}
+
+function EventRow({ event }: { event: CalEvent }) {
+  const allDay = event.allDay || !event.start.includes("T");
+  const color = event.color ?? GOLD;
   return (
-    <div style={{ display: "flex", gap: 8, padding: "7px 0", borderBottom: "1px solid #f3f4f6", alignItems: "flex-start" }}>
-      <div style={{ width: 3, borderRadius: 2, alignSelf: "stretch", background: event.color ?? GOLD, flexShrink: 0 }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: highlight ? 700 : 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{event.title}</div>
-        <div style={{ fontSize: 10, color: "#6b7280", marginTop: 1 }}>
-          {!isToday(event.start) && <span style={{ marginRight: 6 }}>{DAYS[new Date(event.start).getDay()].slice(0,3)} {fmtDate(event.start)}</span>}
-          {fmtTime(event.start)} – {fmtTime(event.end)}
-          {event.location && <span style={{ marginLeft: 6 }}>· {event.location}</span>}
-        </div>
+    <div style={{ display: "flex", gap: 9, padding: "7px 0", borderBottom: "1px solid #f3f4f6", alignItems: "stretch" }}>
+      <div style={{ width: 3, borderRadius: 2, background: color, flexShrink: 0 }} />
+      <div style={{ width: 44, flexShrink: 0 }}>
+        {allDay ? (
+          <div style={{ fontSize: 10, fontWeight: 700, color: GOLD }}>Journée</div>
+        ) : (
+          <>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#111827" }}>{fmtTime(event.start)}</div>
+            <div style={{ fontSize: 10, color: "#9ca3af" }}>{fmtTime(event.end)}</div>
+          </>
+        )}
       </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{event.title}</div>
+        {event.location && <div style={{ fontSize: 10.5, color: "#6b7280", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📍 {event.location}</div>}
+      </div>
+      {event.source === "google" && (
+        <span style={{ alignSelf: "center", fontSize: 9, fontWeight: 700, color: "#4285F4", background: "rgba(66,133,244,0.08)", borderRadius: 4, padding: "1px 5px", flexShrink: 0 }}>Google</span>
+      )}
     </div>
   );
 }
