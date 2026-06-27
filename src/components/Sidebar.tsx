@@ -34,6 +34,7 @@ const nav: NavItem[] = [
   { id: "formation", label: "Formation",            icon: "◈",  href: "/formation",          group: "Agence" },
   { id: "reseaux",   label: "Réseaux sociaux",      icon: "⌘",  href: "/reseaux-sociaux",   group: "Agence" },
   { id: "espace",    label: "Mon espace",           icon: "🗂", href: "/mon-espace",         group: "Personnel" },
+  { id: "echeances", label: "Échéances",            icon: "⏰", href: "/echeances",          group: "Personnel" },
 ];
 
 const directionNav = [
