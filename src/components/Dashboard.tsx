@@ -636,12 +636,12 @@ export default function Dashboard() {
         <RankingBlock refreshKey={refreshKey} currentUserId={currentUserId} />
       </div>
 
-      {/* Grille 2×2 */}
+      {/* Grille 2×2 — mails remontés sur la première ligne */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <TasksBlock refreshKey={refreshKey} />
-        <CallsBlock refreshKey={refreshKey} />
         <MailsBlock refreshKey={refreshKey} />
+        <TasksBlock refreshKey={refreshKey} />
         <AgendaBlock refreshKey={refreshKey} />
+        <CallsBlock refreshKey={refreshKey} />
       </div>
 
       {/* Notes — pleine largeur en bas */}
@@ -885,29 +885,52 @@ const QUOTES: { text: string; author: string }[] = [
   { text: "Bâtir la confiance prend des années ; l'honorer, chaque jour.", author: "Anonyme" },
 ];
 
+function weatherHint(code: number): string {
+  if (code <= 1) return "grand soleil — parfait pour enchaîner les visites";
+  if (code <= 3) return "ciel calme — belle journée pour prospecter";
+  if (code >= 45 && code <= 48) return "brouillard — prudence sur la route";
+  if (code >= 51 && code <= 67) return "pluie en vue — gardez un parapluie à portée";
+  if (code >= 71 && code <= 86) return "temps hivernal — prévoyez de la marge sur vos trajets";
+  if (code >= 95) return "orages possibles — anticipez vos déplacements";
+  return "bonne journée à vous";
+}
+
 function Banner({ firstName }: { firstName: string }) {
   // Citation différente à chaque ouverture de page (après montage, pour éviter
   // toute incohérence d'hydratation SSR).
   const [i, setI] = useState(0);
+  const [wx, setWx] = useState<{ temp: number; code: number; city: string } | null>(null);
   useEffect(() => { setI(Math.floor(Math.random() * QUOTES.length)); }, []);
+  useEffect(() => {
+    fetch("/api/weather").then(r => r.ok ? r.json() : null).then(d => {
+      if (d?.current && d?.city) setWx({ temp: d.current.temp, code: d.current.code, city: d.city });
+    }).catch(() => {});
+  }, []);
   const q = QUOTES[i];
 
   return (
     <div style={{
-      position: "relative", overflow: "hidden", borderRadius: 16, padding: "26px 34px", marginBottom: 20,
+      position: "relative", overflow: "hidden", borderRadius: 16, padding: "24px 32px", marginBottom: 20,
       background: "linear-gradient(120deg, #1C1A17 0%, #3A3024 50%, #8A6A42 100%)", color: "#F7F0E6",
       boxShadow: "0 12px 32px rgba(28,26,23,0.28)", border: "1px solid rgba(184,150,106,0.35)",
     }}>
       {/* Lueur dorée discrète */}
       <div style={{ position: "absolute", right: 40, top: -60, width: 220, height: 220, borderRadius: "50%", background: "radial-gradient(circle, rgba(216,183,131,0.18), transparent 70%)", pointerEvents: "none" }} />
 
-      <div style={{ position: "relative", display: "flex", alignItems: "stretch", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
-        {/* Accueil + citation */}
-        <div style={{ flex: "1 1 320px", minWidth: 280 }}>
+      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 28, flexWrap: "wrap" }}>
+        {/* Accueil + météo locale + citation (colonne centrée verticalement) */}
+        <div style={{ flex: "1 1 360px", minWidth: 280 }}>
           <div style={{ fontSize: 10.5, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(247,240,230,0.6)" }}>{todayStr()}</div>
-          <div style={{ fontFamily: SERIF, fontSize: 28, fontWeight: 600, marginTop: 7, letterSpacing: "0.01em" }}>{greet(firstName)}</div>
+          <div style={{ fontFamily: SERIF, fontSize: 30, fontWeight: 600, marginTop: 7, letterSpacing: "0.01em" }}>{greet(firstName)}</div>
 
-          <div style={{ width: 48, height: 1, background: "linear-gradient(90deg, #D8B783, transparent)", margin: "15px 0 13px" }} />
+          {/* Message de bienvenue adapté à la météo locale */}
+          {wx && (
+            <div style={{ fontSize: 13.5, color: "rgba(247,240,230,0.9)", marginTop: 8 }}>
+              {wmo(wx.code).icon} Il fait <b style={{ color: "#F7F0E6" }}>{wx.temp}°</b> à <b style={{ color: "#D8B783" }}>{wx.city}</b> — {weatherHint(wx.code)}.
+            </div>
+          )}
+
+          <div style={{ width: 48, height: 1, background: "linear-gradient(90deg, #D8B783, transparent)", margin: "16px 0 13px" }} />
 
           <div style={{ display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 560 }}>
             <span style={{ fontFamily: SERIF, fontSize: 38, lineHeight: 0.7, color: "rgba(216,183,131,0.85)", marginTop: 8, flexShrink: 0 }}>“</span>
@@ -919,7 +942,7 @@ function Banner({ firstName }: { firstName: string }) {
         </div>
 
         {/* Météo à droite */}
-        <div style={{ flex: "0 1 380px", minWidth: 280, display: "flex" }}>
+        <div style={{ flex: "0 1 390px", minWidth: 280, display: "flex" }}>
           <WeatherCard />
         </div>
       </div>
