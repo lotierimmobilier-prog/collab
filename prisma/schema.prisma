@@ -16,6 +16,7 @@ model User {
   roleId          String
   active          Boolean   @default(true)
   isEmployee      Boolean   @default(false) // salarié de l'agence (décompte d'heures, congés)
+  city            String?   // ville de résidence (météo du tableau de bord)
   accessOverrides Json?
   gedAccess       String?   // null = défaut selon rôle | complet | restreint | aucun
   phone           String?

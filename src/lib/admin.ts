@@ -23,6 +23,7 @@ export interface User {
   roleId: string;
   active: boolean;
   isEmployee?: boolean;             // salarié de l'agence (module RH)
+  city?: string | null;             // ville de résidence (météo)
   createdAt: string;
   lastLogin?: string;
   avatar?: string;

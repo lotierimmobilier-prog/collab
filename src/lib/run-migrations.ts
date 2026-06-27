@@ -37,6 +37,7 @@ const FILES = [
   "migrations_user_employee.sql",
   "migrations_employee_dossier.sql",
   "migrations_google_calendar.sql",
+  "migrations_user_city.sql",
 ];
 
 export interface MigrationReport {

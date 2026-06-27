@@ -20,6 +20,7 @@ export default function UserModal({ user, roles, allUsers = [], onClose, onSave 
     roleId: user?.roleId ?? roles[0]?.id ?? "",
     active: user?.active ?? true,
     isEmployee: (user as { isEmployee?: boolean } | null)?.isEmployee ?? false,
+    city: (user as { city?: string } | null)?.city ?? "",
     gedAccess: (user as { gedAccess?: string } | null)?.gedAccess ?? "",
     parrainId: (user as { parrainId?: string } | null)?.parrainId ?? "",
   });
@@ -78,6 +79,7 @@ export default function UserModal({ user, roles, allUsers = [], onClose, onSave 
       roleId: f.roleId,
       active: f.active,
       isEmployee: f.isEmployee,
+      city: f.city || null,
       createdAt: user?.createdAt ?? new Date().toLocaleDateString("fr-FR"),
       accessOverrides: overrides.length > 0 ? overrides : undefined,
       gedAccess: f.gedAccess || null,
@@ -194,6 +196,14 @@ export default function UserModal({ user, roles, allUsers = [], onClose, onSave 
                   <span style={{ display: "block", fontSize: 11, color: "#9ca3af" }}>Ouvre le module RH (décompte d’heures, congés)</span>
                 </span>
               </label>
+
+              {/* Ville de résidence (météo du tableau de bord) */}
+              <F label="Ville de résidence">
+                <input value={f.city} onChange={e => set("city", e.target.value)} style={{ ...inp, width: "100%" }} placeholder="ex. Bordeaux" />
+                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>
+                  Affiche la météo locale et les prévisions sur le tableau de bord.
+                </div>
+              </F>
 
               {/* Parrain (formation par parrainage) */}
               <F label="Parrain (formation)">
