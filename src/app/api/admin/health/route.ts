@@ -63,7 +63,7 @@ export async function GET() {
   if (disk) checks.push({ name: "Espace disque", status: disk.usedPct >= 90 ? "down" : disk.usedPct >= 80 ? "warn" : "ok", detail: `${disk.usedPct}% utilisé` });
   checks.push({ name: "Mémoire (RAM)", status: server.ramPct >= 92 ? "down" : server.ramPct >= 85 ? "warn" : "ok", detail: `${server.ramPct}% utilisée` });
   try {
-    const cfg = await prisma.mailAccountConfig.count({ where: { smtpHost: { not: null } } }).catch(() => 0);
+    const cfg = await prisma.mailAccountConfig.count({ where: { smtpHost: { not: "" } } }).catch(() => 0);
     const sysSmtp = await prisma.setting.findUnique({ where: { key: "smtp_pass" } }).catch(() => null);
     const mailOk = cfg > 0 || !!sysSmtp?.value;
     checks.push({ name: "Envoi d'emails (SMTP)", status: mailOk ? "ok" : "warn", detail: mailOk ? "Configuré" : "Non configuré" });
