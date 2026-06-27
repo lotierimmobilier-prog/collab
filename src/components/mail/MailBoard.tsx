@@ -931,7 +931,37 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
   const [error, setError]         = useState("");
   const [selLabels, setSelLabels] = useState(["sent"]);
   const [size, setSize]           = useState<"normal" | "large" | "full">("normal");
+  // Pièces jointes : « inline » (≤ 10 Mo, vraies PJ) + « hébergées » (> 10 Mo,
+  // envoyées sous forme de lien de téléchargement).
+  const [attachments, setAttachments] = useState<{ filename: string; mime: string; size: number; content: string }[]>([]);
+  const [hostedLinks, setHostedLinks] = useState<{ fileName: string; size: number; url: string }[]>([]);
+  const [attachBusy, setAttachBusy]   = useState(false);
+  const [attachMsg, setAttachMsg]     = useState("");
   const isMobile = useIsMobile();
+
+  async function pickFiles(files: FileList | null) {
+    if (!files) return;
+    setAttachMsg("");
+    for (const file of Array.from(files)) {
+      if (file.size <= MAIL_INLINE_MAX) {
+        try { const content = await fileToBase64(file); setAttachments(p => [...p, { filename: file.name, mime: file.type || "application/octet-stream", size: file.size, content }]); }
+        catch { setAttachMsg(`Lecture impossible : ${file.name}`); }
+        continue;
+      }
+      // > 10 Mo → proposer l'hébergement serveur + lien.
+      const ok = window.confirm(`« ${file.name} » fait ${fmtMo(file.size)} (plus de 10 Mo).\n\nL'héberger sur le serveur et insérer un lien de téléchargement dans le message ?`);
+      if (!ok) continue;
+      setAttachBusy(true); setAttachMsg(`Hébergement de « ${file.name} »…`);
+      try {
+        const data = await fileToBase64(file);
+        const r = await fetch("/api/mail/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: file.name, mime: file.type, size: file.size, data }) });
+        const d = await r.json();
+        if (!r.ok) setAttachMsg(d.error || "Échec de l'hébergement.");
+        else { setHostedLinks(p => [...p, { fileName: file.name, size: file.size, url: d.url }]); setAttachMsg(""); }
+      } catch { setAttachMsg("Erreur réseau lors de l'hébergement."); }
+      finally { setAttachBusy(false); }
+    }
+  }
 
   // Dimensions de la fenêtre selon l'état d'agrandissement (plein écran d'office sur mobile)
   const frame: React.CSSProperties = isMobile
@@ -977,8 +1007,12 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
     const bodyIsHtml = body.trim().startsWith("<");
     const bodyHtml   = bodyIsHtml ? body : `<div style="font-family:sans-serif;font-size:14px;line-height:1.7">${body.replace(/\n/g,"<br/>")}</div>`;
     const bodyText   = body.replace(/<[^>]+>/g, "");
-    const fullBody   = bodyText + (sigText ? `\n\n--\n${sigText}` : "");
-    const fullHtml   = bodyHtml + (sigHtml ? `<br/><hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0"/><div style="font-family:sans-serif;font-size:12px">${sigHtml}</div>` : "");
+    // Fichiers volumineux hébergés → bloc « lien de téléchargement » + explication.
+    const linksHtml = hostedLinks.map(l => mailLinkBlock(l.fileName, l.size, l.url)).join("");
+    const linksText = hostedLinks.map(l => `\n\n📎 ${l.fileName} (${fmtMo(l.size)}) — trop volumineux pour être joint. Téléchargement : ${l.url} (lien valable 30 jours).`).join("");
+
+    const fullBody   = bodyText + linksText + (sigText ? `\n\n--\n${sigText}` : "");
+    const fullHtml   = bodyHtml + linksHtml + (sigHtml ? `<br/><hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0"/><div style="font-family:sans-serif;font-size:12px">${sigHtml}</div>` : "");
 
     try {
       const r = await fetch("/api/mail/send", {
@@ -999,6 +1033,7 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
           username: acct?.username,
           password: acct?.password,
           inReplyTo: replyTo?.inReplyTo,
+          attachments: attachments.length ? attachments : undefined,
         }),
       });
       const data = await r.json();
@@ -1115,6 +1150,36 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
           })()}
         </div>
 
+        {/* Pièces jointes */}
+        <div style={{ padding: "8px 16px", borderTop: "1px solid #f3f4f6", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, border: "1px solid #e5e7eb", borderRadius: 8, padding: "5px 10px", fontSize: 12, color: "#374151", cursor: "pointer", background: "#fff" }}>
+              📎 Joindre un fichier
+              <input type="file" multiple style={{ display: "none" }} onChange={e => { pickFiles(e.target.files); e.target.value = ""; }} />
+            </label>
+            <span style={{ fontSize: 10.5, color: "#9ca3af" }}>Au-delà de 10 Mo : envoi par lien de téléchargement.</span>
+            {attachBusy && <span style={{ fontSize: 11, color: "#B8966A" }}>⏳ {attachMsg}</span>}
+            {!attachBusy && attachMsg && <span style={{ fontSize: 11, color: "#dc2626" }}>{attachMsg}</span>}
+          </div>
+
+          {(attachments.length > 0 || hostedLinks.length > 0) && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+              {attachments.map((a, i) => (
+                <span key={`a${i}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#f3f4f6", borderRadius: 6, padding: "3px 8px", fontSize: 11.5, color: "#374151" }}>
+                  📄 {a.filename} <span style={{ color: "#9ca3af" }}>({fmtMo(a.size)})</span>
+                  <button onClick={() => setAttachments(p => p.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>×</button>
+                </span>
+              ))}
+              {hostedLinks.map((l, i) => (
+                <span key={`l${i}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#F7F0E6", border: "1px solid #E6E1D9", borderRadius: 6, padding: "3px 8px", fontSize: 11.5, color: "#8A6D44" }}>
+                  🔗 {l.fileName} <span style={{ color: "#B8966A" }}>({fmtMo(l.size)} · lien)</span>
+                  <button onClick={() => setHostedLinks(p => p.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: "#B8966A", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Footer */}
         <div style={{ padding: "10px 16px", borderTop: "1px solid #f3f4f6", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
@@ -1136,4 +1201,34 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
       </div>
     </>
   );
+}
+
+// ── Pièces jointes : utilitaires ───────────────────────────────────
+const MAIL_INLINE_MAX = 10 * 1024 * 1024; // 10 Mo : seuil PJ directe / lien
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(",")[1] || "");
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+function fmtMo(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+  return `${Math.max(1, Math.round(bytes / 1024))} Ko`;
+}
+
+// Bloc HTML inséré dans l'email pour un fichier volumineux hébergé.
+function mailLinkBlock(name: string, size: number, url: string): string {
+  return `<div style="margin:14px 0;padding:14px 16px;border:1px solid #E6E1D9;border-radius:10px;background:#F7F0E6;font-family:sans-serif">`
+    + `<div style="font-weight:600;color:#1C1A17;font-size:14px">📎 Pièce jointe volumineuse — ${escapeHtml(name)} (${fmtMo(size)})</div>`
+    + `<div style="font-size:13px;color:#6b7280;margin:6px 0 12px;line-height:1.5">Ce fichier est trop volumineux pour être envoyé directement en pièce jointe. Il a été déposé en téléchargement sécurisé. Cliquez sur le bouton ci-dessous pour le récupérer — le lien reste valable 30 jours.</div>`
+    + `<a href="${url}" style="display:inline-block;background:#B8966A;color:#ffffff;text-decoration:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600">⬇ Télécharger le fichier</a>`
+    + `</div>`;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 }

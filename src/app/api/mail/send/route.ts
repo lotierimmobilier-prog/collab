@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
 
   const reqBody = await req.json();
   let { smtpHost, smtpPort, smtpSsl, username, password } = reqBody;
-  const { to, cc, subject, body, html, fromEmail, fromName, replyToMessageId, inReplyTo, accountId } = reqBody;
+  const { to, cc, subject, body, html, fromEmail, fromName, replyToMessageId, inReplyTo, accountId, attachments } = reqBody;
 
   if (accountId && (!smtpHost || !password)) {
     const dbAcc = await prisma.mailAccountConfig.findUnique({ where: { id: accountId } });
@@ -53,6 +53,18 @@ export async function POST(req: NextRequest) {
     ...(replyToMessageId && { references: replyToMessageId }),
     ...(inReplyTo && { inReplyTo }),
   };
+
+  // Pièces jointes « réelles » (≤ 10 Mo). Les fichiers volumineux sont déjà
+  // insérés dans le corps sous forme de lien (cf. /api/mail/upload).
+  if (Array.isArray(attachments) && attachments.length) {
+    mailOptions.attachments = attachments
+      .filter((a: { filename?: string; content?: string }) => a?.content && a?.filename)
+      .map((a: { filename: string; content: string; mime?: string }) => ({
+        filename: a.filename,
+        content: Buffer.from(a.content, "base64"),
+        contentType: a.mime || undefined,
+      }));
+  }
 
   try {
     const info = await transport.sendMail(mailOptions);

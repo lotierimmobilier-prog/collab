@@ -932,6 +932,23 @@ model GoogleCalendarAccount {
   @@map("google_calendar_accounts")
 }
 
+// Fichier volumineux d'un email hébergé sur le serveur (au-delà de 10 Mo) :
+// envoyé au destinataire sous forme de lien de téléchargement public.
+model MailUpload {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  fileName  String
+  mime      String?
+  size      Int?
+  data      String                 // base64
+  ownerId   String?
+  downloads Int       @default(0)
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+
+  @@map("mail_uploads")
+}
+
 model UserPresence {
   id       String   @id @default(cuid())
   userId   String
