@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import nodemailer from "nodemailer";
 import { resolveAccountOwner } from "@/lib/mailOwner";
+import { renderBrandedEmail, textToHtml, emailBaseUrl } from "@/lib/email-template";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -43,13 +45,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Connexion SMTP échouée : ${msg}` }, { status: 502 });
   }
 
+  // Mise en page Lotier Immobilier + lien « voir la version en ligne ».
+  // Le contenu rédigé (corps + signature) devient le contenu interne de la charte.
+  const innerHtml = (typeof html === "string" && html.trim()) ? html : textToHtml(body ?? "");
+  const viewToken = randomUUID();
+  const viewUrl = `${emailBaseUrl()}/mail-view/${viewToken}`;
+  const brandedHtml = renderBrandedEmail({
+    subject,
+    contentHtml: innerHtml,
+    viewUrl,
+    senderName: fromName || undefined,
+    preheader: body,
+  });
+
   const mailOptions: nodemailer.SendMailOptions = {
     from: fromName ? `"${fromName}" <${fromEmail}>` : fromEmail,
     to,
     ...(cc && { cc }),
     subject,
     text: body,
-    html: html || `<div style="font-family:sans-serif;font-size:14px;line-height:1.6">${(body ?? "").replace(/\n/g, "<br/>")}</div>`,
+    html: brandedHtml,
     ...(replyToMessageId && { references: replyToMessageId }),
     ...(inReplyTo && { inReplyTo }),
   };
@@ -68,6 +83,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const info = await transport.sendMail(mailOptions);
+
+    // Copie publique (lien « voir la version en ligne »).
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO mail_public_views (token, subject, html) VALUES ($1, $2, $3) ON CONFLICT (token) DO NOTHING`,
+      viewToken, String(subject).slice(0, 500), brandedHtml,
+    ).catch(() => {});
 
     // Sauvegarder le mail envoyé en base pour l'historique Auguste.
     // Rattaché à l'agent de la boîte (cloisonnement), sinon à l'expéditeur.

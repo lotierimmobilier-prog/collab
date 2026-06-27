@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { sendNotificationEmail } from "@/lib/notify-mail";
 
 const MAX_ATTACH_BYTES = 20 * 1024 * 1024; // 20 Mo
 const ATTACH_TTL_DAYS  = 30;
@@ -99,16 +100,34 @@ export async function POST(req: NextRequest) {
   const others = await prisma.channelMember.findMany({
     where: { channelId, userId: { not: session.user.id } },
   });
+  const senderName = `${session.user.prenom ?? ""} ${session.user.nom ?? ""}`.trim();
+  const preview = text ? text.slice(0, 200) : `📎 ${atts.length} pièce(s) jointe(s)`;
   for (const m of others) {
     await prisma.notification.create({
       data: {
         userId: m.userId,
         type: "message",
-        title: `${session.user.prenom ?? ""} ${session.user.nom ?? ""}`,
+        title: senderName,
         body: text ? text.slice(0, 100) : `📎 ${atts.length} pièce(s) jointe(s)`,
         link: "/messagerie-interne",
       },
     });
+  }
+
+  // Notification par email à chaque autre membre (best-effort).
+  if (others.length) {
+    const recipients = await prisma.user.findMany({
+      where: { id: { in: others.map((o: { userId: string }) => o.userId) }, active: true },
+      select: { email: true },
+    });
+    await Promise.all(recipients.map((r: { email: string }) => sendNotificationEmail({
+      to: r.email,
+      subject: `Nouveau message de ${senderName || "votre équipe"}`,
+      heading: `Nouveau message de ${senderName || "votre équipe"}`,
+      message: `${senderName || "Un membre de l'équipe"} vous a écrit :\n\n« ${preview} »`,
+      ctaLabel: "Accéder à la conversation",
+      ctaPath: `/messagerie-interne?channel=${channelId}`,
+    })));
   }
 
   return NextResponse.json({

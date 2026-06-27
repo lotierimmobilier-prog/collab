@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { nextRecurrenceDate } from "@/lib/tasks";
+import { sendNotificationEmail, userEmail } from "@/lib/notify-mail";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   const { id } = await params;
   const body = await req.json();
+
+  // Pour détecter un (ré)assignement, on lit l'assigné actuel avant la mise à jour.
+  const prev = await prisma.task.findUnique({ where: { id }, select: { assigneeId: true } }).catch(() => null);
 
   // Complétion : en passant à "done" on enregistre la date/heure et l'auteur ;
   // en quittant "done" on les efface.
@@ -48,6 +52,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           recurrence: task.recurrence, dueDate: next, createdById: task.createdById ?? session.user.id,
         },
       }).catch(() => { /* la colonne recurrence n'existe peut-être pas encore */ });
+    }
+  }
+
+  // (Ré)assignement à un autre agent → notification interne + email (best-effort).
+  const newAssignee = body.assigneeId;
+  if (newAssignee && newAssignee !== prev?.assigneeId && newAssignee !== session.user.id) {
+    await prisma.notification.create({
+      data: { userId: newAssignee, type: "task", title: "Tâche assignée", body: task.title, link: "/taches" },
+    }).catch(() => {});
+    const u = await userEmail(newAssignee);
+    if (u) {
+      const echeance = task.dueDate ? `\nÉchéance : ${task.dueDate.toLocaleDateString("fr-FR")}` : "";
+      await sendNotificationEmail({
+        to: u.email,
+        subject: `Tâche assignée : ${task.title}`,
+        heading: "Une tâche vous a été attribuée",
+        message: `${task.title}${task.description ? `\n\n${task.description}` : ""}\n\nPriorité : ${task.priority}${echeance}`,
+        ctaLabel: "Voir la tâche",
+        ctaPath: "/taches",
+      });
     }
   }
 
