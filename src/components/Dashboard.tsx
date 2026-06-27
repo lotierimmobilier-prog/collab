@@ -628,11 +628,8 @@ export default function Dashboard() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-      {/* Bannière d'accueil — version luxe + citation inspirante */}
+      {/* Bannière d'accueil — citation à gauche + météo à droite */}
       <Banner firstName={firstName} />
-
-      {/* Météo locale façon Google (jour + jours suivants + courbe horaire) */}
-      <WeatherCard />
 
       {/* Classement du trimestre — pleine largeur */}
       <div style={{ marginBottom: 16 }}>
@@ -729,7 +726,7 @@ function WeatherCard() {
     if (ok) { setEditing(false); load(); } else setErr(msg);
   }
 
-  const card: React.CSSProperties = { background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 16, padding: "18px 22px", marginBottom: 16, boxShadow: "0 4px 16px rgba(28,26,23,0.05)" };
+  const card: React.CSSProperties = { background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px", width: "100%", boxShadow: "0 6px 20px rgba(28,26,23,0.18)" };
 
   // Saisie / modification de la ville.
   if (editing || (!loading && w?.needsCity)) {
@@ -904,18 +901,26 @@ function Banner({ firstName }: { firstName: string }) {
       {/* Lueur dorée discrète */}
       <div style={{ position: "absolute", right: 40, top: -60, width: 220, height: 220, borderRadius: "50%", background: "radial-gradient(circle, rgba(216,183,131,0.18), transparent 70%)", pointerEvents: "none" }} />
 
-      <div style={{ position: "relative" }}>
-        <div style={{ fontSize: 10.5, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(247,240,230,0.6)" }}>{todayStr()}</div>
-        <div style={{ fontFamily: SERIF, fontSize: 28, fontWeight: 600, marginTop: 7, letterSpacing: "0.01em" }}>{greet(firstName)}</div>
+      <div style={{ position: "relative", display: "flex", alignItems: "stretch", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
+        {/* Accueil + citation */}
+        <div style={{ flex: "1 1 320px", minWidth: 280 }}>
+          <div style={{ fontSize: 10.5, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(247,240,230,0.6)" }}>{todayStr()}</div>
+          <div style={{ fontFamily: SERIF, fontSize: 28, fontWeight: 600, marginTop: 7, letterSpacing: "0.01em" }}>{greet(firstName)}</div>
 
-        <div style={{ width: 48, height: 1, background: "linear-gradient(90deg, #D8B783, transparent)", margin: "15px 0 13px" }} />
+          <div style={{ width: 48, height: 1, background: "linear-gradient(90deg, #D8B783, transparent)", margin: "15px 0 13px" }} />
 
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 700 }}>
-          <span style={{ fontFamily: SERIF, fontSize: 38, lineHeight: 0.7, color: "rgba(216,183,131,0.85)", marginTop: 8, flexShrink: 0 }}>“</span>
-          <div>
-            <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 16, lineHeight: 1.5, color: "rgba(247,240,230,0.96)" }}>{q.text}</div>
-            <div style={{ fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "#D8B783", marginTop: 9 }}>— {q.author}</div>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 560 }}>
+            <span style={{ fontFamily: SERIF, fontSize: 38, lineHeight: 0.7, color: "rgba(216,183,131,0.85)", marginTop: 8, flexShrink: 0 }}>“</span>
+            <div>
+              <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 16, lineHeight: 1.5, color: "rgba(247,240,230,0.96)" }}>{q.text}</div>
+              <div style={{ fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "#D8B783", marginTop: 9 }}>— {q.author}</div>
+            </div>
           </div>
+        </div>
+
+        {/* Météo à droite */}
+        <div style={{ flex: "0 1 380px", minWidth: 280, display: "flex" }}>
+          <WeatherCard />
         </div>
       </div>
     </div>
