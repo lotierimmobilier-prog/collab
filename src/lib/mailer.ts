@@ -47,7 +47,14 @@ export async function sendMail({ to, subject, html, attachments }: { to: string;
         tls: { rejectUnauthorized: false },
         connectionTimeout: 12000, greetingTimeout: 12000, socketTimeout: 20000,
       });
-      await transporter.sendMail(message);
+      const info = await transporter.sendMail(message);
+      // Le serveur a répondu mais peut avoir refusé le destinataire : on le
+      // détecte (sinon l'envoi paraît réussi alors que rien n'est délivré).
+      const accepted = (info?.accepted ?? []) as string[];
+      const rejected = (info?.rejected ?? []) as string[];
+      if (accepted.length === 0 && rejected.length > 0) {
+        throw new Error(`Destinataire refusé par le serveur (${cfg.host}:${port}) : ${rejected.join(", ")}`);
+      }
       return true;
     } catch (e) { lastErr = e; }
   }
