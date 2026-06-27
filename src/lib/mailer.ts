@@ -17,9 +17,11 @@ export async function getMailSettings() {
   };
 }
 
-export async function sendMail({ to, subject, html }: { to: string; subject: string; html: string }) {
+export interface MailAttachment { filename: string; content: Buffer; contentType?: string }
+
+export async function sendMail({ to, subject, html, attachments }: { to: string; subject: string; html: string; attachments?: MailAttachment[] }): Promise<boolean> {
   const cfg = await getMailSettings();
-  if (!cfg.enabled || !cfg.pass) return;
+  if (!cfg.enabled || !cfg.pass) return false;
 
   const transporter = nodemailer.createTransport({
     host: cfg.host,
@@ -28,7 +30,8 @@ export async function sendMail({ to, subject, html }: { to: string; subject: str
     auth: { user: cfg.user, pass: cfg.pass },
   });
 
-  await transporter.sendMail({ from: cfg.from, to, subject, html });
+  await transporter.sendMail({ from: cfg.from, to, subject, html, ...(attachments?.length ? { attachments } : {}) });
+  return true;
 }
 
 export function eventMailHtml({ title, start, end, location, description, attendees }: {

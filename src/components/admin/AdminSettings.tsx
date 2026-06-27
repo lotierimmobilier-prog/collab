@@ -10,6 +10,7 @@ const BORDER  = "#E6E1D9";
 interface Settings {
   smtp_host: string; smtp_port: string; smtp_user: string; smtp_pass: string;
   smtp_from: string; notif_enabled: string; auguste_logo_url: string;
+  rh_accountant_email: string;
 }
 
 export default function AdminSettings() {
@@ -32,6 +33,7 @@ export default function AdminSettings() {
     smtp_from: "Collab Lotier <collab@lotier-immobilier.com>",
     notif_enabled: "true",
     auguste_logo_url: "",
+    rh_accountant_email: "lola.cuypers@synec.fr",
   });
   const [logoErr, setLogoErr] = useState("");
 
@@ -150,6 +152,16 @@ export default function AdminSettings() {
           <strong>Gmail :</strong> utilisez un <em>App Password</em> (Compte Google → Sécurité → Mots de passe des applications).<br />
           Le mail de notification est <strong>collab@lotier-immobilier.com</strong>.
         </div>
+      </Section>
+
+      {/* RH — comptable */}
+      <Section title="🧾 RH — cabinet comptable">
+        <Field label="Email du comptable (envoi des décomptes d'heures signés)">
+          <input value={settings.rh_accountant_email} onChange={e => set("rh_accountant_email", e.target.value)} style={{ ...inp, width: "100%" }} placeholder="lola.cuypers@synec.fr" type="email" />
+        </Field>
+        <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 8, marginBottom: 0 }}>
+          Le décompte des heures signé par le salarié et l'employeur est automatiquement envoyé à cette adresse (PDF + lien). Les textes des emails se modifient dans « ✉️ Mails types ».
+        </p>
       </Section>
 
       {/* Avatar d'Auguste */}
