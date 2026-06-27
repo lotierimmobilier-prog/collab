@@ -628,14 +628,8 @@ export default function Dashboard() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-      {/* Bannière */}
-      <div style={{ background: `linear-gradient(135deg, ${GOLD} 0%, #8A6A42 100%)`, borderRadius: 14, padding: "20px 26px", color: "#fff", marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <div style={{ fontSize: 19, fontWeight: 700 }}>{greet(firstName)}</div>
-          <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>{todayStr()}</div>
-        </div>
-        <div style={{ fontSize: 42, opacity: 0.15 }}>◈</div>
-      </div>
+      {/* Bannière d'accueil — version luxe + citation inspirante */}
+      <Banner firstName={firstName} />
 
       {/* Classement du trimestre — pleine largeur */}
       <div style={{ marginBottom: 16 }}>
@@ -653,6 +647,67 @@ export default function Dashboard() {
       {/* Notes — pleine largeur en bas */}
       <div style={{ marginTop: 16 }}>
         <NotesBlock refreshKey={refreshKey} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Bandeau d'accueil « luxe » + citation inspirante ───────────────
+const SERIF = "'Playfair Display', Georgia, 'Times New Roman', serif";
+const QUOTES: { text: string; author: string }[] = [
+  { text: "L'excellence n'est pas un acte, mais une habitude.", author: "Aristote" },
+  { text: "La qualité n'est jamais un accident ; elle est toujours le fruit d'un effort intelligent.", author: "John Ruskin" },
+  { text: "Le succès, c'est d'aller d'échec en échec sans perdre son enthousiasme.", author: "Winston Churchill" },
+  { text: "Ce ne sont pas les murs qui font une maison, mais ceux qui l'habitent.", author: "Proverbe" },
+  { text: "La meilleure façon de prédire l'avenir, c'est de le créer.", author: "Peter Drucker" },
+  { text: "Un objectif sans plan n'est qu'un souhait.", author: "Antoine de Saint-Exupéry" },
+  { text: "Le détail fait la perfection, et la perfection n'est pas un détail.", author: "Léonard de Vinci" },
+  { text: "Rien de grand ne s'est accompli dans le monde sans passion.", author: "Hegel" },
+  { text: "La simplicité est la sophistication suprême.", author: "Léonard de Vinci" },
+  { text: "On ne construit pas une réputation sur ce que l'on a l'intention de faire.", author: "Henry Ford" },
+  { text: "Là où il y a une volonté, il y a un chemin.", author: "Proverbe" },
+  { text: "La patience et le temps font plus que la force et la rage.", author: "Jean de La Fontaine" },
+  { text: "Le client le plus mécontent est votre plus grande source d'apprentissage.", author: "Bill Gates" },
+  { text: "Seuls ceux qui osent aller trop loin savent jusqu'où l'on peut aller.", author: "T. S. Eliot" },
+  { text: "Chaque jour est une nouvelle occasion de faire mieux qu'hier.", author: "Proverbe" },
+  { text: "La persévérance est la noblesse de l'obstination.", author: "Adrien Decourcelle" },
+  { text: "Le talent sans travail n'est qu'une habitude perdue.", author: "Proverbe" },
+  { text: "Faites de chaque rencontre une raison d'exceller.", author: "Anonyme" },
+  { text: "La réussite appartient à ceux qui se lèvent tôt et se couchent inspirés.", author: "Anonyme" },
+  { text: "Bâtir la confiance prend des années ; l'honorer, chaque jour.", author: "Anonyme" },
+];
+
+function Banner({ firstName }: { firstName: string }) {
+  // Citation différente à chaque ouverture de page (après montage, pour éviter
+  // toute incohérence d'hydratation SSR).
+  const [i, setI] = useState(0);
+  useEffect(() => { setI(Math.floor(Math.random() * QUOTES.length)); }, []);
+  const q = QUOTES[i];
+
+  return (
+    <div style={{
+      position: "relative", overflow: "hidden", borderRadius: 16, padding: "26px 34px", marginBottom: 20,
+      background: "linear-gradient(120deg, #1C1A17 0%, #3A3024 50%, #8A6A42 100%)", color: "#F7F0E6",
+      boxShadow: "0 12px 32px rgba(28,26,23,0.28)", border: "1px solid rgba(184,150,106,0.35)",
+    }}>
+      {/* Monogramme filigrane */}
+      <div style={{ position: "absolute", right: -8, top: "50%", transform: "translateY(-50%)", fontSize: 150, color: "rgba(247,240,230,0.06)", lineHeight: 1, pointerEvents: "none" }}>◈</div>
+      {/* Lueur dorée discrète */}
+      <div style={{ position: "absolute", right: 40, top: -60, width: 220, height: 220, borderRadius: "50%", background: "radial-gradient(circle, rgba(216,183,131,0.22), transparent 70%)", pointerEvents: "none" }} />
+
+      <div style={{ position: "relative" }}>
+        <div style={{ fontSize: 10.5, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(247,240,230,0.6)" }}>{todayStr()}</div>
+        <div style={{ fontFamily: SERIF, fontSize: 28, fontWeight: 600, marginTop: 7, letterSpacing: "0.01em" }}>{greet(firstName)}</div>
+
+        <div style={{ width: 48, height: 1, background: "linear-gradient(90deg, #D8B783, transparent)", margin: "15px 0 13px" }} />
+
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 700 }}>
+          <span style={{ fontFamily: SERIF, fontSize: 38, lineHeight: 0.7, color: "rgba(216,183,131,0.85)", marginTop: 8, flexShrink: 0 }}>“</span>
+          <div>
+            <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 16, lineHeight: 1.5, color: "rgba(247,240,230,0.96)" }}>{q.text}</div>
+            <div style={{ fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "#D8B783", marginTop: 9 }}>— {q.author}</div>
+          </div>
+        </div>
       </div>
     </div>
   );
