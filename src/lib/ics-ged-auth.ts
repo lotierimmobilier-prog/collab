@@ -9,14 +9,11 @@ const ID = "default";
 
 /** Niveau d'accès GED d'un utilisateur (réglage individuel sinon défaut du rôle). */
 export async function gedLevelForUser(userId: string): Promise<GedLevel> {
-  try {
-    const u = await prisma.user.findUnique({ where: { id: userId }, select: { roleId: true, gedAccess: true } });
-    return gedAccessLevel(u?.roleId, u?.gedAccess);
-  } catch {
-    // Repli si la colonne gedAccess n'est pas encore appliquée en base.
-    const u = await prisma.user.findUnique({ where: { id: userId }, select: { roleId: true } }).catch(() => null);
-    return gedAccessLevel(u?.roleId, null);
-  }
+  // Le réglage individuel gedAccess est stocké dans user_extras.
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { roleId: true } }).catch(() => null);
+  let ged: string | null = null;
+  try { const { gedAccessExtra } = await import("@/lib/user-extras"); ged = await gedAccessExtra(userId); } catch { /* défaut rôle */ }
+  return gedAccessLevel(u?.roleId, ged);
 }
 
 export async function getValidGedToken(): Promise<{ token?: string; apiBase?: string | null; error?: string }> {

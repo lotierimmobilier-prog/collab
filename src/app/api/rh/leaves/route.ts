@@ -4,13 +4,10 @@ import { prisma } from "@/lib/prisma";
 
 const VALIDATORS = ["admin", "dirigeant", "direction"];
 
-// Salarié de l'agence ? (résilient si la colonne isEmployee manque encore).
+// Salarié de l'agence ? (statut stocké dans user_extras).
 async function isEmployee(uid: string): Promise<boolean> {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const u: any = await prisma.user.findUnique({ where: { id: uid }, select: { isEmployee: true } });
-    return !!u?.isEmployee;
-  } catch { return false; }
+  const { isEmployeeExtra } = await import("@/lib/user-extras");
+  return isEmployeeExtra(uid);
 }
 
 function countDays(start: Date, end: Date, halfStart: boolean, halfEnd: boolean): number {

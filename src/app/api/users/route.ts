@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { saveUser, healUsers } from "@/lib/user-write";
+import { saveUser } from "@/lib/user-write";
+import { getExtras, setExtras } from "@/lib/user-extras";
 
 // GET /api/users — liste tous les utilisateurs.
-// Résilient : si une colonne récente manque encore en base (migration non
-// appliquée), on retombe sur une sélection minimale plutôt que de renvoyer 500.
+// On ne sélectionne que les colonnes RÉELLEMENT présentes dans « users », puis
+// on fusionne les attributs de la table annexe user_extras (parrain, ville,
+// statut salarié, GED, surcharges d'accès) qui en est la source de vérité.
 export async function GET() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fmt = (u: any) => ({
@@ -17,41 +19,41 @@ export async function GET() {
   });
 
   try {
-    // healUsers ajoute à la volée toute colonne récente manquante (gedAccess,
-    // parrainId, avatar…) afin que la sélection complète aboutisse et renvoie
-    // bien le parrain enregistré.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const users = await healUsers<any[]>(() => prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true, prenom: true, nom: true, email: true,
-        roleId: true, active: true, isEmployee: true, city: true, accessOverrides: true, gedAccess: true,
-        createdAt: true, lastLogin: true, avatar: true, parrainId: true,
-      },
-    }));
-    return NextResponse.json(users.map(fmt));
+    const colRows: any[] = await prisma.$queryRawUnsafe(
+      `SELECT column_name FROM information_schema.columns WHERE table_name = 'users'`,
+    );
+    const have = new Set(colRows.map(c => c.column_name));
+    const want = [
+      { n: "id", s: "id" }, { n: "prenom", s: "prenom" }, { n: "nom", s: "nom" }, { n: "email", s: "email" },
+      { n: "roleId", s: '"roleId"' }, { n: "active", s: "active" }, { n: "createdAt", s: '"createdAt"' },
+      { n: "lastLogin", s: '"lastLogin"' }, { n: "avatar", s: "avatar" },
+      { n: "parrainId", s: '"parrainId"' }, { n: "gedAccess", s: '"gedAccess"' }, { n: "city", s: "city" },
+      { n: "isEmployee", s: '"isEmployee"' }, { n: "accessOverrides", s: '"accessOverrides"' },
+    ];
+    const cols = want.filter(c => have.has(c.n)).map(c => c.s);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = await prisma.$queryRawUnsafe(
+      `SELECT ${cols.join(", ")} FROM users ORDER BY "createdAt" DESC`,
+    );
+
+    // Fusion avec user_extras (source de vérité pour ces champs).
+    const extras = await getExtras(rows.map(r => r.id));
+    const merged = rows.map(r => {
+      const ex = extras.get(r.id);
+      if (!ex) return r;
+      return {
+        ...r,
+        parrainId: ex.parrainId ?? r.parrainId ?? null,
+        city: ex.city ?? r.city ?? null,
+        isEmployee: ex.isEmployee ?? r.isEmployee ?? false,
+        gedAccess: ex.gedAccess ?? r.gedAccess ?? null,
+        accessOverrides: ex.accessOverrides ?? r.accessOverrides ?? null,
+      };
+    });
+    return NextResponse.json(merged.map(fmt));
   } catch (e) {
-    // Repli résilient : on ne sélectionne QUE les colonnes réellement présentes
-    // en base (déterminées dynamiquement), pour toujours renvoyer parrainId /
-    // city / isEmployee / gedAccess quand elles existent — au lieu de les
-    // perdre et de faire « disparaître » le parrain de la fiche.
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const colRows: any[] = await prisma.$queryRawUnsafe(
-        `SELECT column_name FROM information_schema.columns WHERE table_name = 'users'`,
-      );
-      const have = new Set(colRows.map(c => c.column_name));
-      const base = ['id', 'prenom', 'nom', 'email', '"roleId"', 'active', '"createdAt"', '"lastLogin"'];
-      const optional = ['parrainId', 'gedAccess', 'city', 'isEmployee', 'accessOverrides', 'avatar'];
-      const cols = base.concat(optional.filter(c => have.has(c)).map(c => `"${c}"`));
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rows: any[] = await prisma.$queryRawUnsafe(
-        `SELECT ${cols.join(', ')} FROM users ORDER BY "createdAt" DESC`,
-      );
-      return NextResponse.json(rows.map(fmt));
-    } catch (e2) {
-      return NextResponse.json({ error: String(e), fallbackError: String(e2) }, { status: 500 });
-    }
+    return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }
 
@@ -64,19 +66,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Champs obligatoires manquants" }, { status: 400 });
     }
     const passwordHash = await bcrypt.hash(password, 12);
+    // Colonnes de base sur « users » ; les attributs annexes (parrain, ville,
+    // statut salarié, GED, surcharges d'accès) vont dans user_extras.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data: any = {
-      prenom, nom, email: email.toLowerCase(), passwordHash,
-      roleId, active: active ?? true,
-      accessOverrides: accessOverrides ?? undefined,
-    };
-    if (gedAccess) data.gedAccess = gedAccess;
-    if (parrainId) data.parrainId = parrainId;
-    if (typeof isEmployee === "boolean") data.isEmployee = isEmployee;
-    if (city !== undefined) data.city = city?.trim() || null;
+    const data: any = { prenom, nom, email: email.toLowerCase(), passwordHash, roleId, active: active ?? true };
 
     const sel = { id: true, prenom: true, nom: true, email: true, roleId: true, active: true };
     const user = await saveUser(() => prisma.user.create({ data, select: sel }), data);
+    await setExtras(user.id, {
+      parrainId: parrainId || null, city: city?.trim() || null,
+      isEmployee: !!isEmployee, gedAccess: gedAccess || null,
+      accessOverrides: accessOverrides ?? null,
+    });
     return NextResponse.json({ ...user, password: "••••••••" }, { status: 201 });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);

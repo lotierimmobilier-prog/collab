@@ -13,12 +13,13 @@ export async function GET() {
 
   let users: Array<{ id: string; prenom: string; nom: string; email: string; roleId: string }> = [];
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    users = await prisma.user.findMany({
-      where: { isEmployee: true } as any,
+    const { employeeUserIds } = await import("@/lib/user-extras");
+    const ids = await employeeUserIds();
+    users = ids.length ? await prisma.user.findMany({
+      where: { id: { in: ids } },
       select: { id: true, prenom: true, nom: true, email: true, roleId: true },
       orderBy: [{ nom: "asc" }, { prenom: "asc" }],
-    });
+    }) : [];
   } catch { users = []; }
 
   // Comptage des documents + prochaine échéance par salarié (résilient si la

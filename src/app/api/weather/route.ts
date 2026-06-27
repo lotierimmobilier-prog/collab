@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
 
 // Météo via Open-Meteo (gratuit, sans clé) : géocodage + temps actuel,
 // prévisions sur 7 jours et courbe horaire. Cache mémoire 30 min/ville.
@@ -67,11 +66,12 @@ export async function GET(req: NextRequest) {
 
   let city = (new URL(req.url).searchParams.get("city") || "").trim();
   if (!city) {
+    // Ville stockée dans user_extras (source de vérité).
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const u: any = await prisma.user.findUnique({ where: { id: session.user.id }, select: { city: true } });
-      city = (u?.city || "").trim();
-    } catch { /* colonne absente */ }
+      const { getExtra } = await import("@/lib/user-extras");
+      const ex = await getExtra(session.user.id);
+      city = (ex?.city || "").trim();
+    } catch { /* table absente */ }
   }
   if (!city) return NextResponse.json({ city: null, needsCity: true });
 
