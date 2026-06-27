@@ -628,12 +628,8 @@ export default function Dashboard() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-      {/* Bannière d'accueil — version luxe + citation inspirante */}
+      {/* Bannière d'accueil — version luxe + citation inspirante + météo */}
       <Banner firstName={firstName} />
-
-      {/* Météo locale + prévisions 3 jours */}
-      <WeatherBlock />
-
 
       {/* Classement du trimestre — pleine largeur */}
       <div style={{ marginBottom: 16 }}>
@@ -692,7 +688,8 @@ function weekdayShort(iso: string): string {
   return DAYS[d.getDay()].slice(0, 3);
 }
 
-function WeatherBlock() {
+// Météo intégrée au bandeau (thème sombre, à droite de la citation).
+function WeatherInline() {
   const [w, setW] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
   const [cityInput, setCityInput] = useState("");
@@ -708,67 +705,56 @@ function WeatherBlock() {
     setSaving(false); setCityInput(""); load();
   }
 
-  // Demande de ville (profil non renseigné).
+  const tile: React.CSSProperties = { textAlign: "center", background: "rgba(247,240,230,0.10)", border: "1px solid rgba(247,240,230,0.18)", borderRadius: 10, padding: "7px 10px", minWidth: 58 };
+
+  // Profil sans ville → invite à la saisir (depuis le bandeau).
   if (!loading && w?.needsCity) {
     return (
-      <div style={{ ...weatherCard, marginBottom: 16 }}>
-        <div style={{ fontSize: 13, color: "#6b7280" }}>
-          🌦️ Indiquez votre ville pour afficher la météo et organiser vos visites.
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <input value={cityInput} onChange={e => setCityInput(e.target.value)} onKeyDown={e => e.key === "Enter" && saveCity()} placeholder="Votre ville (ex. Bordeaux)" style={{ flex: 1, height: 34, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 10px", fontSize: 13, outline: "none" }} />
-          <button onClick={saveCity} disabled={saving} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "0 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{saving ? "…" : "Valider"}</button>
+      <div style={{ minWidth: 230, maxWidth: 320 }}>
+        <div style={{ fontSize: 12, color: "rgba(247,240,230,0.85)", marginBottom: 8 }}>🌦️ Votre ville pour afficher la météo et caler les visites :</div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <input value={cityInput} onChange={e => setCityInput(e.target.value)} onKeyDown={e => e.key === "Enter" && saveCity()} placeholder="ex. Bordeaux" style={{ flex: 1, height: 32, border: "1px solid rgba(247,240,230,0.3)", borderRadius: 8, padding: "0 10px", fontSize: 12.5, outline: "none", background: "rgba(247,240,230,0.12)", color: "#F7F0E6" }} />
+          <button onClick={saveCity} disabled={saving} style={{ background: "#D8B783", color: "#1C1A17", border: "none", borderRadius: 8, padding: "0 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{saving ? "…" : "OK"}</button>
         </div>
       </div>
     );
   }
 
   if (loading || !w || w.error || !w.current) {
-    return (
-      <div style={{ ...weatherCard, marginBottom: 16, color: "#9ca3af", fontSize: 12.5 }}>
-        {loading ? "Météo en cours de chargement…" : `Météo indisponible${w?.city ? ` pour ${w.city}` : ""}.`}
-      </div>
-    );
+    return <div style={{ fontSize: 12, color: "rgba(247,240,230,0.6)", minWidth: 180, textAlign: "right" }}>{loading ? "Météo…" : "Météo indisponible"}</div>;
   }
 
   const cur = wmo(w.current.code);
   return (
-    <div style={{ ...weatherCard, marginBottom: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-        {/* Actuel */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 200 }}>
-          <div style={{ fontSize: 40, lineHeight: 1 }}>{cur.icon}</div>
-          <div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: "#1C1A17", lineHeight: 1 }}>{w.current.temp}°</div>
-            <div style={{ fontSize: 12.5, color: "#6b7280", marginTop: 3 }}>{cur.label} · <b style={{ color: GOLD }}>{w.city}</b></div>
-          </div>
+    <div style={{ minWidth: 250 }} title={weatherJoke(w.daily)}>
+      {/* Actuel */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "flex-end" }}>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 30, fontWeight: 800, color: "#F7F0E6", lineHeight: 1 }}>{w.current.temp}°</div>
+          <div style={{ fontSize: 11.5, color: "rgba(247,240,230,0.75)", marginTop: 3 }}>{cur.label} · <b style={{ color: "#D8B783" }}>{w.city}</b></div>
         </div>
+        <div style={{ fontSize: 40, lineHeight: 1 }}>{cur.icon}</div>
+      </div>
 
-        <div style={{ flex: 1 }} />
-
-        {/* Prévisions 3 jours */}
-        <div style={{ display: "flex", gap: 8 }}>
-          {(w.daily ?? []).map(d => {
-            const wi = wmo(d.code);
-            return (
-              <div key={d.date} style={{ textAlign: "center", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px", minWidth: 64 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" }}>{weekdayShort(d.date)}</div>
-                <div style={{ fontSize: 22, margin: "2px 0" }}>{wi.icon}</div>
-                <div style={{ fontSize: 11.5, fontWeight: 700, color: "#374151" }}>{d.tmax}°<span style={{ color: "#9ca3af", fontWeight: 500 }}> / {d.tmin}°</span></div>
-              </div>
-            );
-          })}
-        </div>
+      {/* Prévisions 3 jours */}
+      <div style={{ display: "flex", gap: 7, marginTop: 12, justifyContent: "flex-end" }}>
+        {(w.daily ?? []).map(d => {
+          const wi = wmo(d.code);
+          return (
+            <div key={d.date} style={tile}>
+              <div style={{ fontSize: 9.5, fontWeight: 700, color: "rgba(247,240,230,0.6)", textTransform: "uppercase" }}>{weekdayShort(d.date)}</div>
+              <div style={{ fontSize: 19, margin: "1px 0" }}>{wi.icon}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#F7F0E6" }}>{d.tmax}°<span style={{ color: "rgba(247,240,230,0.55)", fontWeight: 500 }}> / {d.tmin}°</span></div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Blague « organisation des visites » */}
-      <div style={{ fontSize: 12, color: "#8A6D44", background: GOLD_BG, borderRadius: 8, padding: "8px 12px", marginTop: 12 }}>
-        {weatherJoke(w.daily)}
-      </div>
+      <div style={{ fontSize: 10.5, color: "#D8B783", marginTop: 9, textAlign: "right", lineHeight: 1.4, maxWidth: 290, marginLeft: "auto" }}>{weatherJoke(w.daily)}</div>
     </div>
   );
 }
-const weatherCard: React.CSSProperties = { background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, padding: "16px 20px" };
 
 // ─── Bandeau d'accueil « luxe » + citation inspirante ───────────────
 const SERIF = "'Playfair Display', Georgia, 'Times New Roman', serif";
@@ -808,24 +794,28 @@ function Banner({ firstName }: { firstName: string }) {
       background: "linear-gradient(120deg, #1C1A17 0%, #3A3024 50%, #8A6A42 100%)", color: "#F7F0E6",
       boxShadow: "0 12px 32px rgba(28,26,23,0.28)", border: "1px solid rgba(184,150,106,0.35)",
     }}>
-      {/* Monogramme filigrane */}
-      <div style={{ position: "absolute", right: -8, top: "50%", transform: "translateY(-50%)", fontSize: 150, color: "rgba(247,240,230,0.06)", lineHeight: 1, pointerEvents: "none" }}>◈</div>
       {/* Lueur dorée discrète */}
-      <div style={{ position: "absolute", right: 40, top: -60, width: 220, height: 220, borderRadius: "50%", background: "radial-gradient(circle, rgba(216,183,131,0.22), transparent 70%)", pointerEvents: "none" }} />
+      <div style={{ position: "absolute", right: 40, top: -60, width: 220, height: 220, borderRadius: "50%", background: "radial-gradient(circle, rgba(216,183,131,0.18), transparent 70%)", pointerEvents: "none" }} />
 
-      <div style={{ position: "relative" }}>
-        <div style={{ fontSize: 10.5, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(247,240,230,0.6)" }}>{todayStr()}</div>
-        <div style={{ fontFamily: SERIF, fontSize: 28, fontWeight: 600, marginTop: 7, letterSpacing: "0.01em" }}>{greet(firstName)}</div>
+      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 28, flexWrap: "wrap" }}>
+        {/* Accueil + citation */}
+        <div style={{ flex: 1, minWidth: 280 }}>
+          <div style={{ fontSize: 10.5, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(247,240,230,0.6)" }}>{todayStr()}</div>
+          <div style={{ fontFamily: SERIF, fontSize: 28, fontWeight: 600, marginTop: 7, letterSpacing: "0.01em" }}>{greet(firstName)}</div>
 
-        <div style={{ width: 48, height: 1, background: "linear-gradient(90deg, #D8B783, transparent)", margin: "15px 0 13px" }} />
+          <div style={{ width: 48, height: 1, background: "linear-gradient(90deg, #D8B783, transparent)", margin: "15px 0 13px" }} />
 
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 700 }}>
-          <span style={{ fontFamily: SERIF, fontSize: 38, lineHeight: 0.7, color: "rgba(216,183,131,0.85)", marginTop: 8, flexShrink: 0 }}>“</span>
-          <div>
-            <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 16, lineHeight: 1.5, color: "rgba(247,240,230,0.96)" }}>{q.text}</div>
-            <div style={{ fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "#D8B783", marginTop: 9 }}>— {q.author}</div>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 620 }}>
+            <span style={{ fontFamily: SERIF, fontSize: 38, lineHeight: 0.7, color: "rgba(216,183,131,0.85)", marginTop: 8, flexShrink: 0 }}>“</span>
+            <div>
+              <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 16, lineHeight: 1.5, color: "rgba(247,240,230,0.96)" }}>{q.text}</div>
+              <div style={{ fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "#D8B783", marginTop: 9 }}>— {q.author}</div>
+            </div>
           </div>
         </div>
+
+        {/* Météo (jour + 3 prochains jours) */}
+        <WeatherInline />
       </div>
     </div>
   );
