@@ -19,6 +19,7 @@ export default function UserModal({ user, roles, allUsers = [], onClose, onSave 
     password: user?.password ?? "",
     roleId: user?.roleId ?? roles[0]?.id ?? "",
     active: user?.active ?? true,
+    isEmployee: (user as { isEmployee?: boolean } | null)?.isEmployee ?? false,
     gedAccess: (user as { gedAccess?: string } | null)?.gedAccess ?? "",
     parrainId: (user as { parrainId?: string } | null)?.parrainId ?? "",
   });
@@ -76,6 +77,7 @@ export default function UserModal({ user, roles, allUsers = [], onClose, onSave 
       password: f.password,
       roleId: f.roleId,
       active: f.active,
+      isEmployee: f.isEmployee,
       createdAt: user?.createdAt ?? new Date().toLocaleDateString("fr-FR"),
       accessOverrides: overrides.length > 0 ? overrides : undefined,
       gedAccess: f.gedAccess || null,
@@ -181,6 +183,16 @@ export default function UserModal({ user, roles, allUsers = [], onClose, onSave 
                   <div style={{ position: "absolute", top: 3, left: f.active ? 21 : 3, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
                 </div>
                 <span style={{ fontSize: 13, color: "#374151" }}>Compte {f.active ? "actif" : "inactif"}</span>
+              </label>
+
+              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                <div onClick={() => set("isEmployee", !f.isEmployee)} style={{ width: 40, height: 22, borderRadius: 11, background: f.isEmployee ? "#B8966A" : "#e5e7eb", position: "relative", cursor: "pointer", transition: "background .2s" }}>
+                  <div style={{ position: "absolute", top: 3, left: f.isEmployee ? 21 : 3, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+                </div>
+                <span style={{ fontSize: 13, color: "#374151" }}>
+                  Salarié de l’agence
+                  <span style={{ display: "block", fontSize: 11, color: "#9ca3af" }}>Ouvre le module RH (décompte d’heures, congés)</span>
+                </span>
               </label>
 
               {/* Parrain (formation par parrainage) */}

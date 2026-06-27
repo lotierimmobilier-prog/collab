@@ -106,8 +106,9 @@ export async function runMonthlyHoursReminder(now = new Date()): Promise<void> {
     if (marker?.value === today) return;
     await prisma.setting.upsert({ where: { key: "hours_reminder_last_run" }, update: { value: today }, create: { key: "hours_reminder_last_run", value: today } });
 
-    // Collaborateurs salariés (hors agents commerciaux).
-    const users = await prisma.user.findMany({ where: { active: true, NOT: { roleId: "agent" }, email: { not: "" } }, select: { email: true } });
+    // Collaborateurs salariés de l'agence (statut « salarié »).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const users = await prisma.user.findMany({ where: { active: true, isEmployee: true, email: { not: "" } } as any, select: { email: true } });
     const month = now.toISOString().slice(0, 7);
     const cfg = await getMailSettings();
     const tpl = await getTemplate("hours_reminder_collab");

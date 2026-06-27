@@ -4,6 +4,15 @@ import { prisma } from "@/lib/prisma";
 
 const VALIDATORS = ["admin", "dirigeant", "direction"];
 
+// Salarié de l'agence ? (résilient si la colonne isEmployee manque encore).
+async function isEmployee(uid: string): Promise<boolean> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const u: any = await prisma.user.findUnique({ where: { id: uid }, select: { isEmployee: true } });
+    return !!u?.isEmployee;
+  } catch { return false; }
+}
+
 function countDays(start: Date, end: Date, halfStart: boolean, halfEnd: boolean): number {
   let d = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
   if (d < 1) d = 1;
@@ -43,8 +52,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
-  // Réservé aux collaborateurs salariés (pas les agents commerciaux).
-  if (session.user.roleId === "agent") return NextResponse.json({ error: "Module réservé aux collaborateurs." }, { status: 403 });
+  // Réservé aux collaborateurs salariés de l'agence.
+  if (!(await isEmployee(session.user.id))) return NextResponse.json({ error: "Module réservé aux salariés de l'agence." }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));
   if (!body?.startDate || !body?.endDate) return NextResponse.json({ error: "Dates requises." }, { status: 400 });

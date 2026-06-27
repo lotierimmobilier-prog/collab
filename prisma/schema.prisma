@@ -15,6 +15,7 @@ model User {
   passwordHash    String
   roleId          String
   active          Boolean   @default(true)
+  isEmployee      Boolean   @default(false) // salarié de l'agence (décompte d'heures, congés)
   accessOverrides Json?
   gedAccess       String?   // null = défaut selon rôle | complet | restreint | aucun
   phone           String?

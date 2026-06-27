@@ -14,7 +14,14 @@ export async function GET() {
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   const uid = session.user.id;
 
-  const result = { mail: { count: 0, urgent: false }, chat: { count: 0, urgent: false }, legal: { count: 0, urgent: false } };
+  const result = { mail: { count: 0, urgent: false }, chat: { count: 0, urgent: false }, legal: { count: 0, urgent: false }, isEmployee: false };
+
+  // Statut salarié (ouvre le module RH) — résilient si la colonne manque.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const me: any = await prisma.user.findUnique({ where: { id: uid }, select: { isEmployee: true } });
+    result.isEmployee = !!me?.isEmployee;
+  } catch { /* colonne absente → false */ }
 
   // Balayages quotidiens throttlés (sans bloquer) : rappels d'expiration des
   // documents perso + relances de conformité fournisseurs + relance décompte
