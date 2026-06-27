@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import Sidebar from "@/components/Sidebar";
 
 const GOLD = "#B8966A";
+const BORDER = "#E6E1D9";
 
 const TYPES = [
   { value: "plomberie",    label: "Plomberie",    icon: "🔧" },
@@ -25,6 +26,7 @@ interface Supplier {
   notes?: string; active: boolean; ordersCount?: number; metier?: string;
   insuranceType?: string; insurer?: string; insurancePolicy?: string;
   insuranceExpiry?: string | null; hasInsuranceDoc?: boolean;
+  urssafExpiry?: string | null; hasUrssafDoc?: boolean;
 }
 
 // Statut de l'attestation d'assurance (décennale / RC pro).
@@ -35,6 +37,16 @@ function insuranceStatus(expiry?: string | null): { label: string; color: string
   if (days < 0) return { label: "Assurance expirée", color: "#DC2626" };
   if (days <= 30) return { label: "Assurance expire bientôt", color: "#B45309" };
   return { label: "Assurance à jour", color: "#2F855A" };
+}
+
+// Badge générique de conformité (URSSAF…).
+function confBadge(expiry: string | null | undefined, name: string): { label: string; color: string } | null {
+  if (!expiry) return null;
+  const days = Math.floor((new Date(expiry).getTime() - Date.now()) / 86_400_000);
+  if (isNaN(days)) return null;
+  if (days < 0) return { label: `${name} expirée`, color: "#DC2626" };
+  if (days <= 30) return { label: `${name} expire bientôt`, color: "#B45309" };
+  return { label: `${name} à jour`, color: "#2F855A" };
 }
 
 function fileToB64(file: File): Promise<{ name: string; mime: string; size: number; data: string }> {
@@ -111,6 +123,26 @@ export default function FournisseursPage() {
     await load();
   }
 
+  // Relance « justificatifs à jour » (assurance / URSSAF) par email.
+  const [relancing, setRelancing] = useState<string | null>(null);
+  async function relance(s: Supplier) {
+    if (!s.email) { alert("Ce fournisseur n'a pas d'adresse email."); return; }
+    if (!confirm(`Envoyer à ${s.name} (${s.email}) une demande de dépôt de son assurance et de son attestation URSSAF ?`)) return;
+    setRelancing(s.id);
+    try {
+      const r = await fetch(`/api/fournisseurs/${s.id}/relance`, { method: "POST" });
+      const d = await r.json();
+      alert(r.ok ? `Demande envoyée à ${d.sentTo}.` : (d.error || "Envoi impossible."));
+    } catch { alert("Erreur réseau."); }
+    finally { setRelancing(null); }
+  }
+  async function copyPortal(s: Supplier) {
+    const r = await fetch(`/api/fournisseurs/${s.id}/relance`);
+    const d = await r.json();
+    if (r.ok && d.url) { try { await navigator.clipboard.writeText(d.url); alert("Lien de l'espace fournisseur copié :\n" + d.url); } catch { prompt("Lien de l'espace fournisseur :", d.url); } }
+    else alert(d.error || "Impossible de générer le lien.");
+  }
+
   const filtered = suppliers.filter(s => {
     const matchType = filterType === "all" || s.type === filterType;
     const matchSearch = !search || s.name.toLowerCase().includes(search.toLowerCase()) || s.email?.toLowerCase().includes(search.toLowerCase()) || s.contact?.toLowerCase().includes(search.toLowerCase());
@@ -183,7 +215,16 @@ export default function FournisseursPage() {
                         </div>
                         <span style={{ background: "#F7F0E6", color: GOLD, borderRadius: 5, padding: "1px 7px", fontSize: 11, fontWeight: 500 }}>{ti.icon} {ti.label}</span>
                         {s.metier && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 3 }}>{s.metier}</div>}
-                        {(() => { const ins = insuranceStatus(s.insuranceExpiry); return ins ? <div style={{ marginTop: 4 }}><span style={{ background: ins.color + "20", color: ins.color, borderRadius: 5, padding: "1px 7px", fontSize: 10.5, fontWeight: 600 }}>🛡 {ins.label}</span></div> : null; })()}
+                        {(() => {
+                          const ins = insuranceStatus(s.insuranceExpiry);
+                          const urs = confBadge(s.urssafExpiry, "URSSAF");
+                          return (ins || urs) ? (
+                            <div style={{ marginTop: 4, display: "flex", gap: 5, flexWrap: "wrap" }}>
+                              {ins && <span style={{ background: ins.color + "20", color: ins.color, borderRadius: 5, padding: "1px 7px", fontSize: 10.5, fontWeight: 600 }}>🛡 {ins.label}</span>}
+                              {urs && <span style={{ background: urs.color + "20", color: urs.color, borderRadius: 5, padding: "1px 7px", fontSize: 10.5, fontWeight: 600 }}>📄 {urs.label}</span>}
+                            </div>
+                          ) : null;
+                        })()}
                       </div>
                       <div style={{ display: "flex", gap: 4 }}>
                         <button onClick={() => enrichOne(s)} disabled={enriching !== null}
@@ -213,6 +254,17 @@ export default function FournisseursPage() {
                         📋 {s.ordersCount} ordre(s) de service
                       </div>
                     )}
+
+                    <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <button onClick={() => relance(s)} disabled={relancing === s.id || !s.email}
+                        title={s.email ? "Demander assurance + URSSAF par email" : "Pas d'email"}
+                        style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: s.email ? "pointer" : "default", background: "#fff", color: s.email ? GOLD : "#9ca3af" }}>
+                        {relancing === s.id ? "Envoi…" : "📧 Demander justificatifs"}
+                      </button>
+                      <button onClick={() => copyPortal(s)} style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer", background: "#fff", color: "#6b7280" }}>
+                        🔗 Lien dépôt
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -262,8 +314,10 @@ function SupplierForm({ supplier, onSave, onClose }: { supplier: Supplier | null
     insurer:         supplier?.insurer         ?? "",
     insurancePolicy: supplier?.insurancePolicy ?? "",
     insuranceExpiry: supplier?.insuranceExpiry ? supplier.insuranceExpiry.slice(0, 10) : "",
+    urssafExpiry:    supplier?.urssafExpiry    ? supplier.urssafExpiry.slice(0, 10) : "",
   });
   const [insFile, setInsFile] = useState<{ name: string; mime: string; size: number; data: string } | null>(null);
+  const [ursFile, setUrsFile] = useState<{ name: string; mime: string; size: number; data: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
   function set(k: string, v: string | boolean) { setF(p => ({ ...p, [k]: v })); }
@@ -271,7 +325,7 @@ function SupplierForm({ supplier, onSave, onClose }: { supplier: Supplier | null
   async function submit() {
     if (!f.name.trim()) return;
     setSaving(true);
-    await onSave({ id: supplier?.id, ...f, ...(insFile ? { insuranceDoc: insFile } : {}) });
+    await onSave({ id: supplier?.id, ...f, ...(insFile ? { insuranceDoc: insFile } : {}), ...(ursFile ? { urssafDoc: ursFile } : {}) });
     setSaving(false);
   }
 
@@ -324,10 +378,21 @@ function SupplierForm({ supplier, onSave, onClose }: { supplier: Supplier | null
               <F label="N° de police"><input value={f.insurancePolicy} onChange={e => set("insurancePolicy", e.target.value)} style={inp} /></F>
             </div>
             <div style={{ marginTop: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 5 }}>Attestation (PDF / photo)</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 5 }}>Attestation d'assurance (PDF / photo)</div>
               <input type="file" accept="image/*,.pdf" onChange={async e => { const fl = e.target.files?.[0]; if (fl) { if (fl.size > 20 * 1024 * 1024) { alert("Fichier trop volumineux (max 20 Mo)."); return; } setInsFile(await fileToB64(fl)); } }} style={{ fontSize: 13 }} />
               {insFile && <span style={{ fontSize: 12, color: "#2F855A", marginLeft: 8 }}>✓ {insFile.name}</span>}
               {!insFile && supplier?.hasInsuranceDoc && <a href={`/api/fournisseurs/${supplier.id}/insurance`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: GOLD, marginLeft: 8 }}>📎 Voir l'attestation actuelle</a>}
+            </div>
+
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px dashed ${BORDER}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7280", marginBottom: 10 }}>📄 ATTESTATION DE VIGILANCE URSSAF</div>
+              <F label="Date de validité"><input type="date" value={f.urssafExpiry} onChange={e => set("urssafExpiry", e.target.value)} style={inp} /></F>
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 5 }}>Attestation URSSAF (PDF / photo)</div>
+                <input type="file" accept="image/*,.pdf" onChange={async e => { const fl = e.target.files?.[0]; if (fl) { if (fl.size > 20 * 1024 * 1024) { alert("Fichier trop volumineux (max 20 Mo)."); return; } setUrsFile(await fileToB64(fl)); } }} style={{ fontSize: 13 }} />
+                {ursFile && <span style={{ fontSize: 12, color: "#2F855A", marginLeft: 8 }}>✓ {ursFile.name}</span>}
+                {!ursFile && supplier?.hasUrssafDoc && <a href={`/api/fournisseurs/${supplier.id}/urssaf`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: GOLD, marginLeft: 8 }}>📎 Voir l'attestation actuelle</a>}
+              </div>
             </div>
           </div>
 
