@@ -31,6 +31,7 @@ const FILES = [
   "migrations_supplier_insurance.sql",
   "migrations_supplier_conformite.sql",
   "migrations_procedures.sql",
+  "migrations_procedures_roles.sql",
 ];
 
 export interface MigrationReport {

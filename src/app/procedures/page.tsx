@@ -7,8 +7,17 @@ const GOLD = "#B8966A"; const DARK = "#1C1A17"; const BORDER = "#E6E1D9"; const 
 
 interface Procedure {
   id: string; title: string; description?: string; category?: string;
-  kind: string; fileName?: string; mime?: string; size?: number; url?: string; hasFile?: boolean;
+  kind: string; roles?: string[]; fileName?: string; mime?: string; size?: number; url?: string; hasFile?: boolean;
 }
+
+// Audiences ciblables (rôles). Vide = visible par tout le monde.
+const AUDIENCE = [
+  { id: "agent",        label: "Agent commercial" },
+  { id: "gestionnaire", label: "Gestionnaire" },
+  { id: "syndic",       label: "Syndic" },
+  { id: "dirigeant",    label: "Direction" },
+];
+function audienceLabel(id: string) { return AUDIENCE.find(a => a.id === id)?.label ?? id; }
 
 function fileToB64(file: File): Promise<{ name: string; mime: string; size: number; data: string }> {
   return new Promise((res, rej) => {
@@ -89,6 +98,7 @@ export default function ProceduresPage() {
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontWeight: 700, fontSize: 14, color: DARK }}>{p.title}</div>
                               {p.description && <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2, lineHeight: 1.4 }}>{p.description}</div>}
+                              {p.roles && p.roles.length > 0 && <div style={{ fontSize: 10.5, color: GOLD, marginTop: 3 }}>👥 {p.roles.map(audienceLabel).join(" · ")}</div>}
                             </div>
                             {isAdmin && (
                               <div style={{ display: "flex", gap: 4 }}>
@@ -127,14 +137,16 @@ export default function ProceduresPage() {
 
 function ProcForm({ proc, onClose, onSaved }: { proc: Procedure | null; onClose: () => void; onSaved: () => void }) {
   const [f, setF] = useState({ title: proc?.title ?? "", description: proc?.description ?? "", category: proc?.category ?? "", url: proc?.url ?? "" });
+  const [roles, setRoles] = useState<string[]>(proc?.roles ?? []);
   const [file, setFile] = useState<{ name: string; mime: string; size: number; data: string } | null>(null);
   const [saving, setSaving] = useState(false);
   function set(k: string, v: string) { setF(p => ({ ...p, [k]: v })); }
+  function toggleRole(id: string) { setRoles(rs => rs.includes(id) ? rs.filter(r => r !== id) : [...rs, id]); }
 
   async function submit() {
     if (!f.title.trim()) return;
     setSaving(true);
-    const payload = { ...f, ...(file ? { file } : {}) };
+    const payload = { ...f, roles, ...(file ? { file } : {}) };
     const r = proc
       ? await fetch(`/api/procedures/${proc.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
       : await fetch("/api/procedures", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -154,6 +166,22 @@ function ProcForm({ proc, onClose, onSaved }: { proc: Procedure | null; onClose:
         <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
           <L label="Titre *"><input autoFocus value={f.title} onChange={e => set("title", e.target.value)} style={inp} placeholder="Procédure d'état des lieux" /></L>
           <L label="Catégorie"><input value={f.category} onChange={e => set("category", e.target.value)} style={inp} placeholder="Gestion, Transaction, RH…" /></L>
+
+          <L label="Destinataires (vide = tout le monde)">
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {AUDIENCE.map(a => {
+                const on = roles.includes(a.id);
+                return (
+                  <button key={a.id} type="button" onClick={() => toggleRole(a.id)}
+                    style={{ padding: "5px 11px", fontSize: 12, borderRadius: 20, cursor: "pointer", border: `1px solid ${on ? GOLD : BORDER}`, background: on ? GOLD_BG : "#fff", color: on ? GOLD : "#374151", fontWeight: on ? 600 : 400 }}>
+                    {on ? "✓ " : ""}{a.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 5 }}>{roles.length === 0 ? "Visible par tout le monde." : `Visible par : ${roles.map(audienceLabel).join(", ")} (+ admin).`}</div>
+          </L>
+
           <L label="Description"><textarea value={f.description} onChange={e => set("description", e.target.value)} rows={3} style={{ ...inp, height: "auto", padding: "8px 10px", resize: "vertical" }} placeholder="À quoi sert cette procédure…" /></L>
 
           <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 12 }}>
