@@ -100,7 +100,7 @@ export default function ProprietairesPage() {
                         {o.companyName && <span style={{ fontSize: 12, color: "#6b7280" }}>{o.companyName}</span>}
                       </div>
                       <div style={{ display: "flex", gap: 12, fontSize: 12, color: "#6b7280", flexWrap: "wrap" }}>
-                        {o.email  && <a href={`mailto:${o.email}`} style={{ color: "#2563EB", textDecoration: "none" }}>✉ {o.email}</a>}
+                        {o.email  && <a href={`/messagerie?to=${encodeURIComponent(o.email)}`} title="Envoyer un mail depuis la messagerie" style={{ color: "#2563EB", textDecoration: "none" }}>✉ {o.email}</a>}
                         {o.phone  && <span>📞 {o.phone}</span>}
                         {o.mobile && <span>📱 {o.mobile}</span>}
                         {o.address && <span>📍 {o.address}</span>}
