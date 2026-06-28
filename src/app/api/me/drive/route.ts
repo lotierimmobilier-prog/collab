@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { ensureDriveFolders, roleCanSee, isSuperSession } from "@/lib/drive-governance";
 
 export const maxDuration = 60;
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -24,22 +25,64 @@ export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   const uid = session.user.id;
+  const role = (session.user as { roleId?: string }).roleId ?? null;
   const parentId = new URL(req.url).searchParams.get("parentId") || null;
 
+  // À la racine : on s'assure que les dossiers imposés + communs existent.
+  if (!parentId) await ensureDriveFolders(uid);
+
+  const sel = { id: true, parentId: true, kind: true, name: true, mime: true, size: true, system: true, readonly: true, visibility: true, templateKey: true, createdAt: true, updatedAt: true } as const;
+
   try {
-    const items = await prisma.driveItem.findMany({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const own: any[] = await prisma.driveItem.findMany({
       where: { userId: uid, parentId },
-      select: { id: true, parentId: true, kind: true, name: true, mime: true, size: true, createdAt: true, updatedAt: true },
-      orderBy: [{ kind: "asc" }, { name: "asc" }], // dossiers (folder) avant fichiers (file)
+      select: sel,
+      orderBy: [{ kind: "asc" }, { name: "asc" }],
     });
+
+    // Contenu partagé : si le dossier ouvert est un dossier commun dont la
+    // visibilité m'inclut, on agrège les FICHIERS déposés par les autres agents
+    // dans le même dossier (lecture seule).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let shared: any[] = [];
+    if (parentId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const folder: any = await prisma.driveItem.findUnique({ where: { id: parentId }, select: { userId: true, templateKey: true, visibility: true } }).catch(() => null);
+      if (folder && folder.userId === uid && folder.templateKey && roleCanSee(folder.visibility, role)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const peers: any[] = await prisma.driveItem.findMany({
+          where: { templateKey: folder.templateKey, userId: { not: uid }, kind: "folder" },
+          select: { id: true, userId: true },
+        }).catch(() => []);
+        if (peers.length) {
+          const owners = new Map(peers.map(p => [p.id, p.userId]));
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const files: any[] = await prisma.driveItem.findMany({
+            where: { parentId: { in: peers.map(p => p.id) }, kind: "file" },
+            select: sel,
+          }).catch(() => []);
+          const userIds = [...new Set(peers.map(p => p.userId))];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const users: any[] = await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, prenom: true, nom: true } }).catch(() => []);
+          const nameById = new Map(users.map(u => [u.id, `${u.prenom} ${u.nom}`.trim()]));
+          shared = files.map(f => ({ ...f, sharedFrom: nameById.get(owners.get(f.parentId)) ?? "Agence", readonly: true }));
+        }
+      }
+    }
+
     const path = await breadcrumb(uid, parentId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fmt = (i: any) => ({ ...i, createdAt: i.createdAt.toISOString(), updatedAt: i.updatedAt.toISOString() });
     return NextResponse.json({
       parentId,
       path,
-      items: items.map(i => ({ ...i, createdAt: i.createdAt.toISOString(), updatedAt: i.updatedAt.toISOString() })),
+      canManageCommon: isSuperSession(session),
+      items: own.map(fmt),
+      shared: shared.map(fmt),
     });
   } catch {
-    return NextResponse.json({ parentId, path: [], items: [] });
+    return NextResponse.json({ parentId, path: [], items: [], shared: [] });
   }
 }
 
@@ -58,8 +101,12 @@ export async function POST(req: NextRequest) {
 
   // Le dossier parent doit appartenir à l'utilisateur.
   if (parentId) {
-    const parent = await prisma.driveItem.findUnique({ where: { id: parentId }, select: { userId: true, kind: true } });
+    const parent = await prisma.driveItem.findUnique({ where: { id: parentId }, select: { userId: true, kind: true, readonly: true } });
     if (!parent || parent.userId !== uid || parent.kind !== "folder") parentId = null;
+    // Dossier en lecture seule (ressources agence) : seul le super admin y dépose.
+    else if (parent.readonly && !isSuperSession(session)) {
+      return NextResponse.json({ error: "Ce dossier est en lecture seule." }, { status: 403 });
+    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

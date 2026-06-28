@@ -212,28 +212,41 @@ function DocForm({ doc, onClose, onSaved, admin }: { doc: Doc | null; onClose: (
 }
 
 // ── Onglet Drive ───────────────────────────────────────────────────
-interface DriveItem { id: string; parentId: string | null; kind: string; name: string; mime?: string; size?: number }
+interface DriveItem { id: string; parentId: string | null; kind: string; name: string; mime?: string; size?: number; system?: boolean; readonly?: boolean; visibility?: string; sharedFrom?: string }
+const VIS_LABEL: Record<string, string> = { gestionnaire: "Gestionnaires", direction: "Direction", tous: "Toute l'agence" };
+function VisBadge({ v }: { v?: string }) {
+  if (!v || v === "confidentiel") return null;
+  return <span style={{ fontSize: 9.5, fontWeight: 700, color: "#2563eb", background: "#E8EEFB", borderRadius: 20, padding: "1px 7px", whiteSpace: "nowrap" }}>{VIS_LABEL[v] ?? v}</span>;
+}
+
 function DriveTab() {
   const [parentId, setParentId] = useState<string | null>(null);
   const [path, setPath] = useState<{ id: string; name: string }[]>([]);
   const [items, setItems] = useState<DriveItem[]>([]);
+  const [shared, setShared] = useState<DriveItem[]>([]);
+  const [hereReadonly, setHereReadonly] = useState(false);
+  const [canManageCommon, setCanManageCommon] = useState(false);
+  const [showCommon, setShowCommon] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async (pid: string | null) => {
+  const load = useCallback(async (pid: string | null, readonly = false) => {
     setLoading(true);
     const r = await fetch(`/api/me/drive${pid ? `?parentId=${pid}` : ""}`);
-    if (r.ok) { const d = await r.json(); setItems(d.items); setPath(d.path); setParentId(d.parentId); }
+    if (r.ok) { const d = await r.json(); setItems(d.items); setShared(d.shared ?? []); setPath(d.path); setParentId(d.parentId); setCanManageCommon(!!d.canManageCommon); }
+    setHereReadonly(readonly);
     setLoading(false);
   }, []);
   useEffect(() => { load(null); }, [load]);
+
+  const writable = !hereReadonly || canManageCommon;
 
   async function newFolder() {
     const name = prompt("Nom du dossier :");
     if (!name?.trim()) return;
     setBusy(true);
     await fetch("/api/me/drive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "folder", name: name.trim(), parentId }) });
-    setBusy(false); await load(parentId);
+    setBusy(false); await load(parentId, hereReadonly);
   }
   async function upload(fl: FileList | null) {
     if (!fl) return;
@@ -243,18 +256,18 @@ function DriveTab() {
       const b = await fileToB64(file);
       await fetch("/api/me/drive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "file", name: b.name, mime: b.mime, size: b.size, data: b.data, parentId }) });
     }
-    setBusy(false); await load(parentId);
+    setBusy(false); await load(parentId, hereReadonly);
   }
   async function rename(it: DriveItem) {
     const name = prompt("Renommer :", it.name);
     if (!name?.trim() || name === it.name) return;
     await fetch(`/api/me/drive/${it.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim() }) });
-    await load(parentId);
+    await load(parentId, hereReadonly);
   }
   async function remove(it: DriveItem) {
     if (!confirm(it.kind === "folder" ? `Supprimer le dossier « ${it.name} » et tout son contenu ?` : `Supprimer « ${it.name} » ?`)) return;
     await fetch(`/api/me/drive/${it.id}`, { method: "DELETE" });
-    await load(parentId);
+    await load(parentId, hereReadonly);
   }
 
   return (
@@ -264,38 +277,118 @@ function DriveTab() {
           <button onClick={() => load(null)} style={crumb}>🏠 Racine</button>
           {path.map(p => <span key={p.id} style={{ display: "flex", gap: 6, alignItems: "center" }}><span style={{ color: "#d1d5db" }}>/</span><button onClick={() => load(p.id)} style={crumb}>{p.name}</button></span>)}
         </div>
-        <button onClick={newFolder} disabled={busy} style={{ background: "#fff", color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>📁 Nouveau dossier</button>
-        <label style={{ background: GOLD, color: "#fff", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
+        {canManageCommon && <button onClick={() => setShowCommon(true)} style={{ background: "#fff", color: DARK, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>🛡 Dossiers communs</button>}
+        <button onClick={newFolder} disabled={busy || !writable} title={writable ? "" : "Dossier en lecture seule"} style={{ background: "#fff", color: writable ? GOLD : "#cbd5e1", border: `1px solid ${writable ? GOLD : BORDER}`, borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: writable ? "pointer" : "not-allowed" }}>📁 Nouveau dossier</button>
+        <label style={{ background: writable ? GOLD : "#e5e7eb", color: "#fff", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 500, cursor: writable ? "pointer" : "not-allowed" }}>
           ⬆ Téléverser
-          <input type="file" multiple style={{ display: "none" }} onChange={e => { upload(e.target.files); e.target.value = ""; }} />
+          <input type="file" multiple disabled={!writable} style={{ display: "none" }} onChange={e => { upload(e.target.files); e.target.value = ""; }} />
         </label>
       </div>
+      {hereReadonly && <div style={{ fontSize: 12, color: "#8a6d44", background: "#F7F0E6", borderRadius: 8, padding: "7px 12px", marginBottom: 10 }}>🔒 Dossier en lecture seule — seul le super administrateur peut y déposer des documents.</div>}
 
       {busy && <div style={{ fontSize: 12, color: GOLD, marginBottom: 8 }}>Transfert en cours…</div>}
       {loading ? <div style={{ color: "#9ca3af", padding: 40, textAlign: "center" }}>Chargement…</div>
-       : items.length === 0 ? <div style={{ color: "#9ca3af", padding: 40, textAlign: "center" }}>Dossier vide. Créez un dossier ou téléversez des fichiers.</div>
+       : (items.length === 0 && shared.length === 0) ? <div style={{ color: "#9ca3af", padding: 40, textAlign: "center" }}>Dossier vide.</div>
        : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
           {items.map(it => (
             <div key={it.id} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
               <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                <div style={{ fontSize: 26 }}>{it.kind === "folder" ? "📁" : fileIcon(it.mime)}</div>
+                <div style={{ fontSize: 26 }}>{it.kind === "folder" ? (it.system ? "🗂" : "📁") : fileIcon(it.mime)}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {it.kind === "folder"
-                    ? <button onClick={() => load(it.id)} style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", fontWeight: 600, fontSize: 13, color: DARK, wordBreak: "break-word" }}>{it.name}</button>
+                    ? <button onClick={() => load(it.id, it.readonly)} style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", fontWeight: 600, fontSize: 13, color: DARK, wordBreak: "break-word" }}>{it.name}</button>
                     : <a href={`/api/me/drive/${it.id}`} target="_blank" rel="noreferrer" style={{ fontWeight: 600, fontSize: 13, color: DARK, textDecoration: "none", wordBreak: "break-word" }}>{it.name}</a>}
-                  {it.kind === "file" && it.size != null && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{fmtSize(it.size)}</div>}
+                  <div style={{ display: "flex", gap: 5, alignItems: "center", marginTop: 3, flexWrap: "wrap" }}>
+                    {it.kind === "file" && it.size != null && <span style={{ fontSize: 11, color: "#9ca3af" }}>{fmtSize(it.size)}</span>}
+                    {it.kind === "folder" && <VisBadge v={it.visibility} />}
+                    {it.system && <span style={{ fontSize: 9.5, color: "#9ca3af" }} title="Dossier imposé">🔒 imposé</span>}
+                  </div>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                 {it.kind === "file" && <a href={`/api/me/drive/${it.id}`} download style={{ ...miniBtn, textDecoration: "none", color: GOLD }}>⬇</a>}
-                <button onClick={() => rename(it)} style={miniBtn}>✏</button>
-                <button onClick={() => remove(it)} style={{ ...miniBtn, color: RED, borderColor: "#fecaca" }}>✕</button>
+                {!it.system && <button onClick={() => rename(it)} style={miniBtn}>✏</button>}
+                {!it.system && <button onClick={() => remove(it)} style={{ ...miniBtn, color: RED, borderColor: "#fecaca" }}>✕</button>}
+              </div>
+            </div>
+          ))}
+          {shared.map(it => (
+            <div key={`sh-${it.id}`} style={{ background: "#FbF9F5", border: `1px dashed ${GOLD}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <div style={{ fontSize: 26 }}>{fileIcon(it.mime)}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <a href={`/api/me/drive/${it.id}`} target="_blank" rel="noreferrer" style={{ fontWeight: 600, fontSize: 13, color: DARK, textDecoration: "none", wordBreak: "break-word" }}>{it.name}</a>
+                  <div style={{ fontSize: 10.5, color: GOLD, marginTop: 2 }}>partagé · {it.sharedFrom}</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <a href={`/api/me/drive/${it.id}`} download style={{ ...miniBtn, textDecoration: "none", color: GOLD }}>⬇</a>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {showCommon && <CommonFoldersModal onClose={() => { setShowCommon(false); load(parentId, hereReadonly); }} />}
+    </div>
+  );
+}
+
+// Gestion des dossiers communs (super admin) — poussés sur tous les drives.
+function CommonFoldersModal({ onClose }: { onClose: () => void }) {
+  interface Tpl { id: string; name: string; visibility: string; readonly: boolean }
+  const [list, setList] = useState<Tpl[]>([]);
+  const [name, setName] = useState("");
+  const [vis, setVis] = useState("confidentiel");
+  const [ro, setRo] = useState(false);
+  const load = useCallback(() => { fetch("/api/agency/drive/templates").then(r => r.ok ? r.json() : null).then(d => setList(d?.templates ?? [])).catch(() => {}); }, []);
+  useEffect(() => { load(); }, [load]);
+  async function add() {
+    if (!name.trim()) return;
+    await fetch("/api/agency/drive/templates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim(), visibility: vis, readonly: ro }) });
+    setName(""); setVis("confidentiel"); setRo(false); load();
+  }
+  async function setVisOf(id: string, visibility: string) { await fetch("/api/agency/drive/templates", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, visibility }) }); load(); }
+  async function del(id: string) { if (!confirm("Supprimer ce dossier commun de tous les drives (et son contenu) ?")) return; await fetch("/api/agency/drive/templates", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }); load(); }
+  const inp: React.CSSProperties = { height: 38, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 10px", fontSize: 13, outline: "none", background: "#fff" };
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 14, width: 540, maxWidth: "94vw", maxHeight: "88vh", overflow: "auto" }}>
+        <div style={{ padding: "14px 18px", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontWeight: 700, fontSize: 15, color: DARK }}>🛡 Dossiers communs — sur tous les drives</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>×</button>
+        </div>
+        <div style={{ padding: 18 }}>
+          <div style={{ fontSize: 12.5, color: "#6b7280", marginBottom: 12 }}>Ces dossiers apparaissent sur le drive de chaque agent. Par défaut, le contenu reste confidentiel (chacun le sien) ; choisissez une visibilité pour le partager.</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+            {list.length === 0 && <div style={{ fontSize: 13, color: "#9ca3af" }}>Aucun dossier commun pour le moment.</div>}
+            {list.map(t => (
+              <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 12px" }}>
+                <span style={{ fontSize: 18 }}>🗂</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: DARK }}>{t.name}{t.readonly ? " · lecture seule" : ""}</div>
+                </div>
+                <select value={t.visibility} onChange={e => setVisOf(t.id, e.target.value)} style={{ ...inp, height: 32, fontSize: 12 }}>
+                  <option value="confidentiel">Confidentiel</option><option value="gestionnaire">Gestionnaires</option><option value="direction">Direction</option><option value="tous">Toute l'agence</option>
+                </select>
+                <button onClick={() => del(t.id)} style={{ ...miniBtn, color: RED, borderColor: "#fecaca" }}>✕</button>
+              </div>
+            ))}
+          </div>
+          <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase" }}>Ajouter un dossier commun</div>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Nom du dossier" style={inp} />
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <select value={vis} onChange={e => setVis(e.target.value)} style={inp}>
+                <option value="confidentiel">Confidentiel (chacun le sien)</option><option value="gestionnaire">Gestionnaires</option><option value="direction">Direction</option><option value="tous">Toute l'agence</option>
+              </select>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: DARK }}><input type="checkbox" checked={ro} onChange={e => setRo(e.target.checked)} /> Lecture seule (rempli par le super admin)</label>
+              <button onClick={add} disabled={!name.trim()} style={{ marginLeft: "auto", background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: name.trim() ? 1 : 0.5 }}>Ajouter</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

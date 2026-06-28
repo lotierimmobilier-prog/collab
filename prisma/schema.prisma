@@ -1177,17 +1177,33 @@ model MonthlyHours {
 /// Drive personnel — arborescence dossiers/fichiers par utilisateur,
 /// stockée en base (fichiers en base64).
 model DriveItem {
-  id        String   @id @default(cuid())
-  userId    String
-  parentId  String?  // dossier parent (null = racine)
-  kind      String   // folder | file
-  name      String
-  mime      String?
-  size      Int?
-  data      String?  // fichier en base64 (null pour un dossier)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  userId     String
+  parentId   String?  // dossier parent (null = racine)
+  kind       String   // folder | file
+  name       String
+  mime       String?
+  size       Int?
+  data       String?  // fichier en base64 (null pour un dossier)
+  system     Boolean  @default(false) // dossier imposé : non renommable / non supprimable
+  readonly   Boolean  @default(false) // contenu géré par le super admin (agents en lecture)
+  visibility String   @default("confidentiel") // confidentiel | gestionnaire | direction | tous
+  templateKey String? // identifie un dossier imposé (default:xxx) ou commun (tpl:id)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([userId, parentId])
   @@map("drive_items")
+}
+
+// Dossiers communs définis par le super admin, poussés sur tous les drives.
+model DriveFolderTemplate {
+  id         String   @id @default(cuid())
+  name       String
+  visibility String   @default("confidentiel")
+  readonly   Boolean  @default(false)
+  order      Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@map("drive_folder_templates")
 }
