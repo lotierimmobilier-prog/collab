@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { MailAccount, Protocol, getPreset, ACCOUNT_COLORS, IMAP_PRESETS } from "@/lib/mail";
 
 interface TestResult { ok: boolean; message?: string; error?: string; inbox?: { messages: number; unseen: number } }
@@ -106,9 +107,15 @@ export default function AccountConfigPanel({ accounts, onSave, onClose, onSyncAc
                         </div>
                       )}
                     </div>
-                    <div style={{ display: "flex", gap: 5 }}>
-                      <button onClick={() => setEditing(a)} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer", background: "#fff" }}>✏</button>
-                      <button onClick={() => deleteAccount(a.id)} style={{ border: "1px solid #fecaca", borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer", color: "#dc2626", background: "#fff" }}>✕</button>
+                    <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                      {a.canManage === false ? (
+                        <span title="Boîte partagée : gérée par le super administrateur. Vous pouvez la consulter et écrire, mais pas la modifier." style={{ fontSize: 10.5, color: "#9ca3af", display: "flex", alignItems: "center", gap: 4 }}>🔒 lecture seule</span>
+                      ) : (
+                        <>
+                          <button onClick={() => setEditing(a)} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer", background: "#fff" }}>✏</button>
+                          <button onClick={() => deleteAccount(a.id)} style={{ border: "1px solid #fecaca", borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer", color: "#dc2626", background: "#fff" }}>✕</button>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -276,6 +283,8 @@ function AccountForm({ account, colorIndex, users, onSave, onCancel }: {
   onSave: (a: MailAccount) => void;
   onCancel: () => void;
 }) {
+  const { data: session } = useSession();
+  const isSuper = session?.user?.superAdmin === true;
   const def = account;
   const [f, setF] = useState({
     label: def?.label ?? "",
@@ -381,7 +390,8 @@ function AccountForm({ account, colorIndex, users, onSave, onCancel }: {
         </div>
       </div>
 
-      {/* Compte partagé toggle */}
+      {/* Compte partagé toggle — réservé au super administrateur */}
+      {isSuper && (
       <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: f.isShared ? "#EFF6FF" : "#f9fafb", border: `1.5px solid ${f.isShared ? "#2563EB" : "#e5e7eb"}`, borderRadius: 10, cursor: "pointer", marginBottom: 14 }}>
         <div style={{ width: 36, height: 20, borderRadius: 10, background: f.isShared ? "#2563EB" : "#d1d5db", position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
           <div style={{ position: "absolute", top: 2, left: f.isShared ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
@@ -392,6 +402,7 @@ function AccountForm({ account, colorIndex, users, onSave, onCancel }: {
           <div style={{ fontSize: 11, color: "#6b7280" }}>Plusieurs utilisateurs peuvent accéder à ce compte</div>
         </div>
       </label>
+      )}
 
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         {(["imap", "pop3"] as Protocol[]).map(p => (

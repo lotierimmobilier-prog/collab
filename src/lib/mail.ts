@@ -22,6 +22,7 @@ export interface MailAccount {
   // Accès multi-utilisateurs
   sharedUserIds?: string[];   // IDs des utilisateurs autorisés (vide = créateur seulement)
   isShared?: boolean;         // true si compte d'agence partagé
+  canManage?: boolean;        // l'utilisateur courant peut-il gérer la config (super admin / sa boîte)
   dbId?: string;              // ID en base si persisté
 }
 
