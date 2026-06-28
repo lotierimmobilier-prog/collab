@@ -11,6 +11,7 @@ interface Settings {
   smtp_host: string; smtp_port: string; smtp_user: string; smtp_pass: string;
   smtp_from: string; notif_enabled: string; auguste_logo_url: string;
   rh_accountant_email: string; auguste_auto_send_ged: string;
+  auguste_token_cap: string; auguste_price_in: string; auguste_price_out: string;
 }
 
 export default function AdminSettings() {
@@ -35,6 +36,7 @@ export default function AdminSettings() {
     auguste_logo_url: "",
     rh_accountant_email: "lola.cuypers@synec.fr",
     auguste_auto_send_ged: "0",
+    auguste_token_cap: "1000000", auguste_price_in: "3", auguste_price_out: "15",
   });
   const [logoErr, setLogoErr] = useState("");
 
@@ -199,6 +201,24 @@ export default function AdminSettings() {
           </div>
         </div>
         <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 12 }}>N'oubliez pas d'<strong>Enregistrer</strong> pour appliquer.</div>
+      </Section>
+
+      <Section title="✦ Auguste — budget & tokens">
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <label style={{ flex: 1, minWidth: 180 }}>
+            <span style={{ fontSize: 12, color: "#6b7280" }}>Plafond mensuel par agent (tokens)</span>
+            <input value={settings.auguste_token_cap} onChange={e => set("auguste_token_cap", e.target.value.replace(/[^\d]/g, ""))} inputMode="numeric" style={{ ...inp, width: "100%", marginTop: 4 }} />
+          </label>
+          <label style={{ width: 150 }}>
+            <span style={{ fontSize: 12, color: "#6b7280" }}>Tarif entrée ($/M tokens)</span>
+            <input value={settings.auguste_price_in} onChange={e => set("auguste_price_in", e.target.value)} inputMode="decimal" style={{ ...inp, width: "100%", marginTop: 4 }} />
+          </label>
+          <label style={{ width: 150 }}>
+            <span style={{ fontSize: 12, color: "#6b7280" }}>Tarif sortie ($/M tokens)</span>
+            <input value={settings.auguste_price_out} onChange={e => set("auguste_price_out", e.target.value)} inputMode="decimal" style={{ ...inp, width: "100%", marginTop: 4 }} />
+          </label>
+        </div>
+        <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 8 }}>Le compteur de consommation et le coût estimé apparaissent sur votre tableau de bord. Pour le <strong>coût réel du compte Claude</strong>, renseigner la variable d'environnement <code>ANTHROPIC_ADMIN_KEY</code> (clé Admin Anthropic). N'oubliez pas d'<strong>Enregistrer</strong>.</div>
       </Section>
 
       <Section title="📎 Auguste — envoi automatique des documents">

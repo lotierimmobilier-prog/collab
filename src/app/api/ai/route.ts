@@ -731,6 +731,7 @@ Confirme toujours clairement ce qui a été fait, par exemple :
 
   const sideEffects: SideEffect[] = [];
   const toolsUsed: string[] = [];
+  let inTok = 0, outTok = 0; // consommation cumulée (boucle tool-use)
 
   const apiMessages: Anthropic.MessageParam[] = messages.map((m: { role: string; content: string }) => ({
     role: m.role as "user" | "assistant",
@@ -748,6 +749,8 @@ Confirme toujours clairement ce qui a été fait, par exemple :
       tools: TOOLS,
       messages: apiMessages,
     });
+    inTok += response.usage?.input_tokens ?? 0;
+    outTok += response.usage?.output_tokens ?? 0;
 
     if (response.stop_reason !== "tool_use") {
       finalText = response.content
@@ -790,6 +793,9 @@ Confirme toujours clairement ce qui a été fait, par exemple :
       question: String(lastUser).slice(0, 2000),
       reply: finalText.slice(0, 4000),
       tools: [...new Set(toolsUsed)],
+      feature: "chat",
+      inputTokens: inTok,
+      outputTokens: outTok,
     },
   }).catch(() => {});
 
