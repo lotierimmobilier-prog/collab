@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import {
   MailAccount, MailMessage, MailThread, MailLabel,
   DEFAULT_LABELS, SYSTEM_LABELS, threadFromMessages,
@@ -25,6 +26,8 @@ const AI_KEY_STORE  = "collab_ai_key";
 const SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 export default function MailBoard() {
+  const { data: mbSession } = useSession();
+  const myEmail = (mbSession?.user?.email ?? "").toLowerCase();
   const [accounts, setAccounts]           = useState<MailAccount[]>([]);
   const [gmailConfigs, setGmailConfigs]   = useState<GmailConfig[]>([]);
   const [labels, setLabels]               = useState<MailLabel[]>(DEFAULT_LABELS);
@@ -50,7 +53,7 @@ export default function MailBoard() {
   const [labelsOpen, setLabelsOpen]             = useState(false);
   const [showCompose, setShowCompose]           = useState(false);
   const [composePrefill, setComposePrefill]     = useState<{ to: string; subject?: string } | null>(null);
-  const [forwardData, setForwardData]           = useState<{ to: string; cc?: string; subject: string; body: string; accountId: string } | null>(null);
+  const [forwardData, setForwardData]           = useState<{ to: string; cc?: string; subject: string; body: string; accountId: string; attachments?: { filename: string; mime: string; size: number; content: string }[] } | null>(null);
   const [aiKey, setAiKey]                       = useState("");
   const [syncing, setSyncing]                   = useState<string | null>(null);
   const [syncStatus, setSyncStatus]             = useState("");
@@ -852,12 +855,14 @@ export default function MailBoard() {
 
       {showCompose && <ComposeModal accounts={accounts} gmailConfigs={gmailConfigs} labels={customLabels}
         replyTo={composePrefill ? { to: composePrefill.to, subject: composePrefill.subject ?? "" } : undefined}
+        defaultFromEmail={myEmail}
         onClose={() => { setShowCompose(false); setComposePrefill(null); }}
         onSend={msg => { addMessage(msg); setShowCompose(false); setComposePrefill(null); }} />}
       {forwardData && <ComposeModal accounts={accounts} gmailConfigs={gmailConfigs} labels={customLabels}
         replyTo={{ to: forwardData.to, subject: forwardData.subject, accountId: forwardData.accountId }}
         initialBody={forwardData.body}
         initialCc={forwardData.cc}
+        initialAttachments={forwardData.attachments}
         onClose={() => setForwardData(null)} onSend={msg => { addMessage(msg); setForwardData(null); }} />}
       {showImapConfig && <AccountConfigPanel accounts={accounts} onSave={async (newList) => {
         // Détecter les comptes ajoutés (pas de dbId)
@@ -968,19 +973,25 @@ function GIcon() {
   );
 }
 
-function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo, initialBody, initialCc }: {
+function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo, initialBody, initialCc, initialAttachments, defaultFromEmail }: {
   accounts: MailAccount[]; gmailConfigs: GmailConfig[];
   labels: MailLabel[]; onClose: () => void; onSend: (m: MailMessage) => void;
   replyTo?: { to: string; subject: string; inReplyTo?: string; accountId?: string };
   initialBody?: string;
   initialCc?: string;
+  initialAttachments?: { filename: string; mime: string; size: number; content: string }[];
+  defaultFromEmail?: string;
 }) {
   const allAccounts = [
     ...gmailConfigs.map(c => ({ id: c.accountId, dbId: undefined as string|undefined, label: `${c.email}`, email: c.email, name: c.name ?? c.email, smtpHost: "", smtpPort: 587, smtpSsl: true, username: c.email, password: "", signature: "", color: "#4285f4" })),
     ...accounts.map(a => ({ id: a.id, dbId: a.dbId, label: `${a.label} — ${a.email}`, email: a.email, name: a.name, smtpHost: a.smtpHost, smtpPort: a.smtpPort, smtpSsl: a.smtpSsl, username: a.username, password: a.password, signature: a.signature ?? "", color: a.color })),
   ];
 
-  const firstId = replyTo?.accountId ?? allAccounts[0]?.id ?? "";
+  // « De » par défaut : pour une réponse, la boîte qui a reçu le mail ; sinon
+  // (nouveau message, ex. depuis l'annuaire) la boîte personnelle de
+  // l'utilisateur courant — celle dont l'adresse correspond à la sienne.
+  const ownAccount = defaultFromEmail ? allAccounts.find(a => (a.email ?? "").toLowerCase() === defaultFromEmail) : undefined;
+  const firstId = replyTo?.accountId ?? ownAccount?.id ?? allAccounts[0]?.id ?? "";
   const [accountId, setAccountId] = useState(firstId);
   const [to, setTo]               = useState(replyTo?.to ?? "");
   const [cc, setCc]               = useState(initialCc ?? "");
@@ -994,7 +1005,7 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
   const [size, setSize]           = useState<"normal" | "large" | "full">("normal");
   // Pièces jointes : « inline » (≤ 10 Mo, vraies PJ) + « hébergées » (> 10 Mo,
   // envoyées sous forme de lien de téléchargement).
-  const [attachments, setAttachments] = useState<{ filename: string; mime: string; size: number; content: string }[]>([]);
+  const [attachments, setAttachments] = useState<{ filename: string; mime: string; size: number; content: string }[]>(initialAttachments ?? []);
   const [hostedLinks, setHostedLinks] = useState<{ fileName: string; size: number; url: string }[]>([]);
   const [attachBusy, setAttachBusy]   = useState(false);
   const [attachMsg, setAttachMsg]     = useState("");

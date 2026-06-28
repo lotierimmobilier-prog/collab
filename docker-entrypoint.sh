@@ -109,6 +109,7 @@ run_sql prisma/migrations_formation_nudges.sql
 run_sql prisma/migrations_training_resources.sql
 run_sql prisma/migrations_drive_governance.sql
 run_sql prisma/migrations_user_menu.sql
+run_sql prisma/migrations_portal_listings.sql
 
 echo "▶ Démarrage de Collab sur le port ${PORT:-3000}…"
 exec node server.js

@@ -16,7 +16,7 @@ interface Props {
   users?: { id: string; prenom: string; nom: string; email?: string }[];
   onClose: () => void;
   onReply: (m: MailMessage) => void;
-  onForward?: (data: { to: string; cc?: string; subject: string; body: string; accountId: string }) => void;
+  onForward?: (data: { to: string; cc?: string; subject: string; body: string; accountId: string; attachments?: { filename: string; mime: string; size: number; content: string }[] }) => void;
   onApplyLabel: (id: string) => void;
   onRemoveLabel: (id: string) => void;
   onStar: () => void;
@@ -113,6 +113,30 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
   const lastMsg   = thread.messages[thread.messages.length - 1];
   const firstMsg  = thread.messages[0];
   const account   = accounts.find(a => a.id === thread.accountId);
+
+  // Lead de portail (Leboncoin / Bien'ici / Le Figaro) : on détecte l'annonce
+  // et on prépare un brouillon de réponse (vente : fiche jointe ; gestion :
+  // lien ZELOK). L'agent valide et envoie.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [lead, setLead] = useState<any | null>(null);
+  useEffect(() => {
+    const m = firstMsg || lastMsg;
+    if (!m?.from?.email) { setLead(null); return; }
+    let on = true;
+    fetch("/api/mail/portal-reply", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from: m.from.email, subject: thread.subject, body: thread.messages.map(x => x.bodyText || (x.body || "").replace(/<[^>]+>/g, "")).join("\n").slice(0, 8000) }),
+    }).then(r => r.ok ? r.json() : null).then(d => { if (on) setLead(d?.matched ? d : null); }).catch(() => { if (on) setLead(null); });
+    return () => { on = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread.id]);
+
+  function prepareLeadReply() {
+    if (!lead || !onForward) return;
+    const to = (lastMsg?.from?.email || firstMsg?.from?.email || "");
+    const attachments = lead.attachment ? [{ filename: lead.attachment.name, mime: lead.attachment.mime || "application/octet-stream", size: lead.attachment.size || 0, content: lead.attachment.content }] : undefined;
+    onForward({ to, subject: lead.subject || reSubject(), body: toHtml(lead.replyText || ""), accountId: thread.accountId, attachments });
+  }
 
   // Vérifie si l'expéditeur existe déjà dans l'annuaire (sinon : proposer de l'ajouter)
   const senderEmail = (firstMsg?.from?.email || lastMsg?.from?.email || "").toLowerCase();
@@ -578,6 +602,28 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#f9fafb", minWidth: 0, minHeight: 0 }}>
+      {/* Lead portail détecté — proposition de réponse automatique (brouillon) */}
+      {lead?.matched && (
+        <div style={{ flexShrink: 0, background: "#FBF6EC", borderBottom: `1px solid #EBD9B8`, padding: "10px 20px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 18 }}>📣</span>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#8a6d44" }}>
+              Lead {lead.portalLabel} · {lead.type === "gestion" ? "Gestion (location)" : "Vente"} · réf. {lead.reference}
+            </div>
+            <div style={{ fontSize: 11.5, color: "#8a7a5e", marginTop: 1 }}>
+              {lead.type === "vente"
+                ? (lead.attachment ? "Auguste a préparé une réponse avec la fiche complète en pièce jointe." : "Réponse prête — ⚠ fiche manquante dans le registre.")
+                : (lead.zelokLink ? "Auguste a préparé une réponse avec le lien ZELOK pour le dossier locataire." : "Réponse prête — ⚠ lien ZELOK manquant dans le registre.")}
+            </div>
+          </div>
+          {onForward && (
+            <button onClick={prepareLeadReply} title="Ouvrir un brouillon de réponse pré-rempli"
+              style={{ background: "#B8966A", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+              ✦ Préparer la réponse
+            </button>
+          )}
+        </div>
+      )}
       {/* Header */}
       <div style={{ padding: "14px 20px", borderBottom: "1px solid #e5e7eb", background: "#fff", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
