@@ -45,6 +45,7 @@ const FILES = [
   "migrations_mail_blocklist.sql",
   "migrations_mail_signatures.sql",
   "migrations_client_portal.sql",
+  "migrations_tenant_documents.sql",
 ];
 
 export interface MigrationReport {
