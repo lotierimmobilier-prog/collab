@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import {
   MailAccount, MailMessage, MailThread, MailLabel,
   DEFAULT_LABELS, SYSTEM_LABELS, threadFromMessages,
@@ -25,6 +26,8 @@ const AI_KEY_STORE  = "collab_ai_key";
 const SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 export default function MailBoard() {
+  const { data: mbSession } = useSession();
+  const myEmail = (mbSession?.user?.email ?? "").toLowerCase();
   const [accounts, setAccounts]           = useState<MailAccount[]>([]);
   const [gmailConfigs, setGmailConfigs]   = useState<GmailConfig[]>([]);
   const [labels, setLabels]               = useState<MailLabel[]>(DEFAULT_LABELS);
@@ -852,6 +855,7 @@ export default function MailBoard() {
 
       {showCompose && <ComposeModal accounts={accounts} gmailConfigs={gmailConfigs} labels={customLabels}
         replyTo={composePrefill ? { to: composePrefill.to, subject: composePrefill.subject ?? "" } : undefined}
+        defaultFromEmail={myEmail}
         onClose={() => { setShowCompose(false); setComposePrefill(null); }}
         onSend={msg => { addMessage(msg); setShowCompose(false); setComposePrefill(null); }} />}
       {forwardData && <ComposeModal accounts={accounts} gmailConfigs={gmailConfigs} labels={customLabels}
@@ -969,20 +973,25 @@ function GIcon() {
   );
 }
 
-function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo, initialBody, initialCc, initialAttachments }: {
+function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo, initialBody, initialCc, initialAttachments, defaultFromEmail }: {
   accounts: MailAccount[]; gmailConfigs: GmailConfig[];
   labels: MailLabel[]; onClose: () => void; onSend: (m: MailMessage) => void;
   replyTo?: { to: string; subject: string; inReplyTo?: string; accountId?: string };
   initialBody?: string;
   initialCc?: string;
   initialAttachments?: { filename: string; mime: string; size: number; content: string }[];
+  defaultFromEmail?: string;
 }) {
   const allAccounts = [
     ...gmailConfigs.map(c => ({ id: c.accountId, dbId: undefined as string|undefined, label: `${c.email}`, email: c.email, name: c.name ?? c.email, smtpHost: "", smtpPort: 587, smtpSsl: true, username: c.email, password: "", signature: "", color: "#4285f4" })),
     ...accounts.map(a => ({ id: a.id, dbId: a.dbId, label: `${a.label} — ${a.email}`, email: a.email, name: a.name, smtpHost: a.smtpHost, smtpPort: a.smtpPort, smtpSsl: a.smtpSsl, username: a.username, password: a.password, signature: a.signature ?? "", color: a.color })),
   ];
 
-  const firstId = replyTo?.accountId ?? allAccounts[0]?.id ?? "";
+  // « De » par défaut : pour une réponse, la boîte qui a reçu le mail ; sinon
+  // (nouveau message, ex. depuis l'annuaire) la boîte personnelle de
+  // l'utilisateur courant — celle dont l'adresse correspond à la sienne.
+  const ownAccount = defaultFromEmail ? allAccounts.find(a => (a.email ?? "").toLowerCase() === defaultFromEmail) : undefined;
+  const firstId = replyTo?.accountId ?? ownAccount?.id ?? allAccounts[0]?.id ?? "";
   const [accountId, setAccountId] = useState(firstId);
   const [to, setTo]               = useState(replyTo?.to ?? "");
   const [cc, setCc]               = useState(initialCc ?? "");
