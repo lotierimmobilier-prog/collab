@@ -64,17 +64,28 @@ export async function POST(req: NextRequest) {
     return !!set && !!fromEmail && set.has(fromEmail.trim().toLowerCase());
   };
 
-  // Tombstones : messages supprimés définitivement à ne pas ressusciter.
+  // Tombstones : messages supprimés/mis en corbeille à ne pas ressusciter.
+  // On reconnaît par (uid+compte+dossier) ET par Message-ID stable (au cas où
+  // le serveur change l'UID au resync).
+  const msgIds = [...new Set(messages.map((m: { messageId?: string }) => m.messageId).filter(Boolean) as string[])];
   const tomb = await prisma.emailMessage.findMany({
-    where: { labels: { has: "deleted" }, OR: messages.map((m: { uid?: string; id?: string; accountId?: string; folder?: string }) => ({ uid: String(m.uid || m.id), accountId: m.accountId, folder: m.folder || "INBOX" })) },
-    select: { uid: true, accountId: true, folder: true },
-  }).catch(() => [] as { uid: string; accountId: string; folder: string }[]);
+    where: {
+      labels: { hasSome: ["deleted", "trash"] },
+      OR: [
+        ...messages.map((m: { uid?: string; id?: string; accountId?: string; folder?: string }) => ({ uid: String(m.uid || m.id), accountId: m.accountId, folder: m.folder || "INBOX" })),
+        ...(msgIds.length ? [{ messageId: { in: msgIds } }] : []),
+      ],
+    },
+    select: { uid: true, accountId: true, folder: true, messageId: true },
+  }).catch(() => [] as { uid: string; accountId: string; folder: string; messageId: string | null }[]);
   const tombSet = new Set(tomb.map(t => `${t.uid}|${t.accountId}|${t.folder}`));
+  const tombMid = new Set(tomb.map(t => t.messageId).filter(Boolean) as string[]);
 
   let saved = 0;
   for (const m of messages) {
     try {
       if (tombSet.has(`${String(m.uid || m.id)}|${m.accountId}|${m.folder || "INBOX"}`)) continue;
+      if (m.messageId && tombMid.has(m.messageId)) continue;
       const spam = isSpam(m.accountId, m.from?.email);
       const labels = spam ? ["trash"] : (m.labels || ["inbox"]);
       const read = spam ? true : (m.status === "read");

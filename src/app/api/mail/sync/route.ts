@@ -78,6 +78,18 @@ async function syncFolder(client: any, folder: string, accountId: string, since:
             /désinscri|desinscri|se d[ée]sabonner|unsubscribe|newsletter|no[-_]?reply|nepasrepondre|ne-pas-repondre/.test(`${subjLc} ${fromLc}`)
           );
 
+          // Anti-résurrection : si ce message (identifié par son Message-ID
+          // stable) a déjà été supprimé/mis en corbeille, on ne le ré-importe
+          // pas — même si le serveur lui a attribué un nouveau UID.
+          const cleanMid = env.messageId?.replace(/[<>]/g, "");
+          if (cleanMid) {
+            const tomb = await prisma.emailMessage.findFirst({
+              where: { accountId, messageId: cleanMid, labels: { hasSome: ["deleted", "trash"] } },
+              select: { id: true },
+            }).catch(() => null);
+            if (tomb) continue;
+          }
+
           const identity = await identifySender(fromEmail);
           const labels   = isSent ? ["sent"] : isPub ? ["pub"] : ["inbox", ...(isStarred ? ["starred"] : [])];
 
