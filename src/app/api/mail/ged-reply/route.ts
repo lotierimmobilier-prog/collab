@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { gedDocAllowed } from "@/lib/ics";
 import { getValidGedToken, gedLevelForUser } from "@/lib/ics-ged-auth";
 import { gedFindDocuments, gedFile } from "@/lib/ics-ged";
-import { AUGUSTE_SIGNATURE_HTML } from "@/lib/auguste-signature";
+import { augusteSignatureHtml } from "@/lib/auguste-signature";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -43,8 +43,8 @@ export async function POST(req: NextRequest) {
   // 1b) Correspondance par NOM / SIGNATURE : on lit le nom dans le nom
   //     d'expéditeur + les dernières lignes du corps (signature). Validée
   //     seulement si le PRÉNOM et le NOM du locataire apparaissent tous deux.
-  const tail = String(b?.body ?? "").split("\n").map(l => l.trim()).filter(Boolean).slice(-4).join(" ");
-  const hints = `${fromName} ${tail}`.toLowerCase();
+  // On scanne tout le corps (et l'expéditeur) pour repérer un nom de locataire.
+  const hints = `${fromName} ${String(b?.body ?? "")}`.toLowerCase();
   const words = [...new Set(hints.split(/[^a-zàâäéèêëïîôöùûüç]+/i).filter(w => w.length >= 3))].slice(0, 12);
   let nameTenant: typeof emailTenant = null;
   if (!emailTenant && words.length) {
@@ -104,13 +104,15 @@ export async function POST(req: NextRequest) {
   const intro = attachment
     ? `Suite à votre demande, vous trouverez ci-joint ${doc.label}.`
     : `Nous avons bien reçu votre demande concernant ${doc.label}. Votre conseiller la traite et vous le transmettra dans les meilleurs délais.`;
+  // Photo d'Auguste (réglage admin auguste_logo_url) pour la signature.
+  const logo = await prisma.setting.findUnique({ where: { key: "auguste_logo_url" } }).catch(() => null);
   const replyHtml = `
 <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1C1A17;line-height:1.6">
   <p>Bonjour ${escapeHtml(clientName)},</p>
   <p>${intro}</p>
   <p>Nous restons à votre disposition pour toute information complémentaire.</p>
 </div>
-${AUGUSTE_SIGNATURE_HTML}`.trim();
+${augusteSignatureHtml(logo?.value || null)}`.trim();
 
   // Réglage global : envoi 100 % automatique quand l'expéditeur est reconnu.
   const autoSetting = await prisma.setting.findUnique({ where: { key: "auguste_auto_send_ged" } }).catch(() => null);
