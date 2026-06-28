@@ -889,10 +889,12 @@ export default function MailBoard() {
 
       {/* Thread popup — par-dessus tout */}
       {selectedThread && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+        // Sur mobile : plein écran, AU-DESSUS de la barre de navigation du bas
+        // (zIndex > 100) pour que tout le mail soit visible et défilable.
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 110, display: "flex", alignItems: isMobile ? "stretch" : "center", justifyContent: "center", padding: isMobile ? 0 : "16px" }}
           onClick={e => { if (e.target === e.currentTarget) setSelectedThread(null); }}
         >
-          <div style={{ width: "min(960px, 100%)", height: "calc(100dvh - 32px)", maxHeight: "calc(100dvh - 32px)", background: "#fff", borderRadius: 16, boxShadow: "0 24px 80px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ width: isMobile ? "100%" : "min(960px, 100%)", height: isMobile ? "100dvh" : "calc(100dvh - 32px)", maxHeight: isMobile ? "100dvh" : "calc(100dvh - 32px)", background: "#fff", borderRadius: isMobile ? 0 : 16, boxShadow: "0 24px 80px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <ThreadView
               thread={selectedThread}
               labels={labels}

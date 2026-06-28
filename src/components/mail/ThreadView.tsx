@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { MailThread, MailMessage, MailLabel, MailAccount, MailAttachment, buildContext } from "@/lib/mail";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 const GOLD    = "#B8966A";
 const GOLD_BG = "#F7F0E6";
@@ -42,6 +43,8 @@ const SENDER_BADGE: Record<string, { label: string; color: string; bg: string }>
 };
 
 export default function ThreadView({ thread, labels, accounts, aiKey, loadingBody, users = [], onClose, onReply, onForward, onApplyLabel, onRemoveLabel, onStar, onTrash, onRestore, onDeletePermanent, customLabels, onSetLabels }: Props) {
+  const isMobile = useIsMobile();
+  const [suggestOpen, setSuggestOpen]     = useState(false); // boîte « 🧠 Mémorisé » repliée en icône sur mobile
   const [showReply, setShowReply]         = useState(false);
   const [replySize, setReplySize]         = useState<"normal" | "large" | "full">("normal");
   const [replyBody, setReplyBody]         = useState("");
@@ -662,7 +665,14 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
 
         {/* Suggestion de classification IA */}
         {classifying && <span style={{ fontSize: 11, color: "#9ca3af" }}>✦ Classification en cours…</span>}
-        {classifySuggestion && classifySuggestion.labels.length > 0 && (
+        {/* Sur mobile : repliée en simple icône cerveau, cliquable pour déplier. */}
+        {classifySuggestion && classifySuggestion.labels.length > 0 && isMobile && !suggestOpen && (
+          <button onClick={() => setSuggestOpen(true)} title={classifySuggestion.hasMemory ? "Classement mémorisé — voir" : "Suggestion d'Auguste — voir"}
+            style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 8, border: `1px solid ${classifySuggestion.hasMemory ? "#BFDBFE" : "#FDE68A"}`, background: classifySuggestion.hasMemory ? "#EFF6FF" : "#FEF9C3", cursor: "pointer", fontSize: 15 }}>
+            {classifySuggestion.hasMemory ? "🧠" : "✦"}
+          </button>
+        )}
+        {classifySuggestion && classifySuggestion.labels.length > 0 && (!isMobile || suggestOpen) && (
           <div style={{ display: "flex", alignItems: "center", gap: 6, background: classifySuggestion.hasMemory ? "#EFF6FF" : "#FEF9C3", border: `1px solid ${classifySuggestion.hasMemory ? "#BFDBFE" : "#FDE68A"}`, borderRadius: 8, padding: "4px 10px", fontSize: 11, flexWrap: "wrap" }}>
             <span style={{ color: classifySuggestion.hasMemory ? "#1D4ED8" : "#92400E", fontWeight: 600 }}>
               {classifySuggestion.hasMemory ? "🧠 Mémorisé :" : "✦ Auguste suggère :"}
@@ -711,7 +721,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
                 </button>
               );
             })()}
-            <button onClick={() => setClassifySuggestion(null)} style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: 12 }}>×</button>
+            <button onClick={() => { if (isMobile) setSuggestOpen(false); else setClassifySuggestion(null); }} title={isMobile ? "Replier" : "Fermer"} style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: 12 }}>×</button>
           </div>
         )}
         {memoryMsg && <span style={{ fontSize: 10, color: "#059669", fontWeight: 600 }}>{memoryMsg}</span>}
