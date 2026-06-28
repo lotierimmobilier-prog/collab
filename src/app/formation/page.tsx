@@ -544,6 +544,9 @@ function CompetenceRow({ comp, val, busy, allowFilleul, allowParrain, onSetDates
   const [open, setOpen] = useState(false);
   const [newDate, setNewDate] = useState("");
   const nQ = comp.questions?.length ?? 0;
+  // Validée par un seul côté : on indique la validation encore attendue.
+  const filleulV = !!val?.filleulValidated, parrainV = !!val?.parrainValidated;
+  const waitingFor = status === "termine" && filleulV !== parrainV ? (filleulV ? "parrain" : "filleul") : null;
 
   function addDate() {
     if (!newDate) return;
@@ -559,6 +562,7 @@ function CompetenceRow({ comp, val, busy, allowFilleul, allowParrain, onSetDates
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: DARK }}>{comp.title}</div>
           {comp.description && <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{comp.description}</div>}
+          {waitingFor && <div style={{ fontSize: 11, color: "#D97706", marginTop: 3 }}>⏳ En attente de la validation du {waitingFor}</div>}
         </div>
         {nQ > 0 && (
           <span style={{ fontSize: 10.5, color: GOLD, background: GOLD_BG, borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>QCM</span>
