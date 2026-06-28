@@ -84,6 +84,10 @@ export async function POST(req: NextRequest) {
 </div>
 ${AUGUSTE_SIGNATURE_HTML}`.trim();
 
+  // Réglage global : envoi 100 % automatique quand l'expéditeur est reconnu.
+  const autoSetting = await prisma.setting.findUnique({ where: { key: "auguste_auto_send_ged" } }).catch(() => null);
+  const autoSend = autoSetting?.value === "1";
+
   return NextResponse.json({
     ok: true,
     isRequest: doc.type !== "autre",
@@ -95,6 +99,7 @@ ${AUGUSTE_SIGNATURE_HTML}`.trim();
     attachment,
     replyHtml,
     note: gedNote,
+    autoSend,           // réglage admin : envoi auto autorisé
     // matched + found → l'agent peut envoyer ; sinon contrôle requis.
     mode: matched && attachment ? "ready" : "review",
   });

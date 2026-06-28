@@ -10,7 +10,7 @@ const BORDER  = "#E6E1D9";
 interface Settings {
   smtp_host: string; smtp_port: string; smtp_user: string; smtp_pass: string;
   smtp_from: string; notif_enabled: string; auguste_logo_url: string;
-  rh_accountant_email: string;
+  rh_accountant_email: string; auguste_auto_send_ged: string;
 }
 
 export default function AdminSettings() {
@@ -34,6 +34,7 @@ export default function AdminSettings() {
     notif_enabled: "true",
     auguste_logo_url: "",
     rh_accountant_email: "lola.cuypers@synec.fr",
+    auguste_auto_send_ged: "0",
   });
   const [logoErr, setLogoErr] = useState("");
 
@@ -198,6 +199,20 @@ export default function AdminSettings() {
           </div>
         </div>
         <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 12 }}>N'oubliez pas d'<strong>Enregistrer</strong> pour appliquer.</div>
+      </Section>
+
+      <Section title="📎 Auguste — envoi automatique des documents">
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+          <input type="checkbox" checked={settings.auguste_auto_send_ged === "1"}
+            onChange={e => set("auguste_auto_send_ged", e.target.checked ? "1" : "0")}
+            style={{ width: 18, height: 18, accentColor: GOLD, marginTop: 1 }} />
+          <span style={{ fontSize: 13.5, color: "#1C1A17", lineHeight: 1.5 }}>
+            <strong>Envoyer automatiquement</strong> le document demandé (bail, état des lieux) <strong>uniquement</strong> quand
+            l'adresse e-mail de l'expéditeur correspond à un locataire connu de la GED.<br />
+            <span style={{ fontSize: 12, color: "#9ca3af" }}>Désactivé : Auguste prépare toujours un brouillon à vérifier avant envoi (recommandé pour tester).</span>
+          </span>
+        </label>
+        <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 10 }}>N'oubliez pas d'<strong>Enregistrer</strong>.</div>
       </Section>
 
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>

@@ -313,11 +313,22 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { alert(d.error || "Préparation impossible."); return; }
-      const status = [
-        d.matched ? `✓ Expéditeur reconnu : ${d.contactName} (locataire).` : `⚠️ Expéditeur NON reconnu dans la GED — vérifiez l'identité AVANT d'envoyer.`,
-        d.found ? `📎 Document joint : ${d.attachment.filename}` : `Aucun document joint automatiquement.${d.note ? " " + d.note : ""}`,
-      ].join("\n");
-      alert(status);
+
+      // Envoi 100 % automatique : seulement si activé en réglage ET expéditeur
+      // reconnu ET document trouvé. Sinon, brouillon à vérifier.
+      if (d.autoSend && d.matched && d.found && d.attachment) {
+        const sr = await fetch("/api/mail/send", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: m.from.email, subject: reSubject(), html: d.replyHtml, accountId: thread.accountId, attachments: [d.attachment] }),
+        });
+        if (sr.ok) { alert(`✅ Envoyé automatiquement à ${d.contactName}\n📎 ${d.attachment.filename}`); return; }
+        alert("Envoi automatique impossible — ouverture en brouillon.");
+      } else {
+        alert([
+          d.matched ? `✓ Expéditeur reconnu : ${d.contactName} (locataire).` : `⚠️ Expéditeur NON reconnu dans la GED — vérifiez l'identité AVANT d'envoyer.`,
+          d.found ? `📎 Document joint : ${d.attachment.filename}` : `Aucun document joint automatiquement.${d.note ? " " + d.note : ""}`,
+        ].join("\n"));
+      }
       if (onForward) {
         onForward({ to: m.from.email, subject: reSubject(), body: d.replyHtml, accountId: thread.accountId, attachments: d.attachment ? [d.attachment] : undefined });
       }
