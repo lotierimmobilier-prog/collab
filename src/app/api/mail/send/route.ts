@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import nodemailer from "nodemailer";
 import { resolveAccountOwner } from "@/lib/mailOwner";
 import { renderBrandedEmail, textToHtml, emailBaseUrl } from "@/lib/email-template";
+import { isSuperAdminEmail } from "@/lib/superadmin";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -14,9 +15,19 @@ export async function POST(req: NextRequest) {
   let { smtpHost, smtpPort, smtpSsl, username, password } = reqBody;
   const { to, cc, subject, body, html, fromEmail, fromName, replyToMessageId, inReplyTo, accountId, attachments } = reqBody;
 
-  if (accountId && (!smtpHost || !password)) {
+  if (accountId) {
     const dbAcc = await prisma.mailAccountConfig.findUnique({ where: { id: accountId } });
-    if (dbAcc) { smtpHost = dbAcc.smtpHost; smtpPort = dbAcc.smtpPort; smtpSsl = dbAcc.smtpSsl; username = dbAcc.username; password = dbAcc.password; }
+    if (dbAcc) {
+      // Cloisonnement : on ne peut envoyer que depuis une boîte qui nous est
+      // partagée (ou la sienne / super admin).
+      const uid = session.user.id;
+      const allowed = dbAcc.createdBy === uid
+        || (dbAcc.sharedUserIds || []).includes(uid)
+        || session.user.superAdmin === true
+        || isSuperAdminEmail(session.user.email);
+      if (!allowed) return NextResponse.json({ error: "Vous n'avez pas accès à cette boîte d'envoi." }, { status: 403 });
+      if (!smtpHost || !password) { smtpHost = dbAcc.smtpHost; smtpPort = dbAcc.smtpPort; smtpSsl = dbAcc.smtpSsl; username = dbAcc.username; password = dbAcc.password; }
+    }
   }
 
   if (!smtpHost || !username || !password) {

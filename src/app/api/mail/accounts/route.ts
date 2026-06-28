@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { isSuperAdminEmail } from "@/lib/superadmin";
+
+// Gouvernance des boîtes mail :
+//  - le super admin crée/modifie/partage les boîtes et voit tout (gestion) ;
+//  - un utilisateur ne voit que SA boîte perso + les boîtes partagées avec lui ;
+//    il peut les consulter et écrire, mais PAS modifier la config (mdp, partage…).
+function isSuper(session: { user?: { superAdmin?: boolean; email?: string | null } } | null): boolean {
+  return session?.user?.superAdmin === true || isSuperAdminEmail(session?.user?.email);
+}
 
 // GET — comptes accessibles à l'utilisateur connecté
 export async function GET() {
@@ -9,19 +18,31 @@ export async function GET() {
   const userId = session.user.id;
 
   const accounts = await prisma.mailAccountConfig.findMany({
-    where: {
+    // Super admin : les boîtes PARTAGÉES (qu'il gère) + ses propres boîtes +
+    // celles partagées avec lui — mais PAS les boîtes personnelles des autres.
+    // Autres : les boîtes partagées avec eux + leur boîte personnelle.
+    where: isSuper(session) ? {
       OR: [
+        { isShared: true },
         { createdBy: userId },
         { sharedUserIds: { has: userId } },
+      ],
+    } : {
+      OR: [
+        { sharedUserIds: { has: userId } },
+        { createdBy: userId, isShared: false },
       ],
     },
     orderBy: { createdAt: "asc" },
   });
 
+  const superAdmin = isSuper(session);
   return NextResponse.json(accounts.map(a => ({
     ...a,
     // Ne jamais exposer le mot de passe au client (on garde en DB mais on masque)
     password: "••••••••",
+    // Indique au client si l'utilisateur peut gérer cette boîte (config/mdp/partage).
+    canManage: superAdmin || (a.createdBy === userId && !a.isShared),
   })));
 }
 
@@ -36,12 +57,18 @@ export async function POST(req: NextRequest) {
 
   if (!email || !host) return NextResponse.json({ error: "Email et hôte requis" }, { status: 400 });
 
-  // Agents ayant accès à la boîte. Si ce n'est PAS un admin qui crée la boîte,
-  // c'est sa propre boîte → il en devient l'agent. Un admin paramètre pour un
-  // agent : il renseigne sharedUserIds et ne s'ajoute pas lui-même (il n'a pas
-  // accès au contenu).
+  // Une boîte PARTAGÉE (lecture/écriture par plusieurs agents) ne peut être
+  // créée que par le super administrateur.
+  const wantsShared = isShared === true || (Array.isArray(sharedUserIds) && sharedUserIds.length > 0);
+  if (wantsShared && !isSuper(session)) {
+    return NextResponse.json({ error: "Seul le super administrateur peut créer/partager une boîte mail commune." }, { status: 403 });
+  }
+
+  // Agents ayant accès à la boîte. Pour une boîte personnelle, le créateur en
+  // devient l'agent. Le super admin qui paramètre une boîte partagée renseigne
+  // sharedUserIds (il peut s'y inclure pour l'utiliser, ex. gestion@).
   const agents: string[] = Array.isArray(sharedUserIds) ? [...sharedUserIds] : [];
-  if (session.user.roleId !== "admin" && !agents.includes(session.user.id)) {
+  if (!wantsShared && !agents.includes(session.user.id)) {
     agents.push(session.user.id);
   }
 
@@ -81,7 +108,15 @@ export async function PATCH(req: NextRequest) {
 
   const existing = await prisma.mailAccountConfig.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
-  if (existing.createdBy !== session.user.id) return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+  // Modifier une boîte (config, mot de passe, partage) : super admin, ou le
+  // créateur d'une boîte personnelle. Les utilisateurs avec qui une boîte est
+  // partagée ne peuvent PAS la modifier.
+  const canManage = isSuper(session) || (existing.createdBy === session.user.id && !existing.isShared);
+  if (!canManage) return NextResponse.json({ error: "Seul le super administrateur peut modifier cette boîte mail." }, { status: 403 });
+  // Seul le super admin peut (re)partager une boîte.
+  if ((sharedUserIds !== undefined || isShared !== undefined) && !isSuper(session)) {
+    return NextResponse.json({ error: "Seul le super administrateur peut gérer le partage d'une boîte." }, { status: 403 });
+  }
 
   const updated = await prisma.mailAccountConfig.update({
     where: { id },
@@ -109,7 +144,8 @@ export async function DELETE(req: NextRequest) {
   const { id } = await req.json();
   const existing = await prisma.mailAccountConfig.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
-  if (existing.createdBy !== session.user.id) return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+  const canManage = isSuper(session) || (existing.createdBy === session.user.id && !existing.isShared);
+  if (!canManage) return NextResponse.json({ error: "Seul le super administrateur peut supprimer cette boîte mail." }, { status: 403 });
 
   await prisma.mailAccountConfig.delete({ where: { id } });
   return NextResponse.json({ ok: true });
