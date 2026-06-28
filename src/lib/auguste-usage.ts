@@ -86,20 +86,38 @@ export async function monthlySummary(): Promise<{ month: string; cap: number; pr
 
 // Consommation/coût RÉELS du compte Claude via l'Admin API Anthropic (si une
 // clé admin est configurée). Sinon null (on affiche l'estimation interne).
-export async function realClaudeCost(): Promise<{ amountUsd: number; currency: string } | null> {
+export async function realClaudeCost(): Promise<{ amountUsd: number; currency: string; error?: string } | null> {
   const adminKey = process.env.ANTHROPIC_ADMIN_KEY;
   if (!adminKey) return null;
+  // RFC3339 complet (le cost_report n'accepte pas une simple date) ; on borne au
+  // mois en cours.
+  const start = monthStart().toISOString();
+  let amount = 0; let currency = "USD"; let lastErr = "";
+  // Somme défensive : additionne tous les champs "amount" trouvés dans la réponse
+  // (le coût se trouve dans data[].results[].amount, chaîne ou nombre).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const walk = (node: any) => {
+    if (!node) return;
+    if (Array.isArray(node)) { node.forEach(walk); return; }
+    if (typeof node === "object") {
+      if (node.amount !== undefined) { const v = parseFloat(String(node.amount)); if (Number.isFinite(v)) amount += v; if (typeof node.currency === "string") currency = node.currency; }
+      for (const k of Object.keys(node)) if (k !== "amount" && k !== "currency") walk(node[k]);
+    }
+  };
   try {
-    const since = monthStart().toISOString().slice(0, 10);
-    const r = await fetch(`https://api.anthropic.com/v1/organizations/cost_report?starting_at=${since}`, {
-      headers: { "x-api-key": adminKey, "anthropic-version": "2023-06-01" },
-    });
-    if (!r.ok) return null;
-    const d = await r.json();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const items: any[] = d?.data ?? [];
-    let amount = 0;
-    for (const day of items) for (const res of (day.results ?? [])) amount += parseFloat(res.amount ?? "0") || 0;
-    return { amountUsd: amount, currency: "USD" };
-  } catch { return null; }
+    let page: string | null = null;
+    for (let i = 0; i < 6; i++) {
+      const qs = new URLSearchParams({ starting_at: start, bucket_width: "1d", limit: "31" });
+      if (page) qs.set("page", page);
+      const r = await fetch(`https://api.anthropic.com/v1/organizations/cost_report?${qs.toString()}`, {
+        headers: { "x-api-key": adminKey, "anthropic-version": "2023-06-01" },
+      });
+      if (!r.ok) { lastErr = `HTTP ${r.status}`; break; }
+      const d = await r.json();
+      walk(d?.data ?? d);
+      page = d?.has_more ? (d?.next_page ?? null) : null;
+      if (!page) break;
+    }
+  } catch (e) { lastErr = (e as Error).message; }
+  return { amountUsd: amount, currency, ...(lastErr ? { error: lastErr } : {}) };
 }
