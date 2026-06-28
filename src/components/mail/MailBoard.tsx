@@ -911,6 +911,11 @@ export default function MailBoard() {
               onTrash={() => trash(selectedThread.id)}
               onRestore={() => restore(selectedThread.id)}
               onDeletePermanent={() => deletePermanent(selectedThread.id)}
+              onBlockSender={(email) => {
+                fetch("/api/mail/blocklist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) }).catch(() => {});
+                trash(selectedThread.id);
+                setSelectedThread(null);
+              }}
               customLabels={customLabels}
               onSetLabels={(lbls) => setThreadLabels(selectedThread.id, lbls)}
             />

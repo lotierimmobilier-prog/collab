@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveAccountOwners } from "@/lib/mailOwner";
+import { blockedSendersFor } from "@/lib/mailBlocklist";
 
 // GET — récupérer les emails persistés en BDD
 export async function GET(req: NextRequest) {
@@ -54,9 +55,19 @@ export async function POST(req: NextRequest) {
   const ownerByAccount = await resolveAccountOwners(messages.map((m: { accountId?: string }) => m.accountId || ""));
   const ownerFor = (accId?: string) => (accId && ownerByAccount.get(accId)) || session.user.id;
 
+  // Expéditeurs indésirables → classés directement en corbeille à la réception.
+  const blockedByOwner = await blockedSendersFor([...new Set([...ownerByAccount.values(), session.user.id])]);
+  const isSpam = (accId: string | undefined, fromEmail: string | undefined) => {
+    const set = blockedByOwner.get(ownerFor(accId));
+    return !!set && !!fromEmail && set.has(fromEmail.trim().toLowerCase());
+  };
+
   let saved = 0;
   for (const m of messages) {
     try {
+      const spam = isSpam(m.accountId, m.from?.email);
+      const labels = spam ? ["trash"] : (m.labels || ["inbox"]);
+      const read = spam ? true : (m.status === "read");
       await prisma.emailMessage.upsert({
         where: { uid_accountId_folder: { uid: String(m.uid || m.id), accountId: m.accountId, folder: m.folder || "INBOX" } },
         create: {
@@ -71,19 +82,19 @@ export async function POST(req: NextRequest) {
           bodyText:   m.bodyText,
           bodyHtml:   m.body,
           date:       new Date(m.date),
-          read:       m.status === "read",
+          read,
           starred:    m.labels?.includes("starred") ?? false,
           attachments: m.attachments,
           threadId:   m.threadId,
-          labels:     m.labels || ["inbox"],
+          labels,
           senderType: m.senderType,
           senderId:   m.senderId,
           ownerId:    ownerFor(m.accountId),
         },
         update: {
-          read:    m.status === "read",
+          read,
           starred: m.labels?.includes("starred") ?? false,
-          labels:  m.labels || ["inbox"],
+          labels,
           bodyText: m.bodyText || undefined,
           bodyHtml: m.body    || undefined,
           ownerId:  ownerFor(m.accountId),
