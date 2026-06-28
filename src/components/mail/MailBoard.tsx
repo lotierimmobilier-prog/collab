@@ -470,7 +470,14 @@ export default function MailBoard() {
     const starred = messages.some(m => m.threadId === threadId && m.labels.includes("starred"));
     starred ? removeLabel(threadId, "starred") : applyLabel(threadId, "starred");
   }
-  function trash(threadId: string) { applyLabel(threadId, "trash"); if (selectedThread?.id === threadId) setSelectedThread(null); }
+  function trash(threadId: string) {
+    applyLabel(threadId, "trash");
+    if (selectedThread?.id === threadId) setSelectedThread(null);
+    // Suppression de la copie serveur (IMAP) pour qu'elle ne revienne pas à la
+    // synchro suivante. La ligne reste en corbeille (récupérable dans l'app).
+    const ids = messages.filter(m => m.threadId === threadId).map(m => m.id);
+    ids.forEach(id => { fetch(`/api/mail/messages?id=${id}&mode=trash`, { method: "DELETE" }).catch(() => {}); });
+  }
   function restore(threadId: string) { removeLabel(threadId, "trash"); }
 
   // Glisser-déposer d'un mail vers un dossier/libellé du menu.
