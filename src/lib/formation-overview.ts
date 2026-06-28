@@ -101,9 +101,10 @@ export async function computeOverview(currentUserId: string, isAdmin: boolean): 
       const mid = compToModule.get(c.id)!;
       const pm = perModule.get(mid)!;
       if (v) {
-        const both = v.parrainValidated && v.filleulValidated;
-        if (both) { done++; pm.done++; }
-        else if (v.parrainValidated || v.filleulValidated || (Array.isArray(v.dates) && v.dates.length)) partial++;
+        // Validée dès que le filleul OU le parrain valide.
+        const validated = v.parrainValidated || v.filleulValidated;
+        if (validated) { done++; pm.done++; }
+        else if (Array.isArray(v.dates) && v.dates.length) partial++;
         last = Math.max(last, ts(v.updatedAt), ts(v.parrainValidatedAt), ts(v.filleulValidatedAt));
         if (Array.isArray(v.dates)) for (const d of v.dates) last = Math.max(last, ts(d));
         if (v.quiz && typeof v.quiz === "object") {

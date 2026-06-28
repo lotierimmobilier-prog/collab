@@ -8,12 +8,12 @@ export interface ValidationLike {
   dates?: unknown;
 }
 
-/** Statut d'une compétence pour un filleul : terminée si les DEUX ont validé. */
+/** Statut d'une compétence : terminée dès que le filleul OU le parrain valide. */
 export function validationStatus(v?: ValidationLike | null): VStatus {
   if (!v) return "todo";
-  if (v.parrainValidated && v.filleulValidated) return "termine";
+  if (v.parrainValidated || v.filleulValidated) return "termine";
   const hasDates = Array.isArray(v.dates) && v.dates.length > 0;
-  if (v.parrainValidated || v.filleulValidated || hasDates) return "en_cours";
+  if (hasDates) return "en_cours";
   return "todo";
 }
 

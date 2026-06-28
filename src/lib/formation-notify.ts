@@ -40,11 +40,10 @@ export async function notifyParrainageAssigned(filleulId: string, parrainId: str
   }
 }
 
-// Validation d'une compétence. `by` = côté qui vient de valider.
+// Validation d'une compétence. `by` = côté qui vient de valider. Une seule
+// validation (filleul OU parrain) suffit désormais à acquérir la compétence.
 export async function notifyCompetenceValidated(filleulId: string, competenceId: string, by: "parrain" | "filleul"): Promise<void> {
   const comp = await prisma.trainingCompetence.findUnique({ where: { id: competenceId }, select: { title: true } }).catch(() => null);
-  const val = await prisma.competenceValidation.findUnique({ where: { competenceId_filleulId: { competenceId, filleulId } }, select: { parrainValidated: true, filleulValidated: true } }).catch(() => null);
-  const both = !!(val?.parrainValidated && val?.filleulValidated);
   const title = comp?.title ? `« ${comp.title} »` : "une compétence";
   const url = `${emailBaseUrl()}/formation`;
 
@@ -52,29 +51,19 @@ export async function notifyCompetenceValidated(filleulId: string, competenceId:
   const parrainId = (await getExtra(filleulId))?.parrainId ?? null;
   const [filleul, parrain] = await Promise.all([userById(filleulId), parrainId ? userById(parrainId) : Promise.resolve(null)]);
 
-  if (both) {
-    // Compétence acquise : on félicite le filleul.
-    if (filleul?.email && validEmail(filleul.email)) {
-      const c = wrap("Compétence validée 🎉",
-        `<p style="margin:0 0 14px;color:#3f3a33;font-size:14px;line-height:1.7;">Bravo ${esc(filleul.prenom ?? "")} ! La compétence ${esc(title)} est désormais <strong>validée</strong> par vous et votre parrain.</p>
-         ${btn(url, "Voir mon parcours")}`);
-      await sendMail({ to: filleul.email, subject: `Compétence validée : ${comp?.title ?? "formation"}`, html: renderBrandedEmail({ subject: "Compétence validée", contentHtml: c }), transactional: true }).catch(() => {});
-    }
-    return;
+  if (by === "parrain" && filleul?.email && validEmail(filleul.email)) {
+    // Le parrain a validé : la compétence est acquise, on félicite le filleul.
+    const c = wrap("Compétence validée 🎉",
+      `<p style="margin:0 0 14px;color:#3f3a33;font-size:14px;line-height:1.7;">Bravo ${esc(filleul.prenom ?? "")} ! Votre parrain a validé la compétence ${esc(title)} : elle est désormais <strong>acquise</strong>.</p>
+       ${btn(url, "Voir mon parcours")}`);
+    await sendMail({ to: filleul.email, subject: `Compétence validée : ${comp?.title ?? "formation"}`, html: renderBrandedEmail({ subject: "Compétence validée", contentHtml: c }), transactional: true }).catch(() => {});
   }
   if (by === "filleul" && parrain?.email && validEmail(parrain.email)) {
-    // Le filleul s'est déclaré prêt : on invite le parrain à valider.
-    const c = wrap("Une compétence attend votre validation",
+    // Le filleul a validé : on informe le parrain (suivi).
+    const c = wrap("Votre filleul a validé une compétence",
       `<p style="margin:0 0 14px;color:#3f3a33;font-size:14px;line-height:1.7;">Bonjour ${esc(parrain.prenom ?? "")},</p>
-       <p style="margin:0 0 14px;color:#3f3a33;font-size:14px;line-height:1.7;"><strong>${esc(`${filleul?.prenom ?? ""} ${filleul?.nom ?? ""}`.trim() || "Votre filleul")}</strong> a marqué la compétence ${esc(title)} comme acquise. Vérifiez et validez-la de votre côté pour la finaliser.</p>
-       ${btn(url, "Valider la compétence")}`);
-    await sendMail({ to: parrain.email, subject: "Une compétence attend votre validation", html: renderBrandedEmail({ subject: "Validation attendue", contentHtml: c }), transactional: true }).catch(() => {});
-  }
-  if (by === "parrain" && filleul?.email && validEmail(filleul.email)) {
-    // Le parrain a validé : on informe le filleul de l'avancement.
-    const c = wrap("Votre parrain a validé une compétence",
-      `<p style="margin:0 0 14px;color:#3f3a33;font-size:14px;line-height:1.7;">Bonjour ${esc(filleul.prenom ?? "")}, votre parrain a validé la compétence ${esc(title)}. Pensez à la confirmer de votre côté si ce n'est pas déjà fait.</p>
-       ${btn(url, "Voir mon parcours")}`);
-    await sendMail({ to: filleul.email, subject: "Votre parrain a validé une compétence", html: renderBrandedEmail({ subject: "Avancement formation", contentHtml: c }), transactional: true }).catch(() => {});
+       <p style="margin:0 0 14px;color:#3f3a33;font-size:14px;line-height:1.7;"><strong>${esc(`${filleul?.prenom ?? ""} ${filleul?.nom ?? ""}`.trim() || "Votre filleul")}</strong> a validé la compétence ${esc(title)}. Vous pouvez la consulter dans le suivi.</p>
+       ${btn(url, "Suivre mon filleul")}`);
+    await sendMail({ to: parrain.email, subject: "Votre filleul a validé une compétence", html: renderBrandedEmail({ subject: "Avancement formation", contentHtml: c }), transactional: true }).catch(() => {});
   }
 }

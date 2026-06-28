@@ -514,7 +514,6 @@ function Parcours({ filleulId, modules, side, heading, canParrain, canFilleul }:
                 key={c.id} comp={c} val={vals[c.id]} busy={busy === c.id}
                 allowFilleul={allowFilleul} allowParrain={allowParrain}
                 onSetDates={(dates) => act(c.id, { action: "setDates", dates })}
-                onSetQuiz={(quiz) => act(c.id, { action: "setQuiz", quiz })}
                 onValidateFilleul={(value, comment) => act(c.id, { action: "validateFilleul", value, comment })}
                 onValidateParrain={(value, comment) => act(c.id, { action: "validateParrain", value, comment })}
               />
@@ -522,15 +521,20 @@ function Parcours({ filleulId, modules, side, heading, canParrain, canFilleul }:
           </div>
         </div>
       ))}
+
+      {/* Partie dédiée QCM */}
+      <QcmSection
+        modules={modules} vals={vals} canAnswer={allowFilleul} busyId={busy}
+        onAnswer={(competenceId, quiz) => act(competenceId, { action: "setQuiz", quiz })}
+      />
     </div>
   );
 }
 
-function CompetenceRow({ comp, val, busy, allowFilleul, allowParrain, onSetDates, onSetQuiz, onValidateFilleul, onValidateParrain }: {
+function CompetenceRow({ comp, val, busy, allowFilleul, allowParrain, onSetDates, onValidateFilleul, onValidateParrain }: {
   comp: Competence; val?: Validation; busy: boolean;
   allowFilleul: boolean; allowParrain: boolean;
   onSetDates: (dates: string[]) => void;
-  onSetQuiz: (quiz: Record<string, number>) => void;
   onValidateFilleul: (value: boolean, comment?: string) => void;
   onValidateParrain: (value: boolean, comment?: string) => void;
 }) {
@@ -539,10 +543,7 @@ function CompetenceRow({ comp, val, busy, allowFilleul, allowParrain, onSetDates
   const dates: string[] = Array.isArray(val?.dates) ? (val!.dates as string[]) : [];
   const [open, setOpen] = useState(false);
   const [newDate, setNewDate] = useState("");
-  const quiz: Record<string, number> = (val?.quiz as Record<string, number>) || {};
   const nQ = comp.questions?.length ?? 0;
-  const answered = comp.questions?.filter(q => quiz[q.id] !== undefined).length ?? 0;
-  const correct = comp.questions?.filter(q => quiz[q.id] === q.correctIndex).length ?? 0;
 
   function addDate() {
     if (!newDate) return;
@@ -551,9 +552,6 @@ function CompetenceRow({ comp, val, busy, allowFilleul, allowParrain, onSetDates
     setNewDate("");
   }
   function removeDate(d: string) { onSetDates(dates.filter(x => x !== d)); }
-  function answerQuestion(qId: string, idx: number) {
-    onSetQuiz({ ...quiz, [qId]: idx });
-  }
 
   return (
     <div style={{ borderTop: `1px solid ${BORDER}` }}>
@@ -563,9 +561,7 @@ function CompetenceRow({ comp, val, busy, allowFilleul, allowParrain, onSetDates
           {comp.description && <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{comp.description}</div>}
         </div>
         {nQ > 0 && (
-          <span style={{ fontSize: 11, color: "#6b7280", whiteSpace: "nowrap" }}>
-            QCM {correct}/{nQ}
-          </span>
+          <span style={{ fontSize: 10.5, color: GOLD, background: GOLD_BG, borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>QCM</span>
         )}
         <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: sl.color, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>{sl.label}</span>
         <button onClick={() => setOpen(o => !o)} style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }}>{open ? "Fermer" : "Détails"}</button>
@@ -609,24 +605,7 @@ function CompetenceRow({ comp, val, busy, allowFilleul, allowParrain, onSetDates
               </div>
             )}
           </div>
-
-          {/* Questions de contrôle (QCM) */}
-          {nQ > 0 && (
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 8 }}>
-                Questions de contrôle {answered > 0 && <span style={{ color: "#6b7280", fontWeight: 400 }}>— {correct}/{nQ} bonne(s) réponse(s)</span>}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {comp.questions.map((q, qi) => (
-                  <QuizQuestion
-                    key={q.id} q={q} index={qi} chosen={quiz[q.id]}
-                    canAnswer={allowFilleul} busy={busy}
-                    onAnswer={(idx) => answerQuestion(q.id, idx)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Le QCM est désormais regroupé dans une partie dédiée (voir QcmSection). */}
         </div>
       )}
     </div>
@@ -668,6 +647,52 @@ function QuizQuestion({ q, index, chosen, canAnswer, busy, onAnswer }: {
       {answered && q.explanation && (
         <div style={{ fontSize: 12, color: "#6b7280", marginTop: 8, fontStyle: "italic" }}>{q.explanation}</div>
       )}
+    </div>
+  );
+}
+
+// ─── Partie dédiée QCM : tous les quiz du parcours, regroupés ──────────
+function QcmSection({ modules, vals, canAnswer, busyId, onAnswer }: {
+  modules: Module[]; vals: Record<string, Validation>; canAnswer: boolean;
+  busyId: string | null; onAnswer: (competenceId: string, quiz: Record<string, number>) => void;
+}) {
+  const items = modules.flatMap(m => (m.competences ?? [])
+    .filter(c => (c.questions?.length ?? 0) > 0)
+    .map(c => ({ module: m, comp: c })));
+  if (items.length === 0) return null;
+
+  let totalQ = 0, answeredN = 0, correctN = 0;
+  for (const { comp } of items) {
+    const quiz = (vals[comp.id]?.quiz as Record<string, number>) || {};
+    for (const q of comp.questions) { totalQ++; if (quiz[q.id] !== undefined) { answeredN++; if (quiz[q.id] === q.correctIndex) correctN++; } }
+  }
+  const pct = answeredN ? Math.round((correctN / answeredN) * 100) : 0;
+
+  return (
+    <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, overflow: "hidden" }}>
+      <div style={{ padding: "12px 16px", background: GOLD_BG, borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: DARK }}>📝 QCM — Quiz de connaissances</div>
+          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{canAnswer ? "Testez vos connaissances. Vos réponses sont enregistrées automatiquement." : "Réponses du filleul (lecture seule)."}</div>
+        </div>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: GOLD, whiteSpace: "nowrap" }}>{answeredN}/{totalQ} répondues{answeredN ? ` · ${correctN}/${answeredN} bonnes (${pct}%)` : ""}</span>
+      </div>
+      <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 18 }}>
+        {items.map(({ module, comp }) => {
+          const quiz = (vals[comp.id]?.quiz as Record<string, number>) || {};
+          return (
+            <div key={comp.id}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: DARK, marginBottom: 8 }}>{comp.title} <span style={{ color: "#9ca3af", fontWeight: 400 }}>· {module.title}</span></div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {comp.questions.map((q, qi) => (
+                  <QuizQuestion key={q.id} q={q} index={qi} chosen={quiz[q.id]} canAnswer={canAnswer} busy={busyId === comp.id}
+                    onAnswer={(idx) => onAnswer(comp.id, { ...quiz, [q.id]: idx })} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
