@@ -739,9 +739,10 @@ function QuizQuestion({ q, index, chosen, canAnswer, busy, onAnswer }: {
 }
 
 // ─── Partie dédiée QCM : tous les quiz du parcours, regroupés ──────────
-function QcmSection({ modules, vals, canAnswer, busyId, onAnswer }: {
+function QcmSection({ modules, vals, canAnswer, busyId, onAnswer, onReset }: {
   modules: Module[]; vals: Record<string, Validation>; canAnswer: boolean;
   busyId: string | null; onAnswer: (competenceId: string, quiz: Record<string, number>) => void;
+  onReset?: () => void;
 }) {
   const items = modules.flatMap(m => (m.competences ?? [])
     .filter(c => (c.questions?.length ?? 0) > 0)
@@ -762,7 +763,12 @@ function QcmSection({ modules, vals, canAnswer, busyId, onAnswer }: {
           <div style={{ fontSize: 14, fontWeight: 700, color: DARK }}>📝 QCM — Quiz de connaissances</div>
           <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{canAnswer ? "Testez vos connaissances. Vos réponses sont enregistrées automatiquement." : "Réponses du filleul (lecture seule)."}</div>
         </div>
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: GOLD, whiteSpace: "nowrap" }}>{answeredN}/{totalQ} répondues{answeredN ? ` · ${correctN}/${answeredN} bonnes (${pct}%)` : ""}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: GOLD, whiteSpace: "nowrap" }}>{answeredN}/{totalQ} répondues{answeredN ? ` · ${correctN}/${answeredN} bonnes (${pct}%)` : ""}</span>
+          {canAnswer && onReset && answeredN > 0 && (
+            <button onClick={onReset} title="Effacer mes réponses pour recommencer" style={{ border: `1px solid ${BORDER}`, background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, color: DARK, cursor: "pointer", whiteSpace: "nowrap" }}>↺ Recommencer</button>
+          )}
+        </div>
       </div>
       <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 18 }}>
         {items.map(({ module, comp }) => {
@@ -812,10 +818,16 @@ function useMyValidations(filleulId: string) {
 function MyQcm({ filleulId, modules }: { filleulId: string; modules: Module[] }) {
   const { vals, busy, setQuiz } = useMyValidations(filleulId);
   const hasQ = modules.some(m => (m.competences ?? []).some(c => (c.questions?.length ?? 0) > 0));
+  async function resetAll() {
+    if (!confirm("Recommencer le QCM ? Vos réponses actuelles seront effacées et vous pourrez répondre à nouveau.")) return;
+    const comps = modules.flatMap(m => m.competences ?? [])
+      .filter(c => { const qz = vals[c.id]?.quiz as Record<string, number> | undefined; return qz && Object.keys(qz).length > 0; });
+    for (const c of comps) await setQuiz(c.id, {});
+  }
   if (!hasQ) {
     return <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, padding: 26, textAlign: "center", color: "#6b7280", fontSize: 13.5 }}>Aucun QCM n’est disponible pour le moment.</div>;
   }
-  return <QcmSection modules={modules} vals={vals} canAnswer={true} busyId={busy} onAnswer={setQuiz} />;
+  return <QcmSection modules={modules} vals={vals} canAnswer={true} busyId={busy} onAnswer={setQuiz} onReset={resetAll} />;
 }
 
 // ─── Onglet « Mon diplôme » (filleul) ────────────────────────────────
