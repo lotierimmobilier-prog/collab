@@ -22,7 +22,7 @@ interface Person { id: string; prenom: string; nom: string; email?: string; acti
 interface MeInfo extends Person { roleId: string; parrainId: string | null; parrain: Person | null; }
 interface AdminUser extends Person { roleId: string; parrainId: string | null; parrain: Person | null; }
 
-type Tab = "parcours" | "filleuls" | "suivi" | "modules" | "affectation";
+type Tab = "controle" | "parcours" | "filleuls" | "suivi" | "modules" | "affectation";
 
 export default function FormationPage() {
   const { data: session } = useSession();
@@ -55,8 +55,8 @@ export default function FormationPage() {
   // Choix d'onglet par défaut selon le rôle / la situation.
   useEffect(() => {
     if (!me) return;
-    if (isAdmin) setTab("modules");
-    else if (filleuls.length > 0) setTab("filleuls");
+    if (isAdmin) setTab("controle");
+    else if (filleuls.length > 0) setTab("controle");
     else setTab("parcours");
   }, [me, isAdmin, filleuls.length]);
 
@@ -66,6 +66,7 @@ export default function FormationPage() {
     .map(u => ({ id: u.id, prenom: u.prenom, nom: u.nom, email: u.email }));
 
   const tabs: { id: Tab; label: string; show: boolean }[] = [
+    { id: "controle", label: "Contrôle", show: !!isAdmin || filleuls.length > 0 },
     { id: "parcours", label: "Mon parcours", show: !!me?.parrainId },
     { id: "filleuls", label: `Mes filleuls${filleuls.length ? ` (${filleuls.length})` : ""}`, show: filleuls.length > 0 },
     { id: "suivi", label: `Suivi des filleuls${allFilleuls.length ? ` (${allFilleuls.length})` : ""}`, show: !!isAdmin },
@@ -111,6 +112,10 @@ export default function FormationPage() {
               </div>
             )}
 
+            {tab === "controle" && (!!isAdmin || filleuls.length > 0) && (
+              <ControleView modules={modules} isAdmin={!!isAdmin} />
+            )}
+
             {tab === "parcours" && me?.parrainId && (
               <Parcours
                 filleulId={me.id}
@@ -143,6 +148,182 @@ export default function FormationPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Espace de contrôle : tableau de bord de la formation ─────────────
+interface OvFilleul {
+  id: string; prenom: string; nom: string; active: boolean;
+  parrain: { id: string; prenom: string; nom: string } | null;
+  total: number; done: number; progress: number;
+  quiz: { answered: number; correct: number; rate: number | null };
+  lastActivity: string | null;
+  status: "termine" | "en_cours" | "en_retard" | "jamais";
+  perModule: { moduleId: string; done: number; total: number }[];
+}
+interface OvParrain { id: string; prenom: string; nom: string; filleulsCount: number; avgProgress: number; enRetard: number }
+interface Overview {
+  isAdmin: boolean;
+  filleuls: OvFilleul[]; parrains: OvParrain[];
+  kpi: { filleuls: number; avgProgress: number; doneCompetences: number; termine: number; enRetard: number; jamais: number; avgQuiz: number | null };
+  retardDays: number; generatedAt: string;
+}
+
+const ST_META: Record<OvFilleul["status"], { label: string; color: string; bg: string }> = {
+  termine: { label: "Terminé", color: "#2F855A", bg: "#E6F4EA" },
+  en_cours: { label: "En cours", color: "#2563eb", bg: "#E8EEFB" },
+  en_retard: { label: "En retard", color: "#B91C1C", bg: "#FCE9E9" },
+  jamais: { label: "Jamais commencé", color: "#8a8275", bg: "#F0EDE7" },
+};
+const pctTxt = (n: number) => `${Math.round(n * 100)}%`;
+
+function ProgressBar({ p, w = 120 }: { p: number; w?: number }) {
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+      <div style={{ background: "#eee", borderRadius: 6, height: 8, width: w, overflow: "hidden" }}>
+        <div style={{ background: GOLD, height: 8, width: `${Math.round(p * 100)}%` }} />
+      </div>
+      <span style={{ fontSize: 12, color: DARK, fontWeight: 600, minWidth: 34 }}>{pctTxt(p)}</span>
+    </div>
+  );
+}
+
+function ControleView({ modules, isAdmin }: { modules: Module[]; isAdmin: boolean }) {
+  const [ov, setOv] = useState<Overview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"all" | "alert">("all");
+  const [sel, setSel] = useState<OvFilleul | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch("/api/formation/overview");
+      if (r.ok) setOv(await r.json());
+    } catch { /* silencieux */ }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) return <div style={{ color: "#9ca3af", fontSize: 13, padding: 24, textAlign: "center" }}>Chargement du tableau de bord…</div>;
+  if (!ov || ov.filleuls.length === 0) return (
+    <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, padding: 26, textAlign: "center", color: "#6b7280", fontSize: 13.5 }}>
+      Aucun filleul à suivre pour le moment.
+    </div>
+  );
+
+  // Vue détaillée d'un filleul (drill-in vers son parcours).
+  if (sel) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <button onClick={() => setSel(null)} style={{ border: `1px solid ${BORDER}`, background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, cursor: "pointer", color: DARK }}>← Retour au tableau de bord</button>
+          <div style={{ fontSize: 15, fontWeight: 700, color: DARK }}>{sel.prenom} {sel.nom}</div>
+          {sel.parrain && <span style={{ fontSize: 12.5, color: "#6b7280" }}>Parrain : {sel.parrain.prenom} {sel.parrain.nom}</span>}
+          <a href={`/api/formation/report?filleulId=${sel.id}`} target="_blank" rel="noreferrer" style={{ marginLeft: "auto", textDecoration: "none", background: GOLD, color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600 }}>⤓ Bilan PDF</a>
+        </div>
+        <Parcours filleulId={sel.id} modules={modules} side="parrain" canParrain={true} canFilleul={isAdmin} />
+      </div>
+    );
+  }
+
+  const k = ov.kpi;
+  const rows = filter === "alert" ? ov.filleuls.filter(f => f.status === "en_retard" || f.status === "jamais") : ov.filleuls;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* KPI */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <Kpi label="Filleuls suivis" value={String(k.filleuls)} />
+        <Kpi label="Avancement moyen" value={pctTxt(k.avgProgress)} color={GOLD} />
+        <Kpi label="Terminés" value={String(k.termine)} color={GREEN} />
+        <Kpi label="En retard" value={String(k.enRetard)} color={k.enRetard ? RED : DARK} />
+        <Kpi label="Jamais commencé" value={String(k.jamais)} color={k.jamais ? "#8a8275" : DARK} />
+        <Kpi label="Réussite QCM" value={k.avgQuiz === null ? "—" : pctTxt(k.avgQuiz)} />
+      </div>
+
+      {/* Filtres + export */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        {([["all", "Tous"], ["alert", `À relancer${k.enRetard + k.jamais ? ` (${k.enRetard + k.jamais})` : ""}`]] as const).map(([id, lbl]) => (
+          <button key={id} onClick={() => setFilter(id)} style={{
+            padding: "6px 13px", borderRadius: 999, cursor: "pointer", fontSize: 12.5,
+            border: `1px solid ${filter === id ? GOLD : BORDER}`, background: filter === id ? GOLD_BG : "#fff",
+            fontWeight: filter === id ? 700 : 500, color: DARK,
+          }}>{lbl}</button>
+        ))}
+        <a href="/api/formation/report" target="_blank" rel="noreferrer" style={{ marginLeft: "auto", textDecoration: "none", background: "#fff", border: `1px solid ${BORDER}`, color: DARK, borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600 }}>⤓ Exporter le bilan global</a>
+      </div>
+
+      {/* Tableau des filleuls */}
+      <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 640 }}>
+            <thead>
+              <tr style={{ background: GOLD_BG, color: DARK }}>
+                {["Filleul", "Parrain", "Avancement", "QCM", "Dernière activité", "Statut"].map((h, i) => (
+                  <th key={h} style={{ textAlign: i >= 2 && i <= 3 ? "center" : "left", padding: "9px 12px", fontSize: 11.5, fontWeight: 700, borderBottom: `2px solid ${GOLD}`, whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(f => {
+                const st = ST_META[f.status];
+                return (
+                  <tr key={f.id} onClick={() => setSel(f)} style={{ cursor: "pointer", borderBottom: `1px solid #f4f1ec` }}>
+                    <td style={{ padding: "9px 12px", fontWeight: 600, color: DARK, whiteSpace: "nowrap" }}>{f.prenom} {f.nom}</td>
+                    <td style={{ padding: "9px 12px", color: "#6b7280", whiteSpace: "nowrap" }}>{f.parrain ? `${f.parrain.prenom} ${f.parrain.nom}` : "—"}</td>
+                    <td style={{ padding: "9px 12px", textAlign: "center" }}><ProgressBar p={f.progress} w={90} /></td>
+                    <td style={{ padding: "9px 12px", textAlign: "center", color: f.quiz.rate !== null && f.quiz.rate < 0.5 ? RED : DARK }}>{f.quiz.rate === null ? "—" : pctTxt(f.quiz.rate)}</td>
+                    <td style={{ padding: "9px 12px", color: "#6b7280", whiteSpace: "nowrap" }}>{f.lastActivity ? new Date(f.lastActivity).toLocaleDateString("fr-FR") : "—"}</td>
+                    <td style={{ padding: "9px 12px" }}><span style={{ fontSize: 11, fontWeight: 700, color: st.color, background: st.bg, borderRadius: 20, padding: "3px 9px", whiteSpace: "nowrap" }}>{st.label}</span></td>
+                  </tr>
+                );
+              })}
+              {rows.length === 0 && <tr><td colSpan={6} style={{ padding: 22, textAlign: "center", color: "#9ca3af" }}>Aucun filleul dans ce filtre.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div style={{ fontSize: 11.5, color: "#9ca3af" }}>Cliquez sur un filleul pour ouvrir son parcours détaillé. « En retard » = aucune activité depuis plus de {ov.retardDays} jours.</div>
+
+      {/* Charge des parrains */}
+      {ov.parrains.length > 0 && (
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: DARK, margin: "4px 0 8px" }}>Charge des parrains</div>
+          <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 460 }}>
+                <thead>
+                  <tr style={{ background: GOLD_BG, color: DARK }}>
+                    {["Parrain", "Filleuls", "Avancement moyen", "À relancer"].map((h, i) => (
+                      <th key={h} style={{ textAlign: i === 0 ? "left" : "center", padding: "9px 12px", fontSize: 11.5, fontWeight: 700, borderBottom: `2px solid ${GOLD}`, whiteSpace: "nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ov.parrains.map(p => (
+                    <tr key={p.id} style={{ borderBottom: `1px solid #f4f1ec` }}>
+                      <td style={{ padding: "9px 12px", fontWeight: 600, color: DARK, whiteSpace: "nowrap" }}>{p.prenom} {p.nom}</td>
+                      <td style={{ padding: "9px 12px", textAlign: "center" }}>{p.filleulsCount}</td>
+                      <td style={{ padding: "9px 12px", textAlign: "center" }}><ProgressBar p={p.avgProgress} w={80} /></td>
+                      <td style={{ padding: "9px 12px", textAlign: "center", color: p.enRetard ? RED : "#6b7280", fontWeight: p.enRetard ? 700 : 500 }}>{p.enRetard}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Kpi({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 16px", minWidth: 118, flex: "1 1 118px" }}>
+      <div style={{ fontSize: 20, fontWeight: 700, color: color ?? DARK }}>{value}</div>
+      <div style={{ fontSize: 11.5, color: "#9ca3af" }}>{label}</div>
     </div>
   );
 }

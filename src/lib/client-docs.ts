@@ -20,25 +20,34 @@ export const AGENCY_CATEGORY_LABEL: Record<string, string> = {
   attestation_loyer: "Attestation de loyer", caf: "Document CAF", autre: "Document",
 };
 
-export interface DocMeta { id: string; source: string; category: string; fileName: string; mime: string | null; size: number | null; createdAt: string }
+export interface DocMeta { id: string; source: string; category: string; fileName: string; mime: string | null; size: number | null; createdAt: string; validUntil: string | null }
 
 export async function listTenantDocs(tenantId: string): Promise<DocMeta[]> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rows: any[] = await prisma.$queryRawUnsafe(
-      `SELECT id, source, category, "fileName", mime, size, "createdAt"
+      `SELECT id, source, category, "fileName", mime, size, "createdAt", "validUntil"
          FROM tenant_documents WHERE "tenantId" = $1 ORDER BY "createdAt" DESC`, tenantId,
     );
-    return rows.map(r => ({ id: r.id, source: r.source, category: r.category, fileName: r.fileName, mime: r.mime, size: r.size, createdAt: new Date(r.createdAt).toISOString() }));
+    return rows.map(r => ({ id: r.id, source: r.source, category: r.category, fileName: r.fileName, mime: r.mime, size: r.size, createdAt: new Date(r.createdAt).toISOString(), validUntil: r.validUntil ? new Date(r.validUntil).toISOString() : null }));
   } catch { return []; }
 }
 
-export async function addTenantUpload(tenantId: string, category: string, fileName: string, mime: string, size: number, dataB64: string): Promise<{ id: string }> {
+// Échéance par défaut d'une attestation d'assurance déposée sans date : +1 an.
+function defaultValidUntil(category: string, validUntil?: Date | null): Date | null {
+  if (validUntil) return validUntil;
+  if (category === "assurance") { const d = new Date(); d.setFullYear(d.getFullYear() + 1); return d; }
+  return null;
+}
+
+export async function addTenantUpload(tenantId: string, category: string, fileName: string, mime: string, size: number, dataB64: string, validUntil?: Date | null): Promise<{ id: string }> {
   const id = randomUUID();
+  const echeance = defaultValidUntil(category, validUntil);
+  // reminderStage repart à 0 : une nouvelle attestation relance le cycle de rappels.
   await prisma.$executeRawUnsafe(
-    `INSERT INTO tenant_documents (id, "tenantId", source, category, "fileName", mime, size, data)
-       VALUES ($1, $2, 'tenant', $3, $4, $5, $6, $7)`,
-    id, tenantId, category, fileName.slice(0, 200), mime || null, size || null, dataB64,
+    `INSERT INTO tenant_documents (id, "tenantId", source, category, "fileName", mime, size, data, "validUntil", "reminderStage")
+       VALUES ($1, $2, 'tenant', $3, $4, $5, $6, $7, $8, 0)`,
+    id, tenantId, category, fileName.slice(0, 200), mime || null, size || null, dataB64, echeance,
   );
   return { id };
 }
@@ -109,4 +118,68 @@ export async function uploadsCountByTenant(): Promise<Map<string, number>> {
     for (const r of rows) map.set(r.tenantId, Number(r.n));
   } catch { /* vide */ }
   return map;
+}
+
+// ── Suivi des attestations d'assurance ──
+
+export interface InsuranceDoc { id: string; tenantId: string; validUntil: string | null; reminderStage: number; createdAt: string }
+export interface InsuranceRow extends InsuranceDoc { prenom: string; nom: string; email: string | null }
+
+export type InsuranceState = "absente" | "valide" | "bientot" | "expiree";
+export interface InsuranceStatus { state: InsuranceState; label: string; validUntil: string | null; days: number | null }
+
+// Renvoie un statut lisible à partir de la date d'échéance de la dernière attestation.
+export function insuranceStatus(validUntil: string | null): InsuranceStatus {
+  if (!validUntil) return { state: "absente", label: "Aucune attestation", validUntil: null, days: null };
+  const d = new Date(validUntil);
+  const days = Math.ceil((d.getTime() - Date.now()) / 86400000);
+  const dfr = d.toLocaleDateString("fr-FR");
+  if (days < 0) return { state: "expiree", label: `Expirée le ${dfr}`, validUntil, days };
+  if (days <= 30) return { state: "bientot", label: `Expire le ${dfr}`, validUntil, days };
+  return { state: "valide", label: `Valide jusqu'au ${dfr}`, validUntil, days };
+}
+
+// Dernière attestation d'assurance déposée par locataire (id, échéance, étape de rappel).
+export async function latestInsuranceByTenant(): Promise<Map<string, InsuranceDoc>> {
+  const map = new Map<string, InsuranceDoc>();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = await prisma.$queryRawUnsafe(
+      `SELECT DISTINCT ON ("tenantId") id, "tenantId", "validUntil", "reminderStage", "createdAt"
+         FROM tenant_documents WHERE category = 'assurance'
+         ORDER BY "tenantId", "createdAt" DESC`,
+    );
+    for (const r of rows) map.set(r.tenantId, {
+      id: r.id, tenantId: r.tenantId,
+      validUntil: r.validUntil ? new Date(r.validUntil).toISOString() : null,
+      reminderStage: Number(r.reminderStage ?? 0),
+      createdAt: new Date(r.createdAt).toISOString(),
+    });
+  } catch { /* vide */ }
+  return map;
+}
+
+// Dernières attestations d'assurance avec coordonnées du locataire (pour les relances).
+export async function latestInsuranceWithTenant(): Promise<InsuranceRow[]> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = await prisma.$queryRawUnsafe(
+      `SELECT DISTINCT ON (d."tenantId") d.id, d."tenantId", d."validUntil", d."reminderStage", d."createdAt",
+              t.prenom, t.nom, t.email
+         FROM tenant_documents d JOIN tenants t ON t.id = d."tenantId"
+        WHERE d.category = 'assurance'
+        ORDER BY d."tenantId", d."createdAt" DESC`,
+    );
+    return rows.map(r => ({
+      id: r.id, tenantId: r.tenantId,
+      validUntil: r.validUntil ? new Date(r.validUntil).toISOString() : null,
+      reminderStage: Number(r.reminderStage ?? 0),
+      createdAt: new Date(r.createdAt).toISOString(),
+      prenom: r.prenom ?? "", nom: r.nom ?? "", email: r.email ?? null,
+    }));
+  } catch { return []; }
+}
+
+export async function setInsuranceReminderStage(docId: string, stage: number): Promise<void> {
+  await prisma.$executeRawUnsafe(`UPDATE tenant_documents SET "reminderStage" = $2 WHERE id = $1`, docId, stage).catch(() => {});
 }

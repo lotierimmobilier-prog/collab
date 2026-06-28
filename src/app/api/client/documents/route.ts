@@ -24,6 +24,13 @@ export async function POST(req: NextRequest) {
   const size = Math.ceil((data.length * 3) / 4); // taille approx. depuis le base64
   if (size > MAX_DOC_BYTES) return NextResponse.json({ error: "Fichier trop volumineux (max 10 Mo)." }, { status: 413 });
 
-  const { id } = await addTenantUpload(client.id, category, fileName, mime, size, data);
+  // Date d'échéance (attestation d'assurance) : facultative côté locataire.
+  let validUntil: Date | null = null;
+  if (typeof b?.validUntil === "string" && /^\d{4}-\d{2}-\d{2}/.test(b.validUntil)) {
+    const d = new Date(b.validUntil);
+    if (!isNaN(d.getTime())) validUntil = d;
+  }
+
+  const { id } = await addTenantUpload(client.id, category, fileName, mime, size, data, validUntil);
   return NextResponse.json({ ok: true, id }, { status: 201 });
 }
