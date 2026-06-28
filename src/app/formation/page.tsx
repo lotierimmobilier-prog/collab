@@ -547,6 +547,8 @@ function CompetenceRow({ comp, val, busy, allowFilleul, allowParrain, onSetDates
   // Validée par un seul côté : on indique la validation encore attendue.
   const filleulV = !!val?.filleulValidated, parrainV = !!val?.parrainValidated;
   const waitingFor = status === "termine" && filleulV !== parrainV ? (filleulV ? "parrain" : "filleul") : null;
+  // Vue « compte filleul » : validation simplifiée (un seul bouton).
+  const filleulOnly = allowFilleul && !allowParrain;
 
   function addDate() {
     if (!newDate) return;
@@ -567,26 +569,46 @@ function CompetenceRow({ comp, val, busy, allowFilleul, allowParrain, onSetDates
         {nQ > 0 && (
           <span style={{ fontSize: 10.5, color: GOLD, background: GOLD_BG, borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>QCM</span>
         )}
-        <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: sl.color, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>{sl.label}</span>
+        {filleulOnly ? (
+          // Compte filleul : un seul bouton clair pour valider sa compétence.
+          <button onClick={() => onValidateFilleul(!filleulV)} disabled={busy} title={filleulV ? "Annuler ma validation" : "Marquer la compétence comme acquise"}
+            style={{ border: `1px solid ${filleulV ? GREEN : GOLD}`, background: filleulV ? "#EAF4EE" : GOLD, color: filleulV ? GREEN : "#fff", borderRadius: 999, padding: "5px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+            {filleulV ? "✓ J'ai validé" : "Je valide"}
+          </button>
+        ) : (
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: sl.color, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>{sl.label}</span>
+        )}
         <button onClick={() => setOpen(o => !o)} style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }}>{open ? "Fermer" : "Détails"}</button>
       </div>
 
       {open && (
         <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 14, opacity: busy ? 0.6 : 1 }}>
           <ResourceLinks competenceId={comp.id} />
-          {/* Validations croisées */}
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <ValidBadge
-              label="Filleul" on={!!val?.filleulValidated} at={val?.filleulValidatedAt}
-              canToggle={allowFilleul} busy={busy}
-              onToggle={() => onValidateFilleul(!val?.filleulValidated)}
-            />
-            <ValidBadge
-              label="Parrain" on={!!val?.parrainValidated} at={val?.parrainValidatedAt}
-              canToggle={allowParrain} busy={busy}
-              onToggle={() => onValidateParrain(!val?.parrainValidated)}
-            />
-          </div>
+          {/* Validation */}
+          {filleulOnly ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <button onClick={() => onValidateFilleul(!filleulV)} disabled={busy}
+                style={{ border: `1px solid ${filleulV ? GREEN : GOLD}`, background: filleulV ? "#EAF4EE" : GOLD, color: filleulV ? GREEN : "#fff", borderRadius: 10, padding: "10px 18px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>
+                {filleulV ? "✓ Compétence acquise — annuler" : "Je valide cette compétence"}
+              </button>
+              <span style={{ fontSize: 12, color: parrainV ? GREEN : "#6b7280" }}>
+                {parrainV ? "✓ Également validée par votre parrain" : "Validation du parrain en attente"}
+              </span>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <ValidBadge
+                label="Filleul" on={!!val?.filleulValidated} at={val?.filleulValidatedAt}
+                canToggle={allowFilleul} busy={busy}
+                onToggle={() => onValidateFilleul(!val?.filleulValidated)}
+              />
+              <ValidBadge
+                label="Parrain" on={!!val?.parrainValidated} at={val?.parrainValidatedAt}
+                canToggle={allowParrain} busy={busy}
+                onToggle={() => onValidateParrain(!val?.parrainValidated)}
+              />
+            </div>
+          )}
 
           {/* Jours réalisés */}
           <div>
