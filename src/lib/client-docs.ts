@@ -62,3 +62,51 @@ export async function removeTenantUpload(tenantId: string, id: string): Promise<
     `DELETE FROM tenant_documents WHERE id = $1 AND "tenantId" = $2 AND source = 'tenant'`, id, tenantId,
   ).catch(() => {});
 }
+
+// ── Côté AGENCE (utilisateur interne) ──
+export const AGENCY_CATEGORIES: { id: string; label: string }[] = [
+  { id: "bail", label: "Bail" },
+  { id: "etat_lieux", label: "État des lieux" },
+  { id: "quittance", label: "Quittance de loyer" },
+  { id: "attestation_loyer", label: "Attestation de loyer" },
+  { id: "caf", label: "Document CAF" },
+  { id: "autre", label: "Document" },
+];
+export const AGENCY_CATEGORY_IDS = AGENCY_CATEGORIES.map(c => c.id);
+
+// L'agence dépose un document pour un locataire (source 'agency').
+export async function addAgencyDoc(tenantId: string, category: string, fileName: string, mime: string, size: number, dataB64: string): Promise<{ id: string }> {
+  const id = randomUUID();
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO tenant_documents (id, "tenantId", source, category, "fileName", mime, size, data)
+       VALUES ($1, $2, 'agency', $3, $4, $5, $6, $7)`,
+    id, tenantId, category, fileName.slice(0, 200), mime || null, size || null, dataB64,
+  );
+  return { id };
+}
+
+// Lecture interne d'un document (sans filtre locataire — réservé à l'agence).
+export async function getAnyDoc(id: string): Promise<{ fileName: string; mime: string | null; data: string } | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = await prisma.$queryRawUnsafe(`SELECT "fileName", mime, data FROM tenant_documents WHERE id = $1 LIMIT 1`, id);
+    const r = rows[0];
+    if (!r?.data) return null;
+    return { fileName: r.fileName, mime: r.mime, data: r.data };
+  } catch { return null; }
+}
+
+export async function removeAnyDoc(id: string): Promise<void> {
+  await prisma.$executeRawUnsafe(`DELETE FROM tenant_documents WHERE id = $1`, id).catch(() => {});
+}
+
+// Vue d'ensemble : nb de justificatifs déposés par locataire (pour la liste agence).
+export async function uploadsCountByTenant(): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = await prisma.$queryRawUnsafe(`SELECT "tenantId", count(*)::int AS n FROM tenant_documents WHERE source = 'tenant' GROUP BY "tenantId"`);
+    for (const r of rows) map.set(r.tenantId, Number(r.n));
+  } catch { /* vide */ }
+  return map;
+}

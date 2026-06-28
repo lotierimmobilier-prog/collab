@@ -29,6 +29,7 @@ const nav: NavItem[] = [
   { id: "appels",    label: "Appels téléphoniques", icon: "📞", href: "/appels",             group: "Principal" },
   { id: "annuaire",  label: "Annuaire",             icon: "▤",  href: "/annuaire",           group: "Principal" },
   { id: "gestion",   label: "Gestion locative",     icon: "🏠", href: "/gestion",            group: "Gestion" },
+  { id: "espace-client", label: "Espace client",    icon: "🔑", href: "/espace-client-agence", group: "Gestion" },
   { id: "assistance",label: "Assistance locataire", icon: "🛟", href: "/assistance",         group: "Gestion" },
   { id: "ods",       label: "Ordres de service",    icon: "📋", href: "/ordres-de-service",  group: "Gestion" },
   { id: "formation", label: "Formation",            icon: "◈",  href: "/formation",          group: "Agence" },
