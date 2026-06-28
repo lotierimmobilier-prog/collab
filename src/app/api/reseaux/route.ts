@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { logAugusteUsage } from "@/lib/auguste-usage";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const KEY = "social_accounts";
@@ -74,6 +75,7 @@ RÈGLES STRICTES :
     try {
       const resp = await anthropic.messages.create({ model: "claude-sonnet-4-6", max_tokens: 700, system: SYSTEM, messages: [{ role: "user", content: userMsg }] });
       const post = resp.content.filter(x => x.type === "text").map(x => (x as Anthropic.TextBlock).text).join("\n").trim() || "—";
+      logAugusteUsage({ userId: session.user.id, userName: session.user.name, feature: "reseaux", question: brief, reply: post, usage: resp.usage });
       return NextResponse.json({ post });
     } catch { return NextResponse.json({ post: "Génération momentanément indisponible. Réessayez." }); }
   }

@@ -261,13 +261,16 @@ model Setting {
 
 // ── Journal des demandes à Auguste (audit admin) ─────────────
 model AugusteLog {
-  id        String   @id @default(cuid())
-  userId    String
-  userName  String
-  question  String
-  reply     String?
-  tools     String[] @default([])
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  userId       String
+  userName     String
+  question     String
+  reply        String?
+  tools        String[] @default([])
+  feature      String?  // mail | formation | client | reseaux | chat | …
+  inputTokens  Int?
+  outputTokens Int?
+  createdAt    DateTime @default(now())
 
   @@index([createdAt])
   @@index([userId])

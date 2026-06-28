@@ -28,7 +28,7 @@ const nav: NavItem[] = [
   { id: "chat",      label: "Messages internes",    icon: "💬", href: "/messagerie-interne", group: "Principal" },
   { id: "appels",    label: "Appels téléphoniques", icon: "📞", href: "/appels",             group: "Principal" },
   { id: "annuaire",  label: "Annuaire",             icon: "▤",  href: "/annuaire",           group: "Principal" },
-  { id: "drive",     label: "Drive",                icon: "🗂", href: "/drive",              group: "Principal" },
+  { id: "drive",     label: "Drive",                icon: "🗂", href: "/drive",              group: "Drive" },
   { id: "gestion",   label: "Gestion locative",     icon: "🏠", href: "/gestion",            group: "Gestion" },
   { id: "espace-client", label: "Espace client",    icon: "🔑", href: "/espace-client-agence", group: "Gestion" },
   { id: "assistance",label: "Assistance locataire", icon: "🛟", href: "/assistance",         group: "Gestion" },
@@ -65,11 +65,11 @@ const adminNav = [
   { id: "admin-auguste-logs", label: "Historique Auguste", icon: "🕘", href: "/admin/auguste-historique" },
 ];
 
-const groups = ["Principal", "Gestion", "Agence", "Réseaux sociaux", "Personnel"];
+const groups = ["Principal", "Drive", "Gestion", "Agence", "Réseaux sociaux", "Personnel"];
 // Libellés affichés des groupes (les clés restent stables).
-const GROUP_LABEL: Record<string, string> = { Principal: "Principal", Gestion: "Gestion locative", Agence: "Agence", "Réseaux sociaux": "Réseaux sociaux", Personnel: "Personnel" };
+const GROUP_LABEL: Record<string, string> = { Principal: "Principal", Drive: "Drive", Gestion: "Gestion locative", Agence: "Agence", "Réseaux sociaux": "Réseaux sociaux", Personnel: "Personnel" };
 // Menus toujours visibles (non masquables) + correspondance nav → module d'accès.
-const ALWAYS_GROUPS = ["Principal", "Personnel"];
+const ALWAYS_GROUPS = ["Principal", "Drive", "Personnel"];
 const NAV_MODULE: Record<string, string> = { dashboard: "dashboard", tasks: "tasks", planning: "planning", mail: "mail", gestion: "locataires", formation: "formation", reseaux: "reseaux" };
 // Gestion locative : réservée à la direction / admin / super admin / gestionnaire.
 const GESTION_ROLES = ["admin", "dirigeant", "direction", "gestionnaire"];

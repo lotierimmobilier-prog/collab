@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { isSuperSession, VISIBILITY, DEFAULT_FOLDERS } from "@/lib/drive-governance";
+import { isSuperSession, VISIBILITY, DEFAULT_FOLDERS, DRIVE_ORDER_KEY, getDriveFolderOrder } from "@/lib/drive-governance";
 
 // Dossiers communs (poussés sur tous les drives) — gérés par le super admin.
 
@@ -11,8 +11,9 @@ export async function GET() {
   if (!isSuperSession(session)) return NextResponse.json({ error: "Réservé au super administrateur" }, { status: 403 });
   const templates = await prisma.driveFolderTemplate.findMany({ orderBy: { order: "asc" } }).catch(() => []);
   // Parents possibles pour un sous-dossier imposé : dossiers par défaut + modèles.
-  const defaults = DEFAULT_FOLDERS.map(d => ({ key: `default:${d.key}`, name: d.name }));
-  return NextResponse.json({ templates, defaults });
+  const defaults = DEFAULT_FOLDERS.map(d => ({ key: `default:${d.key}`, name: d.name, parent: d.parent ? `default:${d.parent}` : null }));
+  const order = await getDriveFolderOrder();
+  return NextResponse.json({ templates, defaults, order });
 }
 
 export async function POST(req: NextRequest) {
@@ -36,6 +37,14 @@ export async function PATCH(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   if (!isSuperSession(session)) return NextResponse.json({ error: "Réservé au super administrateur" }, { status: 403 });
   const b = await req.json().catch(() => ({}));
+
+  // Réordonnancement global des dossiers imposés (pour tous les utilisateurs).
+  if (b?.action === "order" && Array.isArray(b?.order)) {
+    const value = JSON.stringify((b.order as unknown[]).filter(x => typeof x === "string").slice(0, 200));
+    await prisma.setting.upsert({ where: { key: DRIVE_ORDER_KEY }, update: { value }, create: { key: DRIVE_ORDER_KEY, value } });
+    return NextResponse.json({ ok: true });
+  }
+
   const id = String(b?.id ?? "");
   if (!id) return NextResponse.json({ error: "id requis." }, { status: 400 });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

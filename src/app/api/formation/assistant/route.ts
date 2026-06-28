@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { logAugusteUsage } from "@/lib/auguste-usage";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -48,6 +49,7 @@ Règles : réponses en français, pédagogiques, structurées et concrètes ; en
     });
     const reply = resp.content.filter(b => b.type === "text").map(b => (b as Anthropic.TextBlock).text).join("\n").trim()
       || "Désolé, je n'ai pas pu répondre.";
+    logAugusteUsage({ userId: session.user.id, userName: session.user.name, feature: "formation", reply, usage: resp.usage });
     return NextResponse.json({ reply });
   } catch {
     return NextResponse.json({ reply: "L'assistant est momentanément indisponible. Réessayez dans un instant." });

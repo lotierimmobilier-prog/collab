@@ -4,7 +4,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { PERF_TYPES } from "@/lib/performance";
 
-const GOLD = "#B8966A"; const GOLD_BG = "#F7F0E6"; const BORDER = "#E6E1D9"; const DARK = "#1C1A17";
+const GOLD = "#B8966A"; const GOLD_BG = "#F7F0E6"; const BORDER = "#E6E1D9"; const DARK = "#1C1A17"; const RED = "#DC2626";
 
 const DAYS   = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
 const MONTHS = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
@@ -669,6 +669,9 @@ export default function Dashboard() {
       {/* Bannière d'accueil — citation + météo + indicateurs (réordonnables) */}
       <Banner firstName={firstName} kpis={dash?.kpis ?? []} onCustomize={() => setShowCustom(true)} onReorderKpis={reorderKpis} />
 
+      {/* Compteur de consommation Auguste — super admin uniquement (auto-masqué). */}
+      <AugusteBudgetBlock />
+
       {/* Blocs du tableau de bord — dans l'ordre choisi, déplaçables par la poignée ⠿ */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
         {ordered.map(id => (
@@ -695,6 +698,58 @@ export default function Dashboard() {
       </div>
 
       {showCustom && <CustomizePanel onClose={() => setShowCustom(false)} onSaved={() => { setShowCustom(false); loadDash(); }} />}
+    </div>
+  );
+}
+
+// ─── Budget Auguste (super admin) ───────────────────────────────────
+interface AugAgent { userId: string; userName: string; total: number; cost: number }
+interface AugUsage { month: string; cap: number; totalTokens: number; totalCost: number; agents: AugAgent[]; real: { amountUsd: number } | null }
+function AugusteBudgetBlock() {
+  const [d, setD] = useState<AugUsage | null>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => { fetch("/api/admin/auguste-usage").then(r => r.ok ? r.json() : null).then(setD).catch(() => {}); }, []);
+  if (!d) return null; // non super admin → endpoint 403 → masqué
+  const fmtTok = (n: number) => n >= 1e6 ? `${(n / 1e6).toFixed(2)} M` : n >= 1e3 ? `${(n / 1e3).toFixed(0)} k` : String(n);
+  const usd = (n: number) => `$${n.toFixed(2)}`;
+  const Stat = ({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) => (
+    <div style={{ flex: 1, minWidth: 150 }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: color ?? DARK, marginTop: 2 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11.5, color: "#6b7280" }}>{sub}</div>}
+    </div>
+  );
+  return (
+    <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, boxShadow: "0 1px 4px rgba(0,0,0,0.05)", padding: "14px 18px", marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: DARK }}>✦ Budget Auguste — {d.month}</span>
+        <span style={{ fontSize: 10.5, color: "#9ca3af" }}>(visible par le super admin)</span>
+        <button onClick={() => setOpen(o => !o)} style={{ marginLeft: "auto", background: "none", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 10px", fontSize: 12, cursor: "pointer", color: GOLD }}>{open ? "Masquer le détail" : "Détail par agent"}</button>
+      </div>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        <Stat label="Tokens ce mois" value={fmtTok(d.totalTokens)} sub={`plafond ${fmtTok(d.cap)} / agent`} color={GOLD} />
+        <Stat label="Coût estimé (interne)" value={usd(d.totalCost)} sub="d'après les tarifs Sonnet" />
+        <Stat label="Compte Claude (réel)" value={d.real ? usd(d.real.amountUsd) : "—"} sub={d.real ? "via Anthropic Admin API" : "clé admin non configurée"} color={d.real ? "#2F855A" : "#9ca3af"} />
+      </div>
+      {open && (
+        <div style={{ marginTop: 12, borderTop: "1px solid #f3f4f6", paddingTop: 10 }}>
+          {d.agents.length === 0 ? <div style={{ fontSize: 12.5, color: "#9ca3af" }}>Aucune consommation ce mois.</div> : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {d.agents.map(a => {
+                const pct = d.cap > 0 ? Math.min(100, Math.round((a.total / d.cap) * 100)) : 0;
+                return (
+                  <div key={a.userId} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12.5 }}>
+                    <span style={{ flex: 1, color: DARK, fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.userName}</span>
+                    <div style={{ flex: 2, height: 7, background: "#f0ece5", borderRadius: 5, overflow: "hidden" }}><div style={{ width: `${pct}%`, height: "100%", background: pct >= 90 ? RED : GOLD }} /></div>
+                    <span style={{ width: 70, textAlign: "right", color: "#6b7280" }}>{fmtTok(a.total)}</span>
+                    <span style={{ width: 60, textAlign: "right", color: "#6b7280" }}>{usd(a.cost)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

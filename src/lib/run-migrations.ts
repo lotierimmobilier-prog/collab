@@ -54,6 +54,7 @@ const FILES = [
   "migrations_user_menu.sql",
   "migrations_portal_listings.sql",
   "migrations_drive_template_parent.sql",
+  "migrations_auguste_tokens.sql",
 ];
 
 export interface MigrationReport {
