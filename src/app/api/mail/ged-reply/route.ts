@@ -34,11 +34,39 @@ export async function POST(req: NextRequest) {
 
   const doc = detectDocType(text);
 
-  // 1) Correspondance expéditeur ↔ contact (locataire ICS) par e-mail.
-  const tenant = fromEmail
+  // 1a) Correspondance par E-MAIL (la plus fiable) : l'expéditeur est-il le
+  //     locataire enregistré ?
+  const emailTenant = fromEmail
     ? await prisma.icsTenant.findFirst({ where: { email: { equals: fromEmail, mode: "insensitive" } } }).catch(() => null)
     : null;
-  const matched = !!tenant;
+
+  // 1b) Correspondance par NOM / SIGNATURE : on lit le nom dans le nom
+  //     d'expéditeur + les dernières lignes du corps (signature). Validée
+  //     seulement si le PRÉNOM et le NOM du locataire apparaissent tous deux.
+  const tail = String(b?.body ?? "").split("\n").map(l => l.trim()).filter(Boolean).slice(-4).join(" ");
+  const hints = `${fromName} ${tail}`.toLowerCase();
+  const words = [...new Set(hints.split(/[^a-zàâäéèêëïîôöùûüç]+/i).filter(w => w.length >= 3))].slice(0, 12);
+  let nameTenant: typeof emailTenant = null;
+  if (!emailTenant && words.length) {
+    const cands = await prisma.icsTenant.findMany({
+      where: { OR: words.flatMap(w => [{ nomLocataire: { contains: w, mode: "insensitive" as const } }, { prenomLocataire: { contains: w, mode: "insensitive" as const } }]) },
+      take: 25,
+    }).catch(() => []);
+    nameTenant = cands.find(t => {
+      const nom = (t.nomLocataire ?? "").toLowerCase(), pre = (t.prenomLocataire ?? "").toLowerCase();
+      return nom.length >= 2 && pre.length >= 2 && hints.includes(nom) && hints.includes(pre);
+    }) ?? null;
+  }
+
+  const tenant = emailTenant ?? nameTenant;
+  const emailMatch = !!emailTenant;
+  const nameMatch = !!nameTenant;
+  // Incohérence : le nom/signature correspond à un locataire, mais l'e-mail
+  // expéditeur n'est PAS le sien → contrôle d'identité requis.
+  const mismatch = !emailMatch && nameMatch;
+  const tenantEmail = nameTenant?.email ?? null;
+  const matched = emailMatch; // seul l'e-mail vérifié autorise l'envoi auto
+
   const clientName = tenant
     ? `${tenant.prenomLocataire ?? ""} ${tenant.nomLocataire ?? ""}`.trim() || fromName || "Madame, Monsieur"
     : (fromName || "Madame, Monsieur");
@@ -84,18 +112,31 @@ export async function POST(req: NextRequest) {
 </div>
 ${AUGUSTE_SIGNATURE_HTML}`.trim();
 
+  // Réglage global : envoi 100 % automatique quand l'expéditeur est reconnu.
+  const autoSetting = await prisma.setting.findUnique({ where: { key: "auguste_auto_send_ged" } }).catch(() => null);
+  const autoSend = autoSetting?.value === "1";
+
+  // Avertissement d'incohérence d'identité (nom OK mais e-mail différent).
+  const warning = mismatch
+    ? `Le nom/la signature correspond au locataire ${clientName}, mais l'adresse e-mail expéditrice (${fromEmail || "inconnue"}) n'est PAS celle enregistrée (${tenantEmail || "non renseignée"}). Vérifiez l'identité avant d'envoyer.`
+    : "";
+
   return NextResponse.json({
     ok: true,
     isRequest: doc.type !== "autre",
     docType: doc.type,
     docLabel: doc.label,
-    matched,            // l'expéditeur correspond à un locataire connu
+    matched,            // e-mail expéditeur = locataire enregistré (sûr)
+    nameMatch,          // nom/signature = locataire (mais e-mail à vérifier)
+    mismatch,           // nom OK mais e-mail différent → contrôle requis
+    warning,
     contactName: clientName,
     found: !!attachment,
     attachment,
     replyHtml,
     note: gedNote,
-    // matched + found → l'agent peut envoyer ; sinon contrôle requis.
+    autoSend,           // réglage admin : envoi auto autorisé
+    // Envoi auto seulement si e-mail vérifié (pas seulement le nom).
     mode: matched && attachment ? "ready" : "review",
   });
 }

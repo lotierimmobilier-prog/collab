@@ -313,11 +313,24 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { alert(d.error || "Préparation impossible."); return; }
-      const status = [
-        d.matched ? `✓ Expéditeur reconnu : ${d.contactName} (locataire).` : `⚠️ Expéditeur NON reconnu dans la GED — vérifiez l'identité AVANT d'envoyer.`,
-        d.found ? `📎 Document joint : ${d.attachment.filename}` : `Aucun document joint automatiquement.${d.note ? " " + d.note : ""}`,
-      ].join("\n");
-      alert(status);
+
+      // Envoi 100 % automatique : seulement si activé en réglage ET expéditeur
+      // reconnu ET document trouvé. Sinon, brouillon à vérifier.
+      if (d.autoSend && d.matched && d.found && d.attachment) {
+        const sr = await fetch("/api/mail/send", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: m.from.email, subject: reSubject(), html: d.replyHtml, accountId: thread.accountId, attachments: [d.attachment] }),
+        });
+        if (sr.ok) { alert(`✅ Envoyé automatiquement à ${d.contactName}\n📎 ${d.attachment.filename}`); return; }
+        alert("Envoi automatique impossible — ouverture en brouillon.");
+      } else {
+        const lines: string[] = [];
+        if (d.matched) lines.push(`✓ Expéditeur reconnu : ${d.contactName} (locataire vérifié par e-mail).`);
+        else if (d.mismatch) lines.push(`⚠️ ${d.warning}`);
+        else lines.push(`⚠️ Expéditeur NON reconnu dans la GED — vérifiez l'identité AVANT d'envoyer.`);
+        lines.push(d.found ? `📎 Document joint : ${d.attachment.filename}` : `Aucun document joint automatiquement.${d.note ? " " + d.note : ""}`);
+        alert(lines.join("\n"));
+      }
       if (onForward) {
         onForward({ to: m.from.email, subject: reSubject(), body: d.replyHtml, accountId: thread.accountId, attachments: d.attachment ? [d.attachment] : undefined });
       }
@@ -874,6 +887,19 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
           <button onClick={() => forward(tristan.email || "")}
             style={{ background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 7, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
             ↪ Transférer à {tristan.prenom}
+          </button>
+        </div>
+      )}
+
+      {/* ── Demande de document détectée → Auguste peut préparer la réponse ── */}
+      {onForward && /\b(bail|état des lieux|etat des lieux|quittance|attestation|copie (de )?mon|document)\b/i.test(`${thread.subject} ${lastMsg?.bodyText || (lastMsg?.body || "").replace(/<[^>]+>/g, "")}`) && (
+        <div style={{ padding: "10px 20px", background: "#F7F0E6", borderBottom: "1px solid #E6D9C2", display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 16 }}>📎</span>
+          <span style={{ fontSize: 12.5, color: "#7A5C2E", fontWeight: 600 }}>Demande de document détectée.</span>
+          <span style={{ fontSize: 12, color: "#8a6d44" }}>Auguste peut chercher le document du client et préparer la réponse.</span>
+          <button onClick={sendDocument} disabled={aiLoading === "ged"}
+            style={{ marginLeft: "auto", background: GOLD, color: "#fff", border: "none", borderRadius: 7, padding: "6px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+            {aiLoading === "ged" ? "Recherche…" : "✦ Préparer avec Auguste"}
           </button>
         </div>
       )}
