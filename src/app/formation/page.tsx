@@ -232,6 +232,9 @@ function ControleView({ modules, isAdmin }: { modules: Module[]; isAdmin: boolea
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Bandeau fun : météo + blague + conseil du jour */}
+      <FunBand kpi={k} />
+
       {/* KPI */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <Kpi label="Filleuls suivis" value={String(k.filleuls)} />
@@ -315,6 +318,79 @@ function ControleView({ modules, isAdmin }: { modules: Module[]; isAdmin: boolea
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Bandeau « fun » : météo locale + blague + conseil de coaching pour égayer
+// le pilotage de la formation.
+const FORMATION_JOKES: string[] = [
+  "Pourquoi le filleul a apporté une échelle en formation ? Pour viser plus haut. 🪜",
+  "Un bon parrain, c'est comme un GPS : il recalcule sans jamais s'énerver. 🧭",
+  "Le filleul demande : « C'est quoi un mandat exclusif ? » Le parrain : « Une promesse qu'on tient à deux. » 🤝",
+  "La compétence, c'est 10 % de talent et 90 % de « on recommence ». 🔁",
+  "Conseil d'agent : ne jamais dire « facile » avant d'avoir signé. 😅",
+  "Un compromis bien expliqué vaut mieux qu'un grand discours. 📄",
+  "Le secret d'une visite réussie ? Arriver avant le client… et après le ménage. 🧹",
+  "En immobilier, le « non » d'aujourd'hui est juste un « pas encore » mal rangé. 🗂️",
+];
+const FORMATION_TIPS: string[] = [
+  "Validez une compétence dès qu'elle est acquise : un filleul voit sa progression et garde la motivation.",
+  "Un point de 10 min par semaine avec chaque filleul vaut mieux qu'une longue réunion par mois.",
+  "Faites refaire le QCM après une mise en situation réelle : la théorie s'ancre par la pratique.",
+  "Relancez en priorité les filleuls « en retard » : un blocage repéré tôt se débloque vite.",
+  "Confiez une vraie tâche terrain après chaque module : rien ne remplace le concret.",
+  "Célébrez les compétences terminées : un filleul reconnu devient un parrain motivé.",
+  "Demandez au filleul d'expliquer ce qu'il a appris : enseigner, c'est maîtriser deux fois.",
+];
+function wmoIcon(code: number): string {
+  if (code <= 1) return "☀️";
+  if (code <= 3) return "⛅";
+  if (code >= 45 && code <= 48) return "🌫️";
+  if (code >= 51 && code <= 67) return "🌧️";
+  if (code >= 71 && code <= 86) return "🌨️";
+  if (code >= 95) return "⛈️";
+  return "🌡️";
+}
+
+function FunBand({ kpi }: { kpi: { filleuls: number; termine: number; enRetard: number } }) {
+  const [joke, setJoke] = useState("");
+  const [tip, setTip] = useState("");
+  const [wx, setWx] = useState<{ temp: number; code: number; city: string } | null>(null);
+  useEffect(() => {
+    setJoke(FORMATION_JOKES[Math.floor(Math.random() * FORMATION_JOKES.length)]);
+    setTip(FORMATION_TIPS[Math.floor(Math.random() * FORMATION_TIPS.length)]);
+    fetch("/api/weather").then(r => r.ok ? r.json() : null).then(d => {
+      if (d?.current && d?.city) setWx({ temp: d.current.temp, code: d.current.code, city: d.city });
+    }).catch(() => {});
+  }, []);
+
+  const h = new Date().getHours();
+  const hello = h < 12 ? "Bonne matinée" : h < 18 ? "Bel après-midi" : "Bonne soirée";
+  const mood = kpi.enRetard === 0
+    ? "Toute l'équipe est sur les rails, bravo ! 🚀"
+    : `${kpi.enRetard} filleul${kpi.enRetard > 1 ? "s" : ""} à relancer — un petit coup de pouce et c'est reparti. 💪`;
+
+  return (
+    <div style={{ borderRadius: 16, padding: "16px 20px", background: "linear-gradient(135deg, #FCFAF6 0%, #F7F0E6 100%)", border: `1px solid ${BORDER}`, boxShadow: "0 4px 16px rgba(28,26,23,0.05)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: DARK }}>{hello} 👋 <span style={{ color: "#6b6357", fontWeight: 500, fontSize: 14 }}>{mood}</span></div>
+        {wx && (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 999, padding: "5px 12px", fontSize: 13, fontWeight: 600, color: DARK, whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: 16 }}>{wmoIcon(wx.code)}</span> {wx.temp}° · {wx.city}
+          </div>
+        )}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
+        <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 13px" }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>😄 Blague du jour</div>
+          <div style={{ fontSize: 12.5, color: "#3f3a33", lineHeight: 1.5 }}>{joke}</div>
+        </div>
+        <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 13px" }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: GREEN, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>💡 Conseil du jour</div>
+          <div style={{ fontSize: 12.5, color: "#3f3a33", lineHeight: 1.5 }}>{tip}</div>
+        </div>
+      </div>
     </div>
   );
 }
