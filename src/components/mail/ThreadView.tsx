@@ -23,6 +23,7 @@ interface Props {
   onTrash: () => void;
   onRestore?: () => void;
   onDeletePermanent?: () => void;
+  onBlockSender?: (email: string) => void;
   customLabels: MailLabel[];
   onSetLabels?: (labels: string[]) => void;
 }
@@ -42,7 +43,7 @@ const SENDER_BADGE: Record<string, { label: string; color: string; bg: string }>
   unknown: { label: "Inconnu",       color: "#6B7280", bg: "#F9FAFB" },
 };
 
-export default function ThreadView({ thread, labels, accounts, aiKey, loadingBody, users = [], onClose, onReply, onForward, onApplyLabel, onRemoveLabel, onStar, onTrash, onRestore, onDeletePermanent, customLabels, onSetLabels }: Props) {
+export default function ThreadView({ thread, labels, accounts, aiKey, loadingBody, users = [], onClose, onReply, onForward, onApplyLabel, onRemoveLabel, onStar, onTrash, onRestore, onDeletePermanent, onBlockSender, customLabels, onSetLabels }: Props) {
   const isMobile = useIsMobile();
   const [suggestOpen, setSuggestOpen]     = useState(false); // boîte « 🧠 Mémorisé » repliée en icône sur mobile
   const [showReply, setShowReply]         = useState(false);
@@ -632,6 +633,15 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
               style={{ width: 30, height: 30, borderRadius: 7, border: `1px solid ${threadLabelIds.has("starred") ? "#FDE68A" : "#e5e7eb"}`, background: threadLabelIds.has("starred") ? "#FEF9C3" : "#f9fafb", cursor: "pointer", fontSize: 14, color: threadLabelIds.has("starred") ? "#f59e0b" : "#9ca3af", display: "flex", alignItems: "center", justifyContent: "center" }}>★</button>
             <button onClick={onTrash} title="Corbeille"
               style={{ width: 30, height: 30, borderRadius: 7, border: "1px solid #fecaca", background: "#fff5f5", cursor: "pointer", fontSize: 14, color: "#ef4444", display: "flex", alignItems: "center", justifyContent: "center" }}>🗑</button>
+            {onBlockSender && (() => {
+              const spam = (lastMsg?.from?.email || firstMsg?.from?.email || "").trim();
+              if (!spam) return null;
+              return (
+                <button onClick={() => { if (confirm(`Marquer « ${spam} » comme indésirable ?\n\nCe message et les prochains mails de cet expéditeur iront directement à la corbeille.`)) onBlockSender(spam); }}
+                  title={`Indésirable — envoyer ${spam} directement à la corbeille`}
+                  style={{ width: 30, height: 30, borderRadius: 7, border: "1px solid #fde68a", background: "#fffbeb", cursor: "pointer", fontSize: 14, color: "#b45309", display: "flex", alignItems: "center", justifyContent: "center" }}>🚫</button>
+              );
+            })()}
             <button onClick={onClose} title="Fermer"
               style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f3f4f6", cursor: "pointer", fontSize: 17, color: "#6b7280", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, lineHeight: 1 }}
               onMouseEnter={e => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.color = "#ef4444"; }}
