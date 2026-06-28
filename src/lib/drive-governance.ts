@@ -51,6 +51,15 @@ export function roleCanSee(visibility: string, viewerRole: string | null | undef
   }
 }
 
+// Ordre d'affichage des dossiers imposés, défini par le super admin pour tous
+// (liste de templateKeys dans l'ordre voulu). Stocké dans Setting.
+export const DRIVE_ORDER_KEY = "drive_folder_order";
+export async function getDriveFolderOrder(): Promise<string[]> {
+  const s = await prisma.setting.findUnique({ where: { key: DRIVE_ORDER_KEY } }).catch(() => null);
+  if (!s?.value) return [];
+  try { const a = JSON.parse(s.value); return Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : []; } catch { return []; }
+}
+
 // Garantit que les dossiers imposés + communs existent à la racine du drive de
 // l'utilisateur. Synchronise nom / visibilité / lecture seule depuis la source.
 export async function ensureDriveFolders(userId: string): Promise<void> {

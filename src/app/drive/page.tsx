@@ -72,7 +72,16 @@ function DriveExplorer() {
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<SearchHit[] | null>(null);
   const [aiAnswer, setAiAnswer] = useState("");
+  const [view, setView] = useState<"grid" | "list">("grid");
+  const [fileDrop, setFileDrop] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { const v = typeof window !== "undefined" ? localStorage.getItem("driveView") : null; if (v === "list" || v === "grid") setView(v); }, []);
+  function switchView(v: "grid" | "list") { setView(v); try { localStorage.setItem("driveView", v); } catch { /* ignore */ } }
+  // Glisser-déposer de fichiers depuis l'explorateur de l'ordinateur.
+  function onFilesDragOver(e: React.DragEvent) { if (Array.from(e.dataTransfer.types || []).includes("Files") && writable) { e.preventDefault(); setFileDrop(true); } }
+  function onFilesDrop(e: React.DragEvent) {
+    if (Array.from(e.dataTransfer.types || []).includes("Files")) { e.preventDefault(); setFileDrop(false); if (writable && e.dataTransfer.files?.length) upload(e.dataTransfer.files); }
+  }
 
   const load = useCallback(async (pid: string | null, readonly = false) => {
     setLoading(true);
@@ -140,7 +149,15 @@ function DriveExplorer() {
   const miniBtn: React.CSSProperties = { border: `1px solid ${BORDER}`, background: "#fff", borderRadius: 7, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: DARK };
 
   return (
-    <div>
+    <div onDragOver={onFilesDragOver} onDragLeave={e => { if (e.currentTarget === e.target) setFileDrop(false); }} onDrop={onFilesDrop} style={{ position: "relative" }}>
+      {/* Voile « déposez ici » lors d'un glisser depuis l'ordinateur */}
+      {fileDrop && (
+        <div style={{ position: "absolute", inset: 0, zIndex: 30, background: "rgba(247,240,230,0.92)", border: `2px dashed ${GOLD}`, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8, pointerEvents: "none" }}>
+          <div style={{ fontSize: 40 }}>⬇</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#7A5C2E" }}>Déposez vos fichiers ici</div>
+          <div style={{ fontSize: 12.5, color: "#8a6d44" }}>Ils seront ajoutés au dossier courant.</div>
+        </div>
+      )}
       {/* Barre d'outils */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <div style={{ flex: 1, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", minWidth: 200 }}>
@@ -160,6 +177,10 @@ function DriveExplorer() {
         <button onClick={newFolder} disabled={busy || !writable} title={writable ? "" : "Dossier en lecture seule"} style={{ background: "#fff", color: writable ? GOLD : "#cbd5e1", border: `1px solid ${writable ? GOLD : BORDER}`, borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: writable ? "pointer" : "not-allowed" }}>📁 Nouveau dossier</button>
         <button onClick={() => fileRef.current?.click()} disabled={!writable} style={{ background: writable ? GOLD : "#e5e7eb", color: "#fff", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 500, border: "none", cursor: writable ? "pointer" : "not-allowed" }}>⬆ Téléverser</button>
         <input ref={fileRef} type="file" multiple style={{ display: "none" }} onChange={e => { upload(e.target.files); e.target.value = ""; }} />
+        <div style={{ display: "flex", border: `1px solid ${BORDER}`, borderRadius: 8, overflow: "hidden" }}>
+          <button onClick={() => switchView("grid")} title="Vue vignettes" style={{ border: "none", background: view === "grid" ? GOLD_BG : "#fff", color: view === "grid" ? GOLD : "#9ca3af", padding: "8px 11px", cursor: "pointer", fontSize: 14 }}>▦</button>
+          <button onClick={() => switchView("list")} title="Vue liste" style={{ border: "none", borderLeft: `1px solid ${BORDER}`, background: view === "list" ? GOLD_BG : "#fff", color: view === "list" ? GOLD : "#9ca3af", padding: "8px 11px", cursor: "pointer", fontSize: 14 }}>☰</button>
+        </div>
       </div>
 
       {/* Recherche */}
@@ -208,10 +229,11 @@ function DriveExplorer() {
       ) : loading ? <div style={{ color: "#9ca3af", padding: 40, textAlign: "center" }}>Chargement…</div>
        : (items.length === 0 && shared.length === 0) ? <div style={{ color: "#9ca3af", padding: 40, textAlign: "center" }}>Dossier vide — glissez-déposez vos fichiers ou créez un dossier.</div>
        : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: view === "list" ? "1fr" : "repeat(auto-fill, minmax(190px, 1fr))", gap: view === "list" ? 6 : 12 }}>
           {items.map(it => {
             const isFolder = it.kind === "folder";
             const isDropHere = dropTarget === it.id && isFolder;
+            const list = view === "list";
             return (
               <div key={it.id}
                 draggable={!it.system}
@@ -220,9 +242,9 @@ function DriveExplorer() {
                 onDragOver={e => { if (isFolder && dragId && dragId !== it.id) { e.preventDefault(); setDropTarget(it.id); } }}
                 onDragLeave={() => setDropTarget(t => t === it.id ? null : t)}
                 onDrop={e => { if (isFolder && dragId) { e.preventDefault(); move(dragId, it.id); } setDragId(null); setDropTarget(null); }}
-                style={{ background: isDropHere ? GOLD_BG : "#fff", border: `1px ${isDropHere ? "dashed" : "solid"} ${isDropHere ? GOLD : BORDER}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 8, opacity: dragId === it.id ? 0.45 : 1, cursor: it.system ? "default" : "grab" }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                  <div style={{ fontSize: 26 }}>{isFolder ? (it.system ? "🗂" : "📁") : fileIcon(it.mime)}</div>
+                style={{ background: isDropHere ? GOLD_BG : "#fff", border: `1px ${isDropHere ? "dashed" : "solid"} ${isDropHere ? GOLD : BORDER}`, borderRadius: 10, padding: list ? "7px 12px" : 12, display: "flex", flexDirection: list ? "row" : "column", alignItems: list ? "center" : "stretch", gap: list ? 10 : 8, opacity: dragId === it.id ? 0.45 : 1, cursor: it.system ? "default" : "grab" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flex: list ? 1 : undefined, minWidth: 0 }}>
+                  <div style={{ fontSize: list ? 18 : 26 }}>{isFolder ? (it.system ? "🗂" : "📁") : fileIcon(it.mime)}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     {isFolder
                       ? <button onClick={() => load(it.id, it.readonly)} style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", fontWeight: 600, fontSize: 13, color: DARK, wordBreak: "break-word" }}>{it.name}</button>
@@ -243,9 +265,9 @@ function DriveExplorer() {
             );
           })}
           {shared.map(it => (
-            <div key={`sh-${it.id}`} style={{ background: "#FbF9F5", border: `1px dashed ${GOLD}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                <div style={{ fontSize: 26 }}>{fileIcon(it.mime)}</div>
+            <div key={`sh-${it.id}`} style={{ background: "#FbF9F5", border: `1px dashed ${GOLD}`, borderRadius: 10, padding: view === "list" ? "7px 12px" : 12, display: "flex", flexDirection: view === "list" ? "row" : "column", alignItems: view === "list" ? "center" : "stretch", gap: view === "list" ? 10 : 8 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flex: view === "list" ? 1 : undefined, minWidth: 0 }}>
+                <div style={{ fontSize: view === "list" ? 18 : 26 }}>{fileIcon(it.mime)}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <a href={`/api/me/drive/${it.id}`} target="_blank" rel="noreferrer" style={{ fontWeight: 600, fontSize: 13, color: DARK, textDecoration: "none", wordBreak: "break-word" }}>{it.name}</a>
                   <div style={{ fontSize: 10.5, color: GOLD, marginTop: 2 }}>partagé · {it.sharedFrom}</div>
@@ -267,7 +289,7 @@ function DriveExplorer() {
 // Gestion des dossiers imposés (super admin) — noms non modifiables par les agents.
 function CommonFoldersModal({ onClose }: { onClose: () => void }) {
   interface Tpl { id: string; name: string; visibility: string; readonly: boolean; parentKey?: string | null }
-  interface Parent { key: string; name: string }
+  interface Parent { key: string; name: string; parent?: string | null }
   const VIS = [
     { id: "confidentiel", label: "Confidentiel (chacun le sien)" },
     { id: "gestionnaire", label: "Gestionnaires" },
@@ -276,17 +298,41 @@ function CommonFoldersModal({ onClose }: { onClose: () => void }) {
   ];
   const [list, setList] = useState<Tpl[]>([]);
   const [defaults, setDefaults] = useState<Parent[]>([]);
+  const [order, setOrder] = useState<string[]>([]);
+  const [savingOrder, setSavingOrder] = useState(false);
   const [name, setName] = useState("");
   const [vis, setVis] = useState("confidentiel");
   const [ro, setRo] = useState(false);
   const [parent, setParent] = useState("");
   const [loading, setLoading] = useState(true);
-  const reload = () => fetch("/api/agency/drive/templates").then(r => r.ok ? r.json() : { templates: [] }).then(d => { setList(d.templates ?? []); setDefaults(d.defaults ?? []); }).finally(() => setLoading(false));
+  const reload = () => fetch("/api/agency/drive/templates").then(r => r.ok ? r.json() : { templates: [] }).then(d => { setList(d.templates ?? []); setDefaults(d.defaults ?? []); setOrder(d.order ?? []); }).finally(() => setLoading(false));
   useEffect(() => { reload(); }, []);
 
   // Parents possibles : dossiers par défaut + modèles existants.
   const parentOptions: Parent[] = [...defaults, ...list.map(t => ({ key: `tpl:${t.id}`, name: t.name }))];
   const parentName = (key?: string | null) => key ? (parentOptions.find(p => p.key === key)?.name ?? "—") : null;
+
+  // Dossiers imposés de PREMIER NIVEAU (racine) à réordonner, dans l'ordre choisi.
+  const rootFolders: Parent[] = [
+    ...defaults.filter(d => !d.parent),
+    ...list.filter(t => !t.parentKey).map(t => ({ key: `tpl:${t.id}`, name: t.name })),
+  ];
+  const orderedRoots = [...rootFolders].sort((a, b) => {
+    const ia = order.indexOf(a.key), ib = order.indexOf(b.key);
+    return (ia === -1 ? 9999 : ia) - (ib === -1 ? 9999 : ib);
+  });
+  function moveRoot(key: string, dir: -1 | 1) {
+    const keys = orderedRoots.map(r => r.key);
+    const i = keys.indexOf(key); const j = i + dir;
+    if (i < 0 || j < 0 || j >= keys.length) return;
+    [keys[i], keys[j]] = [keys[j], keys[i]];
+    setOrder(keys);
+  }
+  async function saveOrder() {
+    setSavingOrder(true);
+    await fetch("/api/agency/drive/templates", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "order", order: orderedRoots.map(r => r.key) }) }).catch(() => {});
+    setSavingOrder(false);
+  }
 
   async function add() {
     if (!name.trim()) return;
@@ -321,6 +367,25 @@ function CommonFoldersModal({ onClose }: { onClose: () => void }) {
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>×</button>
         </div>
         <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* Ordre d'affichage des dossiers (pour tous les utilisateurs) */}
+          {!loading && orderedRoots.length > 0 && (
+            <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: 12 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: DARK, marginBottom: 8 }}>↕ Ordre des dossiers (appliqué à tous)</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                {orderedRoots.map((r, i) => (
+                  <div key={r.key} style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "5px 10px", background: "#fff" }}>
+                    <span style={{ fontSize: 11, color: "#9ca3af", width: 18 }}>{i + 1}.</span>
+                    <span style={{ fontSize: 16 }}>🗂</span>
+                    <span style={{ flex: 1, fontSize: 13, color: DARK }}>{r.name}</span>
+                    <button onClick={() => moveRoot(r.key, -1)} disabled={i === 0} style={{ border: `1px solid ${BORDER}`, background: "#fff", borderRadius: 6, padding: "2px 8px", cursor: i === 0 ? "default" : "pointer", color: i === 0 ? "#d1d5db" : DARK }}>↑</button>
+                    <button onClick={() => moveRoot(r.key, 1)} disabled={i === orderedRoots.length - 1} style={{ border: `1px solid ${BORDER}`, background: "#fff", borderRadius: 6, padding: "2px 8px", cursor: i === orderedRoots.length - 1 ? "default" : "pointer", color: i === orderedRoots.length - 1 ? "#d1d5db" : DARK }}>↓</button>
+                  </div>
+                ))}
+              </div>
+              <button onClick={saveOrder} disabled={savingOrder} style={{ marginTop: 8, background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{savingOrder ? "Enregistrement…" : "Enregistrer l'ordre"}</button>
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", background: "#FAFAF8", border: `1px solid ${BORDER}`, borderRadius: 10, padding: 12 }}>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Nom du dossier imposé" style={{ ...input, flex: 1, minWidth: 160 }} />
             <select value={parent} onChange={e => setParent(e.target.value)} title="Dossier parent" style={input}>

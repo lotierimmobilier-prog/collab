@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { ensureDriveFolders, roleCanSee, isSuperSession } from "@/lib/drive-governance";
+import { ensureDriveFolders, roleCanSee, isSuperSession, getDriveFolderOrder } from "@/lib/drive-governance";
 
 export const maxDuration = 60;
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -39,6 +39,19 @@ export async function GET(req: NextRequest) {
       where: { userId: uid, parentId },
       select: sel,
       orderBy: [{ kind: "asc" }, { name: "asc" }],
+    });
+
+    // Tri d'affichage : dossiers d'abord, dossiers imposés dans l'ordre choisi
+    // par le super admin (pour tous), puis le reste alphabétiquement, fichiers ensuite.
+    const order = await getDriveFolderOrder();
+    const rank = (it: { templateKey?: string | null }) => {
+      const i = it.templateKey ? order.indexOf(it.templateKey) : -1;
+      return i === -1 ? 100000 : i;
+    };
+    own.sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === "folder" ? -1 : 1;     // dossiers avant fichiers
+      if (a.kind === "folder") { const r = rank(a) - rank(b); if (r !== 0) return r; }
+      return String(a.name).localeCompare(String(b.name), "fr");
     });
 
     // Contenu partagé : si le dossier ouvert est un dossier commun dont la
