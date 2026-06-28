@@ -35,7 +35,6 @@ export default function ReseauxPage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.roleId === "admin";
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [lastPost, setLastPost] = useState("");
   const load = useCallback(() => { fetch("/api/reseaux").then(r => r.ok ? r.json() : null).then(d => setAccounts(d?.accounts ?? [])).catch(() => {}); }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -47,8 +46,8 @@ export default function ReseauxPage() {
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "20px 24px" }}>
           <div style={{ maxWidth: 920, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18 }}>
             <Accounts accounts={accounts} isAdmin={isAdmin} reload={load} />
-            <Generator onPost={setLastPost} />
-            <ImageStudio suggestedText={lastPost} />
+            <Generator />
+            <ImageStudio />
             <Examples />
             <Tips />
           </div>
@@ -191,113 +190,24 @@ function Generator({ onPost }: { onPost?: (t: string) => void }) {
   );
 }
 
-// Création de visuel via Canva (Brand Template autofill). Trois états :
-// non configuré (admin) · non connecté · connecté (choix du modèle + génération).
-interface CanvaTpl { id: string; title: string; thumbnailUrl?: string }
-function ImageStudio({ suggestedText }: { suggestedText?: string }) {
-  const [status, setStatus] = useState<{ configured: boolean; connected: boolean } | null>(null);
-  const [templates, setTemplates] = useState<CanvaTpl[]>([]);
-  const [tpl, setTpl] = useState<string>("");
-  const [fields, setFields] = useState<{ name: string; type: string }[]>([]);
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
-  const [imgUrl, setImgUrl] = useState("");
-  const [err, setErr] = useState("");
-
-  const loadStatus = useCallback(() => {
-    fetch("/api/canva/status").then(r => r.ok ? r.json() : null).then(d => {
-      setStatus(d);
-      if (d?.connected) fetch("/api/canva/templates").then(r => r.json()).then(t => setTemplates(t.templates ?? [])).catch(() => {});
-    }).catch(() => setStatus({ configured: false, connected: false }));
-  }, []);
-  useEffect(() => { loadStatus(); }, [loadStatus]);
-
-  // Charge les champs du modèle choisi et pré-remplit le 1er champ texte.
-  useEffect(() => {
-    if (!tpl) { setFields([]); return; }
-    fetch(`/api/canva/templates?id=${tpl}`).then(r => r.json()).then(d => {
-      const fs = d.fields ?? [];
-      setFields(fs);
-      const firstText = fs.find((f: { type: string }) => f.type === "text");
-      setValues(firstText && suggestedText ? { [firstText.name]: suggestedText } : {});
-    }).catch(() => {});
-  }, [tpl, suggestedText]);
-
-  async function generate() {
-    if (!tpl || busy) return;
-    setBusy(true); setErr(""); setImgUrl("");
-    try {
-      const r = await fetch("/api/canva/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateId: tpl, fields: values }) });
-      const d = await r.json().catch(() => ({}));
-      if (r.ok && d.url) setImgUrl(d.url);
-      else setErr(d.error || "Échec de la génération.");
-    } catch { setErr("Erreur réseau."); }
-    finally { setBusy(false); }
-  }
-
+// Création de visuel via Canva — fonctionnalité désactivée pour l'instant
+// (back-end /api/canva conservé). On affiche un état « En cours » + Canva manuel.
+function ImageStudio() {
   return (
-    <Card title="🎨 Créer un visuel" sub="Générez une image à votre charte depuis un modèle Canva.">
-      {/* Toujours disponible : raccourcis Canva manuels. */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-        <a href="https://www.canva.com/" target="_blank" rel="noreferrer" style={{ ...mini, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Ouvrir Canva ↗</a>
-        <a href="https://www.canva.com/fr_fr/creer/publications-instagram/" target="_blank" rel="noreferrer" style={{ ...mini, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Modèles de posts immobiliers ↗</a>
-      </div>
-
-      {status === null ? <div style={{ fontSize: 12.5, color: "#9ca3af" }}>Chargement…</div>
-       : !status.configured ? (
+    <Card title="🎨 Créer un visuel" sub="Générer une image à votre charte pour vos publications.">
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, opacity: 0.85 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px" }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: GOLD, borderRadius: 999, padding: "3px 10px", whiteSpace: "nowrap" }}>En cours</span>
           <div style={{ fontSize: 12.5, color: "#6b6357", lineHeight: 1.5 }}>
-            La génération automatique de visuels Canva est prête côté application : il reste à renseigner les
-            identifiants de l’app Canva (CANVA_CLIENT_ID / SECRET / REDIRECT_URI). En attendant, utilisez Canva
+            La génération automatique de visuels Canva est en cours de finalisation. En attendant, utilisez Canva
             manuellement avec le texte généré ci-dessus.
           </div>
         </div>
-      ) : !status.connected ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ fontSize: 13, color: DARK, lineHeight: 1.55 }}>Connectez votre compte Canva pour générer un visuel à votre charte en un clic.</div>
-          <a href="/api/canva/connect" style={{ alignSelf: "flex-start", background: GOLD, color: "#fff", textDecoration: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600 }}>Connecter Canva</a>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <a href="https://www.canva.com/" target="_blank" rel="noreferrer" style={{ background: GOLD, color: "#fff", textDecoration: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600 }}>Ouvrir Canva ↗</a>
+          <a href="https://www.canva.com/fr_fr/creer/publications-instagram/" target="_blank" rel="noreferrer" style={{ ...mini, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Modèles de posts immobiliers ↗</a>
         </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {templates.length === 0 ? (
-            <div style={{ fontSize: 12.5, color: "#6b6357", lineHeight: 1.5, background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px" }}>
-              Aucun modèle « autofill » trouvé dans votre Canva. Créez dans Canva un <b>Brand Template</b> (post carré
-              1080×1080) à votre charte, ajoutez-y des <b>champs de données</b> (menu Données), puis revenez ici.
-            </div>
-          ) : (
-            <>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <span style={{ fontSize: 12, color: "#6b7280" }}>Modèle</span>
-                <select value={tpl} onChange={e => setTpl(e.target.value)} style={{ ...inp, minWidth: 220 }}>
-                  <option value="">— choisir —</option>
-                  {templates.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
-                </select>
-              </div>
-              {fields.filter(f => f.type === "text").map(f => (
-                <div key={f.name} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                  <span style={{ fontSize: 11.5, color: "#6b7280" }}>{f.name}</span>
-                  <textarea value={values[f.name] ?? ""} onChange={e => setValues(v => ({ ...v, [f.name]: e.target.value }))} rows={2}
-                    style={{ ...inp, height: "auto", padding: "8px 10px", resize: "vertical", fontFamily: "inherit" }} />
-                </div>
-              ))}
-              {fields.some(f => f.type === "image") && <div style={{ fontSize: 11, color: "#9ca3af" }}>Astuce : les champs photo se remplissent directement dans Canva (l’upload depuis l’app arrive bientôt).</div>}
-              {tpl && (
-                <button onClick={generate} disabled={busy} style={{ alignSelf: "flex-start", background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: busy ? 0.5 : 1 }}>{busy ? "Génération…" : "Générer le visuel"}</button>
-              )}
-            </>
-          )}
-          {err && <div style={{ fontSize: 12.5, color: RED }}>{err}</div>}
-          {imgUrl && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={imgUrl} alt="Visuel généré" style={{ maxWidth: "100%", borderRadius: 10, border: `1px solid ${BORDER}` }} />
-              <a href={imgUrl} download target="_blank" rel="noreferrer" style={{ ...mini, textDecoration: "none", display: "inline-flex", alignItems: "center", alignSelf: "flex-start" }}>⬇ Télécharger</a>
-            </div>
-          )}
-          <button onClick={() => { fetch("/api/canva/disconnect", { method: "POST" }).then(() => loadStatus()); }} style={{ alignSelf: "flex-start", background: "none", border: "none", color: "#9ca3af", fontSize: 11.5, cursor: "pointer", textDecoration: "underline", padding: 0 }}>Déconnecter Canva</button>
-        </div>
-      )}
+      </div>
     </Card>
   );
 }
