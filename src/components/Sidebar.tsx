@@ -33,8 +33,8 @@ const nav: NavItem[] = [
   { id: "assistance",label: "Assistance locataire", icon: "🛟", href: "/assistance",         group: "Gestion" },
   { id: "ods",       label: "Ordres de service",    icon: "📋", href: "/ordres-de-service",  group: "Gestion" },
   { id: "formation", label: "Formation",            icon: "◈",  href: "/formation",          group: "Agence" },
-  { id: "reseaux",   label: "Réseaux sociaux",      icon: "⌘",  href: "/reseaux-sociaux",   group: "Agence" },
   { id: "procedures",label: "Procédures",           icon: "📚", href: "/procedures",         group: "Agence" },
+  { id: "reseaux",   label: "Réseaux sociaux",      icon: "⌘",  href: "/reseaux-sociaux",   group: "Réseaux sociaux" },
   { id: "espace",    label: "Mon espace",           icon: "🗂", href: "/mon-espace",         group: "Personnel" },
   { id: "echeances", label: "Échéances",            icon: "⏰", href: "/echeances",          group: "Personnel" },
   { id: "rh",        label: "Congés & heures",      icon: "💼", href: "/rh",                 group: "Personnel" },
@@ -63,7 +63,12 @@ const adminNav = [
   { id: "admin-auguste-logs", label: "Historique Auguste", icon: "🕘", href: "/admin/auguste-historique" },
 ];
 
-const groups = ["Principal", "Gestion", "Agence", "Personnel"];
+const groups = ["Principal", "Gestion", "Agence", "Réseaux sociaux", "Personnel"];
+// Libellés affichés des groupes (les clés restent stables).
+const GROUP_LABEL: Record<string, string> = { Principal: "Principal", Gestion: "Gestion locative", Agence: "Agence", "Réseaux sociaux": "Réseaux sociaux", Personnel: "Personnel" };
+// Menus toujours visibles (non masquables) + correspondance nav → module d'accès.
+const ALWAYS_GROUPS = ["Principal", "Personnel"];
+const NAV_MODULE: Record<string, string> = { dashboard: "dashboard", tasks: "tasks", planning: "planning", mail: "mail", gestion: "locataires", formation: "formation", reseaux: "reseaux" };
 
 /* Raccourcis bottom nav mobile/tablette, par ordre de priorité. On en affiche
    autant que la largeur de l'écran le permet ; le reste va dans « Plus ». */
@@ -89,7 +94,7 @@ export default function Sidebar({ active }: { active: string }) {
   const adminActive = active.startsWith("admin");
   const [directionOpen, setDirectionOpen] = useState(true);
   const [adminOpen, setAdminOpen] = useState(true);
-  const [badges, setBadges] = useState<{ mail: { count: number; urgent: boolean }; chat: { count: number; urgent: boolean }; legal?: { count: number; urgent: boolean }; isEmployee?: boolean } | null>(null);
+  const [badges, setBadges] = useState<{ mail: { count: number; urgent: boolean }; chat: { count: number; urgent: boolean }; legal?: { count: number; urgent: boolean }; isEmployee?: boolean; hidden?: string[] } | null>(null);
   const [winW, setWinW] = useState(0);
 
   // Largeur de l'écran : la barre du bas s'adapte (nombre de raccourcis +
@@ -104,7 +109,15 @@ export default function Sidebar({ active }: { active: string }) {
   // Le module RH (congés & heures) est réservé aux collaborateurs salariés ;
   // la direction y accède aussi pour valider les relevés.
   const isEmployee = badges?.isEmployee ?? false;
-  const visibleNav = nav.filter(n => !(n.id === "rh" && !isEmployee && !isDirection));
+  // Menus masqués par le super admin (modules « Aucun ») — sauf groupes toujours visibles.
+  const hiddenModules = badges?.hidden ?? [];
+  const visibleNav = nav.filter(n => {
+    if (n.id === "rh" && !isEmployee && !isDirection) return false;
+    if (ALWAYS_GROUPS.includes(n.group)) return true;
+    const mod = NAV_MODULE[n.id];
+    if (mod && hiddenModules.includes(mod)) return false;
+    return true;
+  });
 
   // Pastilles du menu (messages non lus / alertes urgentes), rafraîchies périodiquement.
   useEffect(() => {
@@ -175,14 +188,18 @@ export default function Sidebar({ active }: { active: string }) {
               </div>
 
               {/* Nav items */}
-              {groups.map(group => (
-                <div key={group}>
-                  <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: LABEL_COLOR, padding: "10px 20px 4px", fontWeight: 600 }}>{group}</div>
-                  {visibleNav.filter(n => n.group === group).map(item => (
-                    <MobileMenuItem key={item.id} item={item} active={active} onClose={() => setMobileOpen(false)} dot={navDot(item.id)} />
-                  ))}
-                </div>
-              ))}
+              {groups.map(group => {
+                const gItems = visibleNav.filter(n => n.group === group);
+                if (gItems.length === 0) return null;
+                return (
+                  <div key={group}>
+                    <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: LABEL_COLOR, padding: "10px 20px 4px", fontWeight: 600 }}>{GROUP_LABEL[group] ?? group}</div>
+                    {gItems.map(item => (
+                      <MobileMenuItem key={item.id} item={item} active={active} onClose={() => setMobileOpen(false)} dot={navDot(item.id)} />
+                    ))}
+                  </div>
+                );
+              })}
 
               {isDirection && (
                 <>
@@ -306,9 +323,10 @@ export default function Sidebar({ active }: { active: string }) {
       <nav style={{ flex: 1, overflowY: "auto", overflowX: "hidden", paddingTop: 8, paddingBottom: 8 }}>
         {groups.map(group => {
           const items = visibleNav.filter(n => n.group === group);
+          if (items.length === 0) return null;
           return (
             <div key={group} style={{ marginBottom: 4 }}>
-              {!isCollapsed && <NavLabel>{group}</NavLabel>}
+              {!isCollapsed && <NavLabel>{GROUP_LABEL[group] ?? group}</NavLabel>}
               {isCollapsed && <div style={{ height: 8 }} />}
               {items.map(item => (
                 <NavItemRow key={item.id} item={item} active={active} collapsed={isCollapsed} dot={navDot(item.id)} />

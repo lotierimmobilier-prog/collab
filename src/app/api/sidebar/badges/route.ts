@@ -14,7 +14,23 @@ export async function GET() {
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   const uid = session.user.id;
 
-  const result = { mail: { count: 0, urgent: false }, chat: { count: 0, urgent: false }, legal: { count: 0, urgent: false }, isEmployee: false };
+  const result: { mail: { count: number; urgent: boolean }; chat: { count: number; urgent: boolean }; legal: { count: number; urgent: boolean }; isEmployee: boolean; hidden: string[] } =
+    { mail: { count: 0, urgent: false }, chat: { count: 0, urgent: false }, legal: { count: 0, urgent: false }, isEmployee: false, hidden: [] };
+
+  // Menus masqués pour cet utilisateur : modules réglés sur « Aucun » (droit du
+  // rôle, surchargé par les accès individuels). La barre latérale les cache.
+  try {
+    const { DEFAULT_ROLES, MODULES, getUserRight } = await import("@/lib/admin");
+    const { getExtra } = await import("@/lib/user-extras");
+    const u = await prisma.user.findUnique({ where: { id: uid }, select: { roleId: true } });
+    const extra = await getExtra(uid);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const overrides: any[] = Array.isArray(extra?.accessOverrides) ? (extra!.accessOverrides as any[]) : [];
+    const role = DEFAULT_ROLES.find(r => r.id === u?.roleId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fakeUser: any = { accessOverrides: overrides };
+    result.hidden = MODULES.filter(m => getUserRight(fakeUser, role, m.id) === "aucun").map(m => m.id);
+  } catch { /* défaut : rien de masqué */ }
 
   // Statut salarié (ouvre le module RH) — stocké dans user_extras.
   try {
