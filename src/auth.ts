@@ -166,7 +166,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.user.roleId = token.roleId as string;
       // Le super admin d'origine (adresse codée en dur) l'est toujours, même si
       // le flag du jeton manque (anciennes sessions) ; sinon on suit le jeton.
-      session.user.superAdmin = token.superAdmin === true || isSuperAdminEmail(token.email as string | undefined);
+      // IMPÉRATIF : pendant une impersonation, on ne confère JAMAIS les pouvoirs
+      // de super admin (sinon l'admin verrait, en tant que l'agent, des boîtes
+      // mail partagées auxquelles l'agent n'a pas accès).
+      session.user.superAdmin = !token.impersonatorId
+        && (token.superAdmin === true || isSuperAdminEmail(token.email as string | undefined));
       session.user.impersonatorId = (token.impersonatorId as string) ?? null;
       session.user.impersonatorName = (token.impersonatorName as string) ?? null;
       return session;

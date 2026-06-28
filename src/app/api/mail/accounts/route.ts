@@ -7,7 +7,10 @@ import { isSuperAdminEmail } from "@/lib/superadmin";
 //  - le super admin crée/modifie/partage les boîtes et voit tout (gestion) ;
 //  - un utilisateur ne voit que SA boîte perso + les boîtes partagées avec lui ;
 //    il peut les consulter et écrire, mais PAS modifier la config (mdp, partage…).
-function isSuper(session: { user?: { superAdmin?: boolean; email?: string | null } } | null): boolean {
+function isSuper(session: { user?: { superAdmin?: boolean; email?: string | null; impersonatorId?: string | null } } | null): boolean {
+  // Pendant une impersonation, on n'est JAMAIS super admin : l'admin qui consulte
+  // « en tant que » un agent ne doit voir que les boîtes de cet agent.
+  if (session?.user?.impersonatorId) return false;
   return session?.user?.superAdmin === true || isSuperAdminEmail(session?.user?.email);
 }
 
