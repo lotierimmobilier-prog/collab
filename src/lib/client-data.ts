@@ -107,3 +107,40 @@ export async function createTenantRequest(
   });
   return { ok: true, ref: created.id.slice(-6).toUpperCase() };
 }
+
+// Statut d'une demande, vu côté locataire (libellé + couleur + ordre).
+export const TENANT_REQUEST_STATUS: Record<string, { label: string; color: string; step: number }> = {
+  nouvelle:  { label: "Reçue",                  color: "#2563eb", step: 1 },
+  soumise:   { label: "Reçue",                  color: "#2563eb", step: 1 },
+  ods_cree:  { label: "En cours de traitement", color: "#d97706", step: 2 },
+  cloturee:  { label: "Traitée",                color: "#059669", step: 3 },
+};
+export function tenantRequestStatus(status: string) {
+  return TENANT_REQUEST_STATUS[status] ?? TENANT_REQUEST_STATUS.soumise;
+}
+
+// Liste des demandes d'un locataire (rapprochées par email). Statut traduit
+// pour un affichage clair côté locataire.
+export async function listTenantRequests(tenant: { email: string }): Promise<{ ref: string; description: string | null; status: string; statusLabel: string; statusColor: string; step: number; createdAt: string; updatedAt: string }[]> {
+  const email = (tenant.email ?? "").trim().toLowerCase();
+  if (!email) return [];
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = await prisma.$queryRawUnsafe(
+      `SELECT id, description, status, "createdAt", "updatedAt"
+         FROM assistance_requests
+        WHERE role = 'locataire' AND lower("contactEmail") = $1
+        ORDER BY "createdAt" DESC LIMIT 50`, email,
+    );
+    return rows.map(r => {
+      const st = tenantRequestStatus(r.status);
+      return {
+        ref: String(r.id).slice(-6).toUpperCase(),
+        description: r.description ?? null,
+        status: r.status, statusLabel: st.label, statusColor: st.color, step: st.step,
+        createdAt: new Date(r.createdAt).toISOString(),
+        updatedAt: new Date(r.updatedAt).toISOString(),
+      };
+    });
+  } catch { return []; }
+}
