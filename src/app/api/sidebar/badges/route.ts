@@ -14,11 +14,12 @@ export async function GET() {
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   const uid = session.user.id;
 
-  const result: { mail: { count: number; urgent: boolean }; chat: { count: number; urgent: boolean }; legal: { count: number; urgent: boolean }; isEmployee: boolean; hidden: string[] } =
-    { mail: { count: 0, urgent: false }, chat: { count: 0, urgent: false }, legal: { count: 0, urgent: false }, isEmployee: false, hidden: [] };
+  const result: { mail: { count: number; urgent: boolean }; chat: { count: number; urgent: boolean }; legal: { count: number; urgent: boolean }; isEmployee: boolean; hidden: string[]; hiddenNav: string[] } =
+    { mail: { count: 0, urgent: false }, chat: { count: 0, urgent: false }, legal: { count: 0, urgent: false }, isEmployee: false, hidden: [], hiddenNav: [] };
 
-  // Menus masqués pour cet utilisateur : modules réglés sur « Aucun » (droit du
-  // rôle, surchargé par les accès individuels). La barre latérale les cache.
+  // Menus masqués pour cet utilisateur : (a) modules réglés sur « Aucun » dans
+  // le panneau Accès & permissions, et (b) entrées masquées individuellement par
+  // le super admin (hiddenMenus). La barre latérale cache les deux.
   try {
     const { DEFAULT_ROLES, MODULES, getUserRight } = await import("@/lib/admin");
     const { getExtra } = await import("@/lib/user-extras");
@@ -30,6 +31,7 @@ export async function GET() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const fakeUser: any = { accessOverrides: overrides };
     result.hidden = MODULES.filter(m => getUserRight(fakeUser, role, m.id) === "aucun").map(m => m.id);
+    try { const hm = extra?.hiddenMenus ? JSON.parse(extra.hiddenMenus as string) : []; if (Array.isArray(hm)) result.hiddenNav = hm.map(String); } catch { /* ignore */ }
   } catch { /* défaut : rien de masqué */ }
 
   // Statut salarié (ouvre le module RH) — stocké dans user_extras.

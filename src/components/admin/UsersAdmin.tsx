@@ -50,6 +50,7 @@ export default function UsersAdmin() {
           isEmployee: (user as { isEmployee?: boolean }).isEmployee ?? false,
           city: (user as { city?: string | null }).city ?? null,
           superAdmin: (user as { superAdmin?: boolean }).superAdmin ?? false,
+          hiddenMenus: (user as { hiddenMenus?: string[] }).hiddenMenus ?? [],
         }),
       });
       const data = await res.json();

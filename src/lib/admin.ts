@@ -31,6 +31,7 @@ export interface User {
   gedAccess?: string | null;        // null = défaut rôle | complet | restreint | aucun
   parrainId?: string | null;        // parrain (formation par parrainage)
   superAdmin?: boolean;             // super administrateur (gouvernance des admins)
+  hiddenMenus?: string[];           // entrées de menu masquées pour cet utilisateur
 }
 
 export function getUserRight(user: User, role: Role | undefined, moduleId: string): Right {
@@ -51,6 +52,20 @@ export const MODULES = [
   { id: "reseaux",     label: "Réseaux sociaux",     icon: "📱" },
   { id: "admin",       label: "Administration",      icon: "⚙" },
 ];
+
+// Entrées de menu que le super admin peut masquer individuellement par
+// utilisateur (les groupes Principal & Personnel restent toujours visibles).
+export const HIDEABLE_MENUS: { id: string; label: string; group: string }[] = [
+  { id: "gestion",       label: "Gestion locative",     group: "Gestion locative" },
+  { id: "espace-client", label: "Espace client",        group: "Gestion locative" },
+  { id: "assistance",    label: "Assistance locataire", group: "Gestion locative" },
+  { id: "ods",           label: "Ordres de service",    group: "Gestion locative" },
+  { id: "formation",     label: "Formation",            group: "Agence" },
+  { id: "procedures",    label: "Procédures",           group: "Agence" },
+  { id: "reseaux",       label: "Réseaux sociaux",      group: "Réseaux sociaux" },
+];
+// Rôles autorisés à voir la Gestion locative (jamais les agents commerciaux).
+export const GESTION_ROLES = ["admin", "dirigeant", "direction", "gestionnaire"];
 
 export const RIGHTS: { value: Right; label: string; color: string; bg: string }[] = [
   { value: "aucun",    label: "Aucun",    color: "#9ca3af", bg: "#f3f4f6" },

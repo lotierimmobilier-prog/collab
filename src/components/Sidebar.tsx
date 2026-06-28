@@ -69,6 +69,8 @@ const GROUP_LABEL: Record<string, string> = { Principal: "Principal", Gestion: "
 // Menus toujours visibles (non masquables) + correspondance nav → module d'accès.
 const ALWAYS_GROUPS = ["Principal", "Personnel"];
 const NAV_MODULE: Record<string, string> = { dashboard: "dashboard", tasks: "tasks", planning: "planning", mail: "mail", gestion: "locataires", formation: "formation", reseaux: "reseaux" };
+// Gestion locative : réservée à la direction / admin / super admin / gestionnaire.
+const GESTION_ROLES = ["admin", "dirigeant", "direction", "gestionnaire"];
 
 /* Raccourcis bottom nav mobile/tablette, par ordre de priorité. On en affiche
    autant que la largeur de l'écran le permet ; le reste va dans « Plus ». */
@@ -94,7 +96,7 @@ export default function Sidebar({ active }: { active: string }) {
   const adminActive = active.startsWith("admin");
   const [directionOpen, setDirectionOpen] = useState(true);
   const [adminOpen, setAdminOpen] = useState(true);
-  const [badges, setBadges] = useState<{ mail: { count: number; urgent: boolean }; chat: { count: number; urgent: boolean }; legal?: { count: number; urgent: boolean }; isEmployee?: boolean; hidden?: string[] } | null>(null);
+  const [badges, setBadges] = useState<{ mail: { count: number; urgent: boolean }; chat: { count: number; urgent: boolean }; legal?: { count: number; urgent: boolean }; isEmployee?: boolean; hidden?: string[]; hiddenNav?: string[] } | null>(null);
   const [winW, setWinW] = useState(0);
 
   // Largeur de l'écran : la barre du bas s'adapte (nombre de raccourcis +
@@ -109,11 +111,18 @@ export default function Sidebar({ active }: { active: string }) {
   // Le module RH (congés & heures) est réservé aux collaborateurs salariés ;
   // la direction y accède aussi pour valider les relevés.
   const isEmployee = badges?.isEmployee ?? false;
-  // Menus masqués par le super admin (modules « Aucun ») — sauf groupes toujours visibles.
+  // Menus masqués par le super admin (modules « Aucun » + entrées masquées),
+  // sauf groupes toujours visibles. Gestion locative réservée à certains rôles.
   const hiddenModules = badges?.hidden ?? [];
+  const hiddenNav = badges?.hiddenNav ?? [];
+  const roleId = session?.user?.roleId ?? "";
+  const isSuper = session?.user?.superAdmin === true;
+  const canGestion = isSuper || GESTION_ROLES.includes(roleId);
   const visibleNav = nav.filter(n => {
     if (n.id === "rh" && !isEmployee && !isDirection) return false;
+    if (n.group === "Gestion" && !canGestion) return false; // jamais pour les agents
     if (ALWAYS_GROUPS.includes(n.group)) return true;
+    if (hiddenNav.includes(n.id)) return false;             // masqué individuellement
     const mod = NAV_MODULE[n.id];
     if (mod && hiddenModules.includes(mod)) return false;
     return true;

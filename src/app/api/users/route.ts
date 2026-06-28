@@ -48,7 +48,10 @@ export async function GET() {
       const ex = extras.get(r.id);
       // Le super admin d'origine (adresse codée en dur) l'est toujours.
       const superAdmin = isSuperAdminEmail(r.email) || ex?.superAdmin === true;
-      if (!ex) return { ...r, superAdmin };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let hiddenMenus: string[] = [];
+      try { const h = (ex as any)?.hiddenMenus; if (h) hiddenMenus = JSON.parse(h); } catch { /* ignore */ }
+      if (!ex) return { ...r, superAdmin, hiddenMenus: [] };
       return {
         ...r,
         parrainId: ex.parrainId ?? r.parrainId ?? null,
@@ -56,6 +59,7 @@ export async function GET() {
         isEmployee: ex.isEmployee ?? r.isEmployee ?? false,
         gedAccess: ex.gedAccess ?? r.gedAccess ?? null,
         accessOverrides: ex.accessOverrides ?? r.accessOverrides ?? null,
+        hiddenMenus,
         superAdmin,
       };
     });
