@@ -29,8 +29,8 @@ export async function POST(req: NextRequest) {
     <div style="font-size:30px;font-weight:bold;letter-spacing:8px;color:#B8966A;text-align:center;margin:18px 0;">${code}</div>
     <p style="margin:0;color:#9b8e79;font-size:12px;">Ce code est valable 10 minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.</p>`;
   try {
-    const sent = await sendMail({ to: client.email, subject: "Votre code de connexion — Lotier Immobilier", html: renderBrandedEmail({ subject: "Votre code de connexion", contentHtml: content }) });
-    if (!sent) return NextResponse.json({ ok: false, error: "L'envoi du code a échoué (configuration email). Contactez l'agence." }, { status: 502 });
+    const sent = await sendMail({ to: client.email, subject: "Votre code de connexion — Lotier Immobilier", html: renderBrandedEmail({ subject: "Votre code de connexion", contentHtml: content }), transactional: true });
+    if (!sent) return NextResponse.json({ ok: false, error: "L'envoi du code a échoué (mot de passe SMTP manquant côté agence). Contactez l'agence." }, { status: 502 });
   } catch {
     return NextResponse.json({ ok: false, error: "L'envoi du code a échoué. Réessayez dans un instant." }, { status: 502 });
   }
