@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { resolveAccountOwner, accessibleMailAccount } from "@/lib/mailOwner";
+import { detectPortal } from "@/lib/portalLeads";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { ImapFlow } = require("imapflow");
 
@@ -69,10 +70,14 @@ async function syncFolder(client: any, folder: string, accountId: string, since:
 
           // Détection newsletter / publicité : en-tête List-Unsubscribe (signal
           // standard) ou Precedence: bulk, ou mots-clés dans l'objet/expéditeur.
+          // EXCEPTION : les mails des portails (Leboncoin, Bien'ici, Le Figaro)
+          // sont des leads commerciaux → ils restent en boîte de réception même
+          // s'ils portent les marqueurs habituels des newsletters.
           const hdrs    = (msg.headers ? msg.headers.toString() : "").toLowerCase();
           const subjLc  = (env.subject ?? "").toLowerCase();
           const fromLc  = fromEmail.toLowerCase();
-          const isPub   = !isSent && (
+          const isPortal = !!detectPortal(fromEmail);
+          const isPub   = !isSent && !isPortal && (
             hdrs.includes("list-unsubscribe") ||
             hdrs.includes("precedence: bulk") ||
             /désinscri|desinscri|se d[ée]sabonner|unsubscribe|newsletter|no[-_]?reply|nepasrepondre|ne-pas-repondre/.test(`${subjLc} ${fromLc}`)
@@ -88,6 +93,16 @@ async function syncFolder(client: any, folder: string, accountId: string, since:
               select: { id: true },
             }).catch(() => null);
             if (tomb) continue;
+            // Correction : un mail de portail déjà rangé en « pub » par erreur
+            // est remis en boîte de réception (en conservant ses autres tags).
+            if (isPortal) {
+              const ex = await prisma.emailMessage.findFirst({ where: { accountId, messageId: cleanMid, labels: { has: "pub" } }, select: { id: true, labels: true } }).catch(() => null);
+              if (ex) {
+                const fixed = ex.labels.filter(l => l !== "pub");
+                if (!fixed.includes("inbox")) fixed.push("inbox");
+                await prisma.emailMessage.update({ where: { id: ex.id }, data: { labels: fixed } }).catch(() => {});
+              }
+            }
           }
 
           const identity = await identifySender(fromEmail);
