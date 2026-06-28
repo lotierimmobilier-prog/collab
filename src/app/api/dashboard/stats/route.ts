@@ -97,7 +97,9 @@ export async function GET() {
   // ── Sélection (préférences utilisateur, sinon défaut du rôle) ──
   const prefs = await getDashPrefs(uid);
   const selectedIds = (prefs.kpis && prefs.kpis.length ? prefs.kpis : defaultKpis(role)).slice(0, 4);
-  const kpis = selectedIds.map(id => pool[id]).filter(Boolean) as Kpi[];
+  // On inclut l'id de chaque indicateur pour permettre le réordonnancement
+  // (glisser-déposer) côté client.
+  const kpis = selectedIds.map(id => pool[id] ? { id, ...pool[id] } : null).filter(Boolean) as (Kpi & { id: string })[];
 
   const blocks = (prefs.blocks && prefs.blocks.length ? prefs.blocks : DASH_BLOCK_IDS).filter(b => DASH_BLOCK_IDS.includes(b));
 

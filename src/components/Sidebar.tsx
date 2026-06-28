@@ -206,6 +206,7 @@ export default function Sidebar({ active }: { active: string }) {
                     {gItems.map(item => (
                       <MobileMenuItem key={item.id} item={item} active={active} onClose={() => setMobileOpen(false)} dot={navDot(item.id)} />
                     ))}
+                    {group === "Personnel" && gItems.some(i => i.id === "espace") && <DriveNav />}
                   </div>
                 );
               })}
@@ -340,6 +341,8 @@ export default function Sidebar({ active }: { active: string }) {
               {items.map(item => (
                 <NavItemRow key={item.id} item={item} active={active} collapsed={isCollapsed} dot={navDot(item.id)} />
               ))}
+              {/* Drive personnel déroulable directement sous « Mon espace ». */}
+              {group === "Personnel" && !isCollapsed && items.some(i => i.id === "espace") && <DriveNav />}
             </div>
           );
         })}
@@ -484,5 +487,60 @@ function NavItemRow({ item, active, collapsed, indent, dot }: { item: NavItem; a
         )}
       </div>
     </Link>
+  );
+}
+
+// ── Arborescence du Drive personnel dans la barre latérale ──────────
+// Déroulable directement sous « Mon espace ». Chaque dossier est cliquable
+// (ouvre le Drive sur ce dossier) et déroulable pour voir ses sous-dossiers
+// (chargés à la demande). Cloisonné : on n'affiche que le drive de l'utilisateur.
+interface DriveFolder { id: string; name: string; kind: string; system?: boolean }
+
+function DriveNav() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button onClick={() => setOpen(o => !o)}
+        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "6px 20px 6px 34px", background: "none", border: "none", cursor: "pointer", color: ITEM_COLOR, fontSize: 12.5, textAlign: "left" }}>
+        <span style={{ fontSize: 11, color: LABEL_COLOR, width: 10 }}>{open ? "▾" : "▸"}</span>
+        <span>🗂</span>
+        <span style={{ fontWeight: 500 }}>Drive</span>
+      </button>
+      {open && <DriveFolderList parentId={null} depth={0} />}
+    </div>
+  );
+}
+
+function DriveFolderList({ parentId, depth }: { parentId: string | null; depth: number }) {
+  const [folders, setFolders] = useState<DriveFolder[] | null>(null);
+  useEffect(() => {
+    let on = true;
+    fetch(`/api/me/drive${parentId ? `?parentId=${parentId}` : ""}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (on) setFolders(((d?.items ?? []) as DriveFolder[]).filter(i => i.kind === "folder")); })
+      .catch(() => { if (on) setFolders([]); });
+    return () => { on = false; };
+  }, [parentId]);
+
+  if (folders === null) return <div style={{ padding: `3px 20px 3px ${48 + depth * 14}px`, fontSize: 11.5, color: LABEL_COLOR }}>…</div>;
+  if (!folders.length) return depth === 0 ? <div style={{ padding: "3px 20px 3px 48px", fontSize: 11.5, color: LABEL_COLOR }}>Aucun dossier</div> : null;
+  return <>{folders.map(f => <DriveFolderNode key={f.id} folder={f} depth={depth} />)}</>;
+}
+
+function DriveFolderNode({ folder, depth }: { folder: DriveFolder; depth: number }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", paddingLeft: 34 + depth * 14, paddingRight: 12 }}>
+        <button onClick={() => setOpen(o => !o)} title={open ? "Replier" : "Déplier"}
+          style={{ background: "none", border: "none", cursor: "pointer", color: LABEL_COLOR, fontSize: 11, width: 14, flexShrink: 0, padding: 0 }}>{open ? "▾" : "▸"}</button>
+        <Link href={`/mon-espace?tab=drive&folder=${folder.id}`}
+          style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6, textDecoration: "none", color: ITEM_COLOR, fontSize: 12.5, padding: "5px 0", overflow: "hidden" }}>
+          <span style={{ flexShrink: 0 }}>{folder.system ? "🗂" : "📁"}</span>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{folder.name}</span>
+        </Link>
+      </div>
+      {open && <DriveFolderList parentId={folder.id} depth={depth + 1} />}
+    </div>
   );
 }
