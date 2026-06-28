@@ -14,18 +14,23 @@ export const VISIBILITY_LABEL: Record<string, string> = {
 };
 
 // Dossiers imposés sur chaque drive (non renommables / non supprimables).
-export interface DefaultFolder { key: string; name: string; readonly?: boolean; visibility?: Visibility }
+// `parent` = key d'un autre dossier par défaut (sous-dossier imposé).
+export interface DefaultFolder { key: string; name: string; readonly?: boolean; visibility?: Visibility; parent?: string }
 export const DEFAULT_FOLDERS: DefaultFolder[] = [
-  { key: "mandats",      name: "Mandats" },
-  { key: "compromis",    name: "Compromis & promesses de vente" },
-  { key: "estimations",  name: "Estimations / avis de valeur" },
-  { key: "clients",      name: "Clients (vendeurs & acquéreurs)" },
-  { key: "locations",    name: "Locations & baux" },
-  { key: "diagnostics",  name: "Diagnostics / DPE" },
-  { key: "photos",       name: "Photos & visites" },
-  { key: "administratif", name: "Mes documents administratifs" },
-  { key: "modeles",      name: "Modèles & ressources agence", readonly: true, visibility: "tous" },
-  { key: "formation",    name: "Formation" },
+  // 01. Ventes
+  { key: "ventes",            name: "01. Ventes" },
+  { key: "ventes-estim",      name: "Estimations",                   parent: "ventes" },
+  { key: "ventes-encours",    name: "Vente en cours",                parent: "ventes" },
+  { key: "ventes-compromis",  name: "Compromis & actes",             parent: "ventes" },
+  { key: "ventes-offres",     name: "Offres & négociations",         parent: "ventes" },
+  { key: "ventes-archives",   name: "Ventes finalisées & Archives",  parent: "ventes" },
+  // 02. Location
+  { key: "location",          name: "02. Location" },
+  { key: "location-estim",    name: "Estimations",                       parent: "location" },
+  { key: "location-encours",  name: "Location en cours",                 parent: "location" },
+  { key: "location-archives", name: "Locations finalisées & Archives",   parent: "location" },
+  // 03. Archives
+  { key: "archives",          name: "03. Archives" },
 ];
 
 // Une session impersonée n'est jamais super admin (cf. cloisonnement mail).
@@ -55,7 +60,7 @@ export async function ensureDriveFolders(userId: string): Promise<void> {
     // Arborescence souhaitée : dossiers par défaut (racine) + modèles communs
     // (éventuellement imbriqués via parentKey = templateKey du dossier parent).
     const wanted: { key: string; name: string; readonly: boolean; visibility: string; parentKey: string | null }[] = [
-      ...DEFAULT_FOLDERS.map(d => ({ key: `default:${d.key}`, name: d.name, readonly: !!d.readonly, visibility: d.visibility ?? "confidentiel", parentKey: null })),
+      ...DEFAULT_FOLDERS.map(d => ({ key: `default:${d.key}`, name: d.name, readonly: !!d.readonly, visibility: d.visibility ?? "confidentiel", parentKey: d.parent ? `default:${d.parent}` : null })),
       ...templates.map(t => ({ key: `tpl:${t.id}`, name: t.name, readonly: !!t.readonly, visibility: t.visibility ?? "confidentiel", parentKey: (t.parentKey as string | null) ?? null })),
     ];
     // Tous les dossiers imposés existants de l'utilisateur (racine ET imbriqués).
@@ -65,6 +70,18 @@ export async function ensureDriveFolders(userId: string): Promise<void> {
       select: { id: true, templateKey: true },
     }).catch(() => []);
     const byKey = new Map<string, string>(existing.map(e => [e.templateKey, e.id]));
+
+    // Nettoyage des dossiers imposés OBSOLÈTES (ancienne structure par défaut qui
+    // n'existe plus). Vide → supprimé ; non vide → « déclassé » en dossier normal
+    // (system=false) pour ne JAMAIS perdre de contenu déjà déposé par un agent.
+    const wantedKeys = new Set(wanted.map(w => w.key));
+    for (const e of existing) {
+      const k: string | undefined = e.templateKey;
+      if (!k || !k.startsWith("default:") || wantedKeys.has(k)) continue;
+      const childCount = await prisma.driveItem.count({ where: { userId, parentId: e.id } }).catch(() => 1);
+      if (childCount === 0) { await prisma.driveItem.delete({ where: { id: e.id } }).catch(() => {}); byKey.delete(k); }
+      else { await prisma.driveItem.update({ where: { id: e.id }, data: { system: false, templateKey: null } }).catch(() => {}); byKey.delete(k); }
+    }
 
     // Création/MAJ par passes : un dossier n'est traité qu'une fois son parent
     // présent, ce qui garantit l'ordre parent → enfant.
