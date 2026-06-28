@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { sendTenantWelcome } from "@/lib/client-invite";
 
 export async function GET() {
   const session = await auth();
@@ -42,5 +43,11 @@ export async function POST(req: NextRequest) {
       notes: body.notes || null,
     },
   });
+
+  // Email de bienvenue à l'espace locataire (si email + non explicitement désactivé).
+  if (tenant.email && body.sendWelcome !== false) {
+    after(() => sendTenantWelcome({ email: tenant.email, prenom: tenant.prenom }));
+  }
+
   return NextResponse.json(tenant, { status: 201 });
 }

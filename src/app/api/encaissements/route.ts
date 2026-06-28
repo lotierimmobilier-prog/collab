@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { depositQuittance } from "@/lib/quittance";
 
 async function nextRef(): Promise<string> {
   const year = new Date().getFullYear();
@@ -51,5 +52,8 @@ export async function POST(req: NextRequest) {
       await prisma.appelLoyer.update({ where: { id: body.appelId }, data: { status } });
     }
   }
+  // Quittance déposée automatiquement dans l'espace du/des locataire(s).
+  after(() => depositQuittance(enc));
+
   return NextResponse.json(enc, { status: 201 });
 }
