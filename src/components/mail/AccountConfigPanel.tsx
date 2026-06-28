@@ -17,7 +17,23 @@ export default function AccountConfigPanel({ accounts, onSave, onClose, onSyncAc
   const [showForm, setShowForm] = useState(accounts.length === 0);
   const [syncing, setSyncing]   = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<Record<string, string>>({});
+  const [repairing, setRepairing] = useState<string | null>(null);
   const [users, setUsers]       = useState<UserOpt[]>([]);
+
+  // Réparer le cloisonnement : ré-affecte les messages de la boîte à son agent
+  // légitime (purge les fuites). Réservé au super admin (boîtes gérables).
+  async function repairAccount(a: MailAccount) {
+    if (!confirm(`Réparer le cloisonnement de « ${a.label} » ?\n\nLes messages de cette boîte seront ré-affectés à son agent et disparaîtront des espaces des autres utilisateurs.`)) return;
+    setRepairing(a.id);
+    setSyncResult(p => ({ ...p, [a.id]: "Réparation en cours…" }));
+    try {
+      const resp = await fetch("/api/mail/accounts", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: a.id, action: "repair" }) });
+      const data = await resp.json();
+      if (resp.ok && data.ok) setSyncResult(p => ({ ...p, [a.id]: `✓ Cloisonnement réparé (${data.repaired} message(s) ré-affecté(s)).` }));
+      else setSyncResult(p => ({ ...p, [a.id]: `Erreur : ${data.error || "échec"}` }));
+    } catch { setSyncResult(p => ({ ...p, [a.id]: "Erreur réseau" })); }
+    finally { setRepairing(null); }
+  }
 
   useEffect(() => {
     fetch("/api/users").then(r => r.json()).then(d => {
@@ -125,6 +141,13 @@ export default function AccountConfigPanel({ accounts, onSave, onClose, onSyncAc
                       style={{ flex: 1, background: syncing === a.id ? "#f3f4f6" : "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "8px 0", fontSize: 12, cursor: syncing === a.id ? "default" : "pointer", color: "#059669", fontWeight: 500 }}>
                       {syncing === a.id ? "Sync…" : "🔄 Synchroniser"}
                     </button>
+                    {a.canManage !== false && (
+                      <button onClick={() => repairAccount(a)} disabled={repairing === a.id}
+                        title="Réparer le cloisonnement : ré-affecte les messages de la boîte à son agent légitime"
+                        style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: repairing === a.id ? "default" : "pointer", color: "#8a6d44", fontWeight: 500, whiteSpace: "nowrap" }}>
+                        {repairing === a.id ? "…" : "🔧 Cloisonner"}
+                      </button>
+                    )}
                   </div>
 
                   {syncResult[a.id] && (

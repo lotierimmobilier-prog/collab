@@ -297,7 +297,7 @@ export default function UserModal({ user, roles, allUsers = [], isSuper = false,
               {/* Menus visibles dans la barre latérale */}
               <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: "12px 14px", marginBottom: 14, background: "#FAFAF8" }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#1C1A17" }}>👁 Menus visibles</div>
-                <div style={{ fontSize: 11, color: "#9ca3af", margin: "2px 0 10px" }}>Décochez un menu pour le masquer à cet utilisateur. « Principal » et « Personnel » restent toujours visibles.</div>
+                <div style={{ fontSize: 11, color: "#9ca3af", margin: "2px 0 10px" }}>Point <span style={{ color: "#2F855A", fontWeight: 700 }}>vert</span> = visible, point <span style={{ color: "#DC2626", fontWeight: 700 }}>rouge</span> = masqué. Cliquez pour basculer. « Principal » et « Personnel » restent toujours visibles.</div>
                 {["Gestion locative", "Agence", "Réseaux sociaux"].map(grp => {
                   const items = HIDEABLE_MENUS.filter(m => m.group === grp);
                   if (!items.length) return null;
@@ -309,8 +309,9 @@ export default function UserModal({ user, roles, allUsers = [], isSuper = false,
                           const visible = !hiddenMenus.includes(m.id);
                           return (
                             <button key={m.id} type="button" onClick={() => toggleMenu(m.id)}
-                              style={{ display: "flex", alignItems: "center", gap: 6, border: `1px solid ${visible ? "#B8966A" : "#e5e7eb"}`, background: visible ? "#F7F0E6" : "#fff", color: visible ? "#1C1A17" : "#9ca3af", borderRadius: 999, padding: "5px 11px", fontSize: 12, cursor: "pointer" }}>
-                              <span>{visible ? "✓" : "○"}</span>{m.label}
+                              title={visible ? "Visible — cliquer pour masquer" : "Masqué — cliquer pour afficher"}
+                              style={{ display: "flex", alignItems: "center", gap: 7, border: `1px solid ${visible ? "#B8966A" : "#e5e7eb"}`, background: visible ? "#F7F0E6" : "#fff", color: visible ? "#1C1A17" : "#9ca3af", borderRadius: 999, padding: "5px 11px", fontSize: 12, cursor: "pointer" }}>
+                              <span style={{ width: 9, height: 9, borderRadius: "50%", background: visible ? "#2F855A" : "#DC2626", flexShrink: 0, boxShadow: `0 0 0 2px ${visible ? "#2F855A22" : "#DC262622"}` }} />{m.label}
                             </button>
                           );
                         })}

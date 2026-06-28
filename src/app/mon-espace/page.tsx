@@ -213,6 +213,7 @@ function DocForm({ doc, onClose, onSaved, admin }: { doc: Doc | null; onClose: (
 
 // ── Onglet Drive ───────────────────────────────────────────────────
 interface DriveItem { id: string; parentId: string | null; kind: string; name: string; mime?: string; size?: number; system?: boolean; readonly?: boolean; visibility?: string; sharedFrom?: string }
+interface SearchHit { id: string; kind: string; name: string; mime?: string | null; size?: number | null; folder: string; sharedFrom?: string | null }
 const VIS_LABEL: Record<string, string> = { gestionnaire: "Gestionnaires", direction: "Direction", tous: "Toute l'agence" };
 function VisBadge({ v }: { v?: string }) {
   if (!v || v === "confidentiel") return null;
@@ -229,6 +230,11 @@ function DriveTab() {
   const [showCommon, setShowCommon] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  // Recherche
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState<SearchHit[] | null>(null);
+  const [aiAnswer, setAiAnswer] = useState("");
 
   const load = useCallback(async (pid: string | null, readonly = false) => {
     setLoading(true);
@@ -238,6 +244,22 @@ function DriveTab() {
     setLoading(false);
   }, []);
   useEffect(() => { load(null); }, [load]);
+
+  async function runSearch(ai: boolean) {
+    if (!query.trim() || searching) return;
+    setSearching(true); setAiAnswer("");
+    try {
+      const r = await fetch("/api/me/drive/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ q: query.trim(), ai }) });
+      const d = await r.json().catch(() => ({ results: [] }));
+      setResults(d.results ?? []); setAiAnswer(d.answer ?? "");
+    } catch { setResults([]); }
+    finally { setSearching(false); }
+  }
+  function clearSearch() { setResults(null); setQuery(""); setAiAnswer(""); }
+  function openHit(h: SearchHit) {
+    if (h.kind === "folder") { clearSearch(); load(h.id); }
+    else window.open(`/api/me/drive/${h.id}`, "_blank");
+  }
 
   const writable = !hereReadonly || canManageCommon;
 
@@ -286,8 +308,54 @@ function DriveTab() {
       </div>
       {hereReadonly && <div style={{ fontSize: 12, color: "#8a6d44", background: "#F7F0E6", borderRadius: 8, padding: "7px 12px", marginBottom: 10 }}>🔒 Dossier en lecture seule — seul le super administrateur peut y déposer des documents.</div>}
 
+      {/* Recherche dans le drive */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ position: "relative", flex: 1, minWidth: 220 }}>
+          <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#9ca3af", fontSize: 14 }}>🔎</span>
+          <input value={query} onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") runSearch(false); if (e.key === "Escape") clearSearch(); }}
+            placeholder="Rechercher un document, ou décrivez ce que vous cherchez…"
+            style={{ width: "100%", height: 40, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 34px 0 32px", fontSize: 13, outline: "none", boxSizing: "border-box", background: "#fff" }} />
+          {results !== null && <button onClick={clearSearch} title="Fermer la recherche" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", border: "none", background: "none", cursor: "pointer", color: "#9ca3af", fontSize: 15 }}>✕</button>}
+        </div>
+        <button onClick={() => runSearch(false)} disabled={!query.trim() || searching} style={{ background: "#fff", color: query.trim() ? DARK : "#cbd5e1", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 14px", fontSize: 13, cursor: query.trim() ? "pointer" : "not-allowed" }}>Rechercher</button>
+        <button onClick={() => runSearch(true)} disabled={!query.trim() || searching} title="Auguste cherche le bon document pour vous"
+          style={{ background: query.trim() ? GOLD : "#e5e7eb", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: query.trim() ? "pointer" : "not-allowed", display: "flex", alignItems: "center", gap: 6 }}>✦ Auguste cherche</button>
+      </div>
+
       {busy && <div style={{ fontSize: 12, color: GOLD, marginBottom: 8 }}>Transfert en cours…</div>}
-      {loading ? <div style={{ color: "#9ca3af", padding: 40, textAlign: "center" }}>Chargement…</div>
+
+      {/* Résultats de recherche (remplacent l'arborescence le temps de la recherche) */}
+      {results !== null ? (
+        <div>
+          {searching && <div style={{ color: "#9ca3af", padding: 20, textAlign: "center" }}>Recherche en cours…</div>}
+          {!searching && aiAnswer && <div style={{ background: "#F7F0E6", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 13, color: DARK, marginBottom: 12, lineHeight: 1.5 }}>✦ {aiAnswer}</div>}
+          {!searching && (
+            <>
+              <div style={{ fontSize: 12.5, color: "#6b7280", marginBottom: 10 }}>{results.length} résultat{results.length > 1 ? "s" : ""} pour « {query} »</div>
+              {results.length === 0 ? <div style={{ color: "#9ca3af", padding: 30, textAlign: "center" }}>Aucun document trouvé.</div> : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {results.map(h => (
+                    <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 12, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px" }}>
+                      <div style={{ fontSize: 24 }}>{h.kind === "folder" ? "📁" : fileIcon(h.mime ?? undefined)}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <button onClick={() => openHit(h)} style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", fontWeight: 600, fontSize: 13.5, color: DARK, wordBreak: "break-word" }}>{h.name}</button>
+                        <div style={{ fontSize: 11.5, color: "#9ca3af", marginTop: 2, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <span>📂 {h.folder}</span>
+                          {h.kind === "file" && h.size != null && <span>{fmtSize(h.size)}</span>}
+                          {h.sharedFrom && <span style={{ color: GOLD }}>partagé · {h.sharedFrom}</span>}
+                        </div>
+                      </div>
+                      {h.kind === "file" && <a href={`/api/me/drive/${h.id}`} download style={{ ...miniBtn, textDecoration: "none", color: GOLD }}>⬇</a>}
+                      {h.kind === "folder" && <button onClick={() => openHit(h)} style={miniBtn}>Ouvrir</button>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      ) : loading ? <div style={{ color: "#9ca3af", padding: 40, textAlign: "center" }}>Chargement…</div>
        : (items.length === 0 && shared.length === 0) ? <div style={{ color: "#9ca3af", padding: 40, textAlign: "center" }}>Dossier vide.</div>
        : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>

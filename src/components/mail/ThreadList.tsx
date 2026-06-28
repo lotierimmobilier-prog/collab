@@ -112,7 +112,7 @@ export default function ThreadList({
   function avatarColor(str: string) { let h = 0; for (const c of str) h = (h * 31 + c.charCodeAt(0)) % COLORS.length; return COLORS[h]; }
 
   return (
-    <div style={{ width: "100%", flexShrink: 0, borderBottom: "1px solid #e5e7eb", background: "#fff", display: "flex", flexDirection: "column" }}>
+    <div style={{ width: "100%", flex: 1, minHeight: 0, borderBottom: "1px solid #e5e7eb", background: "#fff", display: "flex", flexDirection: "column" }}>
 
       {/* ── Barre compteur / actions ── */}
       <div style={{ padding: "4px 10px", borderBottom: "1px solid #f3f4f6", fontSize: 10, color: "#9ca3af", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, minHeight: 32 }}>

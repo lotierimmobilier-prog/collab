@@ -5,16 +5,17 @@ import React from "react";
 // titres, gras, listes, tableaux, citations. Suffisant pour un assistant.
 const GOLD = "#B8966A"; const BORDER = "#E6E1D9"; const DARK = "#1C1A17";
 
-// Formatage en ligne : **gras**, *italique*, `code`.
+// Formatage en ligne : [lien](url), **gras**, *italique*, `code`.
 function inline(text: string, keyBase: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
-  const re = /(\*\*([^*]+)\*\*|`([^`]+)`|\*([^*]+)\*)/g;
+  const re = /(\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|`([^`]+)`|\*([^*]+)\*)/g;
   let last = 0; let m: RegExpExecArray | null; let i = 0;
   while ((m = re.exec(text))) {
     if (m.index > last) nodes.push(text.slice(last, m.index));
-    if (m[2] !== undefined) nodes.push(<strong key={`${keyBase}-b${i}`}>{m[2]}</strong>);
-    else if (m[3] !== undefined) nodes.push(<code key={`${keyBase}-c${i}`} style={{ background: "#F0EDE7", borderRadius: 4, padding: "1px 5px", fontSize: "0.92em" }}>{m[3]}</code>);
-    else if (m[4] !== undefined) nodes.push(<em key={`${keyBase}-i${i}`}>{m[4]}</em>);
+    if (m[2] !== undefined) nodes.push(<a key={`${keyBase}-l${i}`} href={m[3]} target="_blank" rel="noreferrer" style={{ color: GOLD, fontWeight: 600, textDecoration: "underline" }}>{m[2]}</a>);
+    else if (m[4] !== undefined) nodes.push(<strong key={`${keyBase}-b${i}`}>{m[4]}</strong>);
+    else if (m[5] !== undefined) nodes.push(<code key={`${keyBase}-c${i}`} style={{ background: "#F0EDE7", borderRadius: 4, padding: "1px 5px", fontSize: "0.92em" }}>{m[5]}</code>);
+    else if (m[6] !== undefined) nodes.push(<em key={`${keyBase}-i${i}`}>{m[6]}</em>);
     last = m.index + m[0].length; i++;
   }
   if (last < text.length) nodes.push(text.slice(last));

@@ -30,3 +30,38 @@ export async function resolveAccountOwner(accountId: string): Promise<string | n
   const map = await resolveAccountOwners([accountId]);
   return map.get(accountId) ?? null;
 }
+
+/**
+ * Cloisonnement STRICT du contenu : vérifie que l'utilisateur est bien agent
+ * de la boîte (présent dans sharedUserIds, ou créateur d'une boîte perso).
+ * Renvoie la config si l'accès est autorisé, sinon null.
+ *
+ * Sert à protéger toute opération qui touche le CONTENU d'une boîte gérée en
+ * base (sync / body / search) : sans ce contrôle, un agent pouvait passer
+ * l'identifiant d'une autre boîte et lire le courrier d'un collègue.
+ * Pendant une impersonation, session.user.id est celui de l'agent consulté,
+ * donc le cloisonnement reste correct.
+ */
+export async function accessibleMailAccount(userId: string | undefined | null, accountId: string | undefined | null) {
+  if (!userId || !accountId) return null;
+  const acc = await prisma.mailAccountConfig.findUnique({ where: { id: accountId } });
+  if (!acc) return null;
+  const isAgent = (acc.sharedUserIds ?? []).includes(userId) || acc.createdBy === userId;
+  return isAgent ? acc : null;
+}
+
+/**
+ * « Répare » le cloisonnement d'une boîte : ré-affecte ownerId de TOUS ses
+ * messages à l'agent légitime (1er sharedUserId, sinon le créateur). Sert après
+ * un changement de partage : les messages synchronisés par erreur par un autre
+ * agent (avant le correctif d'accès) cessent ainsi d'apparaître chez lui.
+ * Renvoie le nombre de messages ré-affectés.
+ */
+export async function normalizeAccountOwnership(accountId: string): Promise<number> {
+  const acc = await prisma.mailAccountConfig.findUnique({ where: { id: accountId }, select: { sharedUserIds: true, createdBy: true } });
+  if (!acc) return 0;
+  const owner = (acc.sharedUserIds && acc.sharedUserIds[0]) || acc.createdBy;
+  if (!owner) return 0;
+  const res = await prisma.emailMessage.updateMany({ where: { accountId, ownerId: { not: owner } }, data: { ownerId: owner } });
+  return res.count;
+}

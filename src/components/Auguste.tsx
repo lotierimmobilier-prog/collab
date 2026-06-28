@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import Markdown from "@/components/Markdown";
 
 const GOLD    = "#B8966A";
 const GOLD_BG = "#F7F0E6";
@@ -436,7 +437,7 @@ export default function Auguste() {
                     color: m.role === "user" ? "#fff" : DARK,
                     fontSize: 13, lineHeight: 1.6,
                   }}>
-                    {formatMsg(m.content)}
+                    {m.role === "assistant" ? <Markdown text={m.content} /> : formatMsg(m.content)}
                   </div>
                 </div>
               ))

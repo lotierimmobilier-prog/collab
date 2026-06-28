@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { accessibleMailAccount } from "@/lib/mailOwner";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { ImapFlow } = require("imapflow");
 
@@ -11,10 +14,22 @@ function makeClient(host: string, port: string, ssl: boolean, username: string, 
 }
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ ok: false, error: "Non authentifié" }, { status: 401 });
+
   const { host, port, ssl, username, password, accountId, query } = await req.json();
 
   if (!host || !username || !password || !query) {
     return NextResponse.json({ ok: false, error: "Paramètres incomplets" }, { status: 400 });
+  }
+
+  // Cloisonnement : si la recherche cible une boîte gérée en base, l'utilisateur
+  // doit en être agent.
+  if (accountId) {
+    const exists = await prisma.mailAccountConfig.findUnique({ where: { id: accountId }, select: { id: true } });
+    if (exists && !(await accessibleMailAccount(session.user.id, accountId))) {
+      return NextResponse.json({ ok: false, error: "Accès non autorisé à cette boîte" }, { status: 403 });
+    }
   }
 
   const client = makeClient(host, port, ssl, username, password);

@@ -1,19 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/auth";
+import { accessibleMailAccount } from "@/lib/mailOwner";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { ImapFlow } = require("imapflow");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { simpleParser } = require("mailparser");
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ ok: false, error: "Non authentifié" }, { status: 401 });
+
   const body = await req.json();
   let { host, port, ssl, username, password } = body;
   const { uid, accountId } = body;
 
-  if (accountId && (!host || !password)) {
-    const dbAcc = await prisma.mailAccountConfig.findUnique({ where: { id: accountId } });
-    if (!dbAcc) return NextResponse.json({ ok: false, error: "Compte introuvable" }, { status: 404 });
-    host = dbAcc.host; port = String(dbAcc.port); ssl = dbAcc.ssl; username = dbAcc.username; password = dbAcc.password;
+  // Cloisonnement : on ne lit le corps d'un message d'une boîte gérée en base
+  // que si l'utilisateur en est agent.
+  if (accountId) {
+    const dbAcc = await accessibleMailAccount(session.user.id, accountId);
+    if (!dbAcc) {
+      const exists = await prisma.mailAccountConfig.findUnique({ where: { id: accountId }, select: { id: true } });
+      return NextResponse.json({ ok: false, error: exists ? "Accès non autorisé à cette boîte" : "Compte introuvable" }, { status: exists ? 403 : 404 });
+    }
+    if (!host || !password) {
+      host = dbAcc.host; port = String(dbAcc.port); ssl = dbAcc.ssl; username = dbAcc.username; password = dbAcc.password;
+    }
   }
 
   if (!host || !username || !password || !uid) {
