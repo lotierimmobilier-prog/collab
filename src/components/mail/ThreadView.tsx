@@ -307,12 +307,36 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
     setAiLoading("ged");
     try {
       const m = lastMsg;
-      const r = await fetch("/api/mail/ged-reply", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fromEmail: m?.from?.email, fromName: m?.from?.name, subject: thread.subject, body: m?.bodyText || (m?.body || "").replace(/<[^>]+>/g, ""), accountId: thread.accountId }),
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) { alert(d.error || "Préparation impossible."); return; }
+      const body = m?.bodyText || (m?.body || "").replace(/<[^>]+>/g, "");
+      const call = async (confirmTenantId?: string) => {
+        const r = await fetch("/api/mail/ged-reply", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fromEmail: m?.from?.email, fromName: m?.from?.name, subject: thread.subject, body, accountId: thread.accountId, ...(confirmTenantId ? { confirmTenantId } : {}) }),
+        });
+        return { ok: r.ok, d: await r.json().catch(() => ({})) };
+      };
+      let { ok, d } = await call();
+      if (!ok) { alert(d.error || "Préparation impossible."); return; }
+
+      // EN CAS DE DOUTE : Auguste demande qui/quoi avant de chercher dans la GED.
+      if (d.needConfirm) {
+        const cands: { id: string; name: string; email?: string | null }[] = d.candidates || [];
+        if (cands.length === 0) { alert(`🤔 Auguste a un doute : ${d.reason}\n\nAucun locataire identifié — à vérifier manuellement.`); return; }
+        let chosen = "";
+        if (cands.length === 1) {
+          if (!confirm(`🤔 Auguste a un doute : ${d.reason}\n\nChercher « ${d.docLabel} » dans la GED pour :\n${cands[0].name}${cands[0].email ? ` <${cands[0].email}>` : ""} ?`)) return;
+          chosen = cands[0].id;
+        } else {
+          const list = cands.map((c, i) => `${i + 1}. ${c.name}${c.email ? ` <${c.email}>` : ""}`).join("\n");
+          const ans = prompt(`🤔 Auguste a un doute : ${d.reason}\n\nPour quel locataire chercher « ${d.docLabel} » ?\n${list}\n\nEntrez le numéro :`);
+          const idx = ans ? parseInt(ans, 10) - 1 : -1;
+          if (idx < 0 || idx >= cands.length) return;
+          chosen = cands[idx].id;
+        }
+        ({ ok, d } = await call(chosen));
+        if (!ok) { alert(d.error || "Préparation impossible."); return; }
+        if (d.needConfirm) { alert("Toujours indéterminé — à vérifier manuellement."); return; }
+      }
 
       // Envoi 100 % automatique : seulement si activé en réglage ET expéditeur
       // reconnu ET document trouvé. Sinon, brouillon à vérifier.
