@@ -153,6 +153,27 @@ model CalendarEvent {
   @@map("calendar_events")
 }
 
+// ── Annonces portails (automatisation des réponses aux leads) ──
+model PortalListing {
+  id               String   @id @default(cuid())
+  platform         String   // leboncoin | bienici | lefigaro
+  reference        String   // référence de l'annonce sur le portail
+  title            String?
+  price            String?
+  type             String   @default("vente") // vente | gestion
+  agentName        String?
+  agentPhone       String?
+  ficheDriveItemId String?  // fiche PDF (drive) pour la vente
+  zelokLink        String?  // lien ZELOK dédié pour la gestion
+  active           Boolean  @default(true)
+  createdBy        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([platform, reference])
+  @@map("portal_listings")
+}
+
 // ── Messagerie interne ───────────────────────────────────────
 
 model Channel {

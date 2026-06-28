@@ -32,6 +32,7 @@ const nav: NavItem[] = [
   { id: "espace-client", label: "Espace client",    icon: "🔑", href: "/espace-client-agence", group: "Gestion" },
   { id: "assistance",label: "Assistance locataire", icon: "🛟", href: "/assistance",         group: "Gestion" },
   { id: "ods",       label: "Ordres de service",    icon: "📋", href: "/ordres-de-service",  group: "Gestion" },
+  { id: "annonces-portails", label: "Annonces portails", icon: "📣", href: "/annonces-portails", group: "Gestion" },
   { id: "formation", label: "Formation",            icon: "◈",  href: "/formation",          group: "Agence" },
   { id: "procedures",label: "Procédures",           icon: "📚", href: "/procedures",         group: "Agence" },
   { id: "reseaux",   label: "Réseaux sociaux",      icon: "⌘",  href: "/reseaux-sociaux",   group: "Réseaux sociaux" },

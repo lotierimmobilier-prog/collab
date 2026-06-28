@@ -50,7 +50,7 @@ export default function MailBoard() {
   const [labelsOpen, setLabelsOpen]             = useState(false);
   const [showCompose, setShowCompose]           = useState(false);
   const [composePrefill, setComposePrefill]     = useState<{ to: string; subject?: string } | null>(null);
-  const [forwardData, setForwardData]           = useState<{ to: string; cc?: string; subject: string; body: string; accountId: string } | null>(null);
+  const [forwardData, setForwardData]           = useState<{ to: string; cc?: string; subject: string; body: string; accountId: string; attachments?: { filename: string; mime: string; size: number; content: string }[] } | null>(null);
   const [aiKey, setAiKey]                       = useState("");
   const [syncing, setSyncing]                   = useState<string | null>(null);
   const [syncStatus, setSyncStatus]             = useState("");
@@ -858,6 +858,7 @@ export default function MailBoard() {
         replyTo={{ to: forwardData.to, subject: forwardData.subject, accountId: forwardData.accountId }}
         initialBody={forwardData.body}
         initialCc={forwardData.cc}
+        initialAttachments={forwardData.attachments}
         onClose={() => setForwardData(null)} onSend={msg => { addMessage(msg); setForwardData(null); }} />}
       {showImapConfig && <AccountConfigPanel accounts={accounts} onSave={async (newList) => {
         // Détecter les comptes ajoutés (pas de dbId)
@@ -968,12 +969,13 @@ function GIcon() {
   );
 }
 
-function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo, initialBody, initialCc }: {
+function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo, initialBody, initialCc, initialAttachments }: {
   accounts: MailAccount[]; gmailConfigs: GmailConfig[];
   labels: MailLabel[]; onClose: () => void; onSend: (m: MailMessage) => void;
   replyTo?: { to: string; subject: string; inReplyTo?: string; accountId?: string };
   initialBody?: string;
   initialCc?: string;
+  initialAttachments?: { filename: string; mime: string; size: number; content: string }[];
 }) {
   const allAccounts = [
     ...gmailConfigs.map(c => ({ id: c.accountId, dbId: undefined as string|undefined, label: `${c.email}`, email: c.email, name: c.name ?? c.email, smtpHost: "", smtpPort: 587, smtpSsl: true, username: c.email, password: "", signature: "", color: "#4285f4" })),
@@ -994,7 +996,7 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
   const [size, setSize]           = useState<"normal" | "large" | "full">("normal");
   // Pièces jointes : « inline » (≤ 10 Mo, vraies PJ) + « hébergées » (> 10 Mo,
   // envoyées sous forme de lien de téléchargement).
-  const [attachments, setAttachments] = useState<{ filename: string; mime: string; size: number; content: string }[]>([]);
+  const [attachments, setAttachments] = useState<{ filename: string; mime: string; size: number; content: string }[]>(initialAttachments ?? []);
   const [hostedLinks, setHostedLinks] = useState<{ fileName: string; size: number; url: string }[]>([]);
   const [attachBusy, setAttachBusy]   = useState(false);
   const [attachMsg, setAttachMsg]     = useState("");
