@@ -543,6 +543,8 @@ function CompetenceRow({ comp, val, busy, allowFilleul, allowParrain, onSetDates
   const dates: string[] = Array.isArray(val?.dates) ? (val!.dates as string[]) : [];
   const [open, setOpen] = useState(false);
   const [newDate, setNewDate] = useState("");
+  const [askDateFor, setAskDateFor] = useState<null | "filleul" | "parrain">(null);
+  const [dateInput, setDateInput] = useState("");
   const nQ = comp.questions?.length ?? 0;
   // Validée par un seul côté : on indique la validation encore attendue.
   const filleulV = !!val?.filleulValidated, parrainV = !!val?.parrainValidated;
@@ -558,6 +560,29 @@ function CompetenceRow({ comp, val, busy, allowFilleul, allowParrain, onSetDates
   }
   function removeDate(d: string) { onSetDates(dates.filter(x => x !== d)); }
 
+  // Validation : la date est obligatoire. Si une date est déjà enregistrée, on
+  // valide directement ; sinon on ouvre une popup pour la saisir.
+  function toggleValidate(side: "filleul" | "parrain") {
+    const on = side === "filleul" ? filleulV : parrainV;
+    if (on) { // annuler la validation — pas de date requise
+      side === "filleul" ? onValidateFilleul(false) : onValidateParrain(false);
+      return;
+    }
+    if (dates.length > 0) {
+      side === "filleul" ? onValidateFilleul(true) : onValidateParrain(true);
+      return;
+    }
+    setDateInput(new Date().toISOString().slice(0, 10));
+    setAskDateFor(side);
+  }
+  async function confirmDateValidate() {
+    if (!dateInput || !askDateFor) return;
+    const side = askDateFor;
+    setAskDateFor(null);
+    await Promise.resolve(onSetDates([...dates, dateInput].sort())); // enregistre la date d'abord
+    side === "filleul" ? onValidateFilleul(true) : onValidateParrain(true);
+  }
+
   return (
     <div style={{ borderTop: `1px solid ${BORDER}` }}>
       <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
@@ -571,7 +596,7 @@ function CompetenceRow({ comp, val, busy, allowFilleul, allowParrain, onSetDates
         )}
         {filleulOnly ? (
           // Compte filleul : un seul bouton clair pour valider sa compétence.
-          <button onClick={() => onValidateFilleul(!filleulV)} disabled={busy} title={filleulV ? "Annuler ma validation" : "Marquer la compétence comme acquise"}
+          <button onClick={() => toggleValidate("filleul")} disabled={busy} title={filleulV ? "Annuler ma validation" : "Marquer la compétence comme acquise"}
             style={{ border: `1px solid ${filleulV ? GREEN : GOLD}`, background: filleulV ? "#EAF4EE" : GOLD, color: filleulV ? GREEN : "#fff", borderRadius: 999, padding: "5px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
             {filleulV ? "✓ J'ai validé" : "Je valide"}
           </button>
@@ -587,7 +612,7 @@ function CompetenceRow({ comp, val, busy, allowFilleul, allowParrain, onSetDates
           {/* Validation */}
           {filleulOnly ? (
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <button onClick={() => onValidateFilleul(!filleulV)} disabled={busy}
+              <button onClick={() => toggleValidate("filleul")} disabled={busy}
                 style={{ border: `1px solid ${filleulV ? GREEN : GOLD}`, background: filleulV ? "#EAF4EE" : GOLD, color: filleulV ? GREEN : "#fff", borderRadius: 10, padding: "10px 18px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>
                 {filleulV ? "✓ Compétence acquise — annuler" : "Je valide cette compétence"}
               </button>
@@ -600,12 +625,12 @@ function CompetenceRow({ comp, val, busy, allowFilleul, allowParrain, onSetDates
               <ValidBadge
                 label="Filleul" on={!!val?.filleulValidated} at={val?.filleulValidatedAt}
                 canToggle={allowFilleul} busy={busy}
-                onToggle={() => onValidateFilleul(!val?.filleulValidated)}
+                onToggle={() => toggleValidate("filleul")}
               />
               <ValidBadge
                 label="Parrain" on={!!val?.parrainValidated} at={val?.parrainValidatedAt}
                 canToggle={allowParrain} busy={busy}
-                onToggle={() => onValidateParrain(!val?.parrainValidated)}
+                onToggle={() => toggleValidate("parrain")}
               />
             </div>
           )}
@@ -632,6 +657,24 @@ function CompetenceRow({ comp, val, busy, allowFilleul, allowParrain, onSetDates
             )}
           </div>
           {/* Le QCM est désormais regroupé dans une partie dédiée (voir QcmSection). */}
+        </div>
+      )}
+
+      {/* Popup : date obligatoire pour valider une compétence */}
+      {askDateFor && (
+        <div onClick={() => setAskDateFor(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 14, width: 360, maxWidth: "94vw", boxShadow: "0 20px 60px rgba(0,0,0,0.25)", overflow: "hidden" }}>
+            <div style={{ padding: "14px 18px", borderBottom: `1px solid ${BORDER}`, fontWeight: 700, fontSize: 14.5, color: DARK }}>Date de réalisation</div>
+            <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ fontSize: 13, color: "#6b7280" }}>Indiquez la date à laquelle la compétence <strong>{comp.title}</strong> a été réalisée pour la valider.</div>
+              <input type="date" value={dateInput} onChange={e => setDateInput(e.target.value)} autoFocus
+                style={{ height: 42, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "0 12px", fontSize: 14, outline: "none" }} />
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
+                <button onClick={() => setAskDateFor(null)} style={{ ...btnGhost, padding: "9px 16px", fontSize: 13 }}>Annuler</button>
+                <button onClick={confirmDateValidate} disabled={!dateInput} style={{ ...btnGold, padding: "9px 18px", fontSize: 13, opacity: dateInput ? 1 : 0.5 }}>Valider la compétence</button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
