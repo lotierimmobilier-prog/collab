@@ -626,47 +626,66 @@ export default function Dashboard() {
   const currentUserId = (session?.user as { id?: string })?.id;
   const refreshKey = useAutoRefresh();
 
-  const [dash, setDash] = useState<{ kpis: { label: string; value: string; sub?: string }[]; blocks: string[] } | null>(null);
+  const [dash, setDash] = useState<{ kpis: { id?: string; label: string; value: string; sub?: string }[]; blocks: string[] } | null>(null);
   const [showCustom, setShowCustom] = useState(false);
+  const [dragBlock, setDragBlock] = useState<string | null>(null);
   const loadDash = () => fetch("/api/dashboard/stats").then(r => r.ok ? r.json() : null).then(d => { if (d) setDash(d); }).catch(() => {});
   useEffect(() => { loadDash(); }, [refreshKey]);
 
   const blocks = dash?.blocks ?? ["ranking", "mails", "tasks", "agenda", "calls", "notes"];
-  const show = (id: string) => blocks.includes(id);
-  const gridBlocks = (["mails", "tasks", "agenda", "calls"] as const).filter(show);
+
+  // Réordonnancement (glisser-déposer) — persistance des préférences.
+  const reorder = (list: string[], from: string, to: string) => {
+    const a = [...list]; const fi = a.indexOf(from), ti = a.indexOf(to);
+    if (fi < 0 || ti < 0 || fi === ti) return a;
+    a.splice(ti, 0, a.splice(fi, 1)[0]); return a;
+  };
+  const saveBlocks = (next: string[]) => {
+    setDash(d => d ? { ...d, blocks: next } : d);
+    fetch("/api/me/dashboard-prefs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ blocks: next }) }).catch(() => {});
+  };
+  const reorderKpis = (ids: string[]) => {
+    setDash(d => d ? { ...d, kpis: ids.map(id => d.kpis.find(k => k.id === id)).filter(Boolean) as typeof d.kpis } : d);
+    fetch("/api/me/dashboard-prefs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kpis: ids }) }).catch(() => {});
+  };
+
+  // Rendu d'un bloc selon son identifiant.
+  const FULL_WIDTH = new Set(["ranking", "notes"]);
+  const nodeFor = (id: string) => {
+    switch (id) {
+      case "ranking": return <RankingBlock refreshKey={refreshKey} currentUserId={currentUserId} />;
+      case "mails":   return <MailsBlock refreshKey={refreshKey} />;
+      case "tasks":   return <TasksBlock refreshKey={refreshKey} />;
+      case "agenda":  return <AgendaBlock refreshKey={refreshKey} />;
+      case "calls":   return <CallsBlock refreshKey={refreshKey} />;
+      case "notes":   return <NotesBlock refreshKey={refreshKey} />;
+      default: return null;
+    }
+  };
+  const ordered = blocks.filter(id => nodeFor(id) !== null);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-      {/* Bannière d'accueil — citation + météo + indicateurs */}
-      <Banner firstName={firstName} kpis={dash?.kpis ?? []} onCustomize={() => setShowCustom(true)} />
+      {/* Bannière d'accueil — citation + météo + indicateurs (réordonnables) */}
+      <Banner firstName={firstName} kpis={dash?.kpis ?? []} onCustomize={() => setShowCustom(true)} onReorderKpis={reorderKpis} />
 
-      {/* Classement du trimestre — pleine largeur */}
-      {show("ranking") && (
-        <div style={{ marginBottom: 16 }}>
-          <RankingBlock refreshKey={refreshKey} currentUserId={currentUserId} />
-        </div>
-      )}
-
-      {/* Grille des blocs sélectionnés */}
-      {gridBlocks.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          {gridBlocks.map(id => (
-            <div key={id}>
-              {id === "mails" && <MailsBlock refreshKey={refreshKey} />}
-              {id === "tasks" && <TasksBlock refreshKey={refreshKey} />}
-              {id === "agenda" && <AgendaBlock refreshKey={refreshKey} />}
-              {id === "calls" && <CallsBlock refreshKey={refreshKey} />}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Notes — pleine largeur en bas */}
-      {show("notes") && (
-        <div style={{ marginTop: 16 }}>
-          <NotesBlock refreshKey={refreshKey} />
-        </div>
-      )}
+      {/* Blocs du tableau de bord — dans l'ordre choisi, déplaçables par la poignée ⠿ */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
+        {ordered.map(id => (
+          <div key={id}
+            onDragOver={e => { if (dragBlock) e.preventDefault(); }}
+            onDrop={e => { e.preventDefault(); if (dragBlock && dragBlock !== id) saveBlocks(reorder(ordered, dragBlock, id)); setDragBlock(null); }}
+            style={{ gridColumn: FULL_WIDTH.has(id) ? "1 / -1" : "auto", position: "relative" }}>
+            <span
+              draggable
+              onDragStart={() => setDragBlock(id)}
+              onDragEnd={() => setDragBlock(null)}
+              title="Glisser pour déplacer ce cadre"
+              style={{ position: "absolute", top: 10, right: 12, zIndex: 5, cursor: "grab", color: "#c4bdb0", fontSize: 15, lineHeight: 1, userSelect: "none", padding: "2px 4px" }}>⠿</span>
+            {nodeFor(id)}
+          </div>
+        ))}
+      </div>
 
       {showCustom && <CustomizePanel onClose={() => setShowCustom(false)} onSaved={() => { setShowCustom(false); loadDash(); }} />}
     </div>
@@ -978,10 +997,20 @@ function weatherHint(code: number): string {
   return "bonne journée à vous";
 }
 
-function Banner({ firstName, kpis, onCustomize }: { firstName: string; kpis: { label: string; value: string; sub?: string }[]; onCustomize: () => void }) {
+function Banner({ firstName, kpis, onCustomize, onReorderKpis }: { firstName: string; kpis: { id?: string; label: string; value: string; sub?: string }[]; onCustomize: () => void; onReorderKpis?: (ids: string[]) => void }) {
   // Citation différente à chaque ouverture de page (après montage, pour éviter
   // toute incohérence d'hydratation SSR).
   const [i, setI] = useState(0);
+  const [dragKpi, setDragKpi] = useState<string | null>(null);
+  const canDrag = !!onReorderKpis && kpis.every(k => !!k.id);
+  const dropKpi = (targetId: string) => {
+    if (!dragKpi || dragKpi === targetId) return;
+    const ids = kpis.map(k => k.id!) ;
+    const fi = ids.indexOf(dragKpi), ti = ids.indexOf(targetId);
+    if (fi < 0 || ti < 0) return;
+    ids.splice(ti, 0, ids.splice(fi, 1)[0]);
+    onReorderKpis?.(ids); setDragKpi(null);
+  };
   const [wx, setWx] = useState<{ temp: number; code: number; city: string } | null>(null);
   useEffect(() => { setI(Math.floor(Math.random() * QUOTES.length)); }, []);
   useEffect(() => {
@@ -1017,7 +1046,14 @@ function Banner({ firstName, kpis, onCustomize }: { firstName: string; kpis: { l
           {kpis.length > 0 && (
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
               {kpis.map((k, n) => (
-                <div key={n} style={{ flex: "1 1 150px", minWidth: 140, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "11px 14px" }}>
+                <div key={k.id ?? n}
+                  draggable={canDrag}
+                  onDragStart={() => canDrag && setDragKpi(k.id ?? null)}
+                  onDragEnd={() => setDragKpi(null)}
+                  onDragOver={e => { if (dragKpi) e.preventDefault(); }}
+                  onDrop={e => { e.preventDefault(); if (k.id) dropKpi(k.id); }}
+                  title={canDrag ? "Glisser pour réorganiser les indicateurs" : undefined}
+                  style={{ flex: "1 1 150px", minWidth: 140, background: "#fff", border: `1px solid ${dragKpi === k.id ? GOLD : BORDER}`, borderRadius: 12, padding: "11px 14px", cursor: canDrag ? "grab" : "default" }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.04em" }}>{k.label}</div>
                   <div style={{ fontSize: 21, fontWeight: 800, color: DARK, marginTop: 3 }}>{k.value}</div>
                   {k.sub && <div style={{ fontSize: 10.5, color: GOLD, marginTop: 2 }}>{k.sub}</div>}
