@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 const PUBLIC_PATHS = [
   "/api/auth",
   "/api/public",       // endpoints publics (assistance locataire par lien)
+  "/api/client",       // espace client (locataires) — session propre par cookie
+  "/espace-client",    // page publique de l'espace locataire
   "/login",
   "/candidature",
   "/declaration",      // page publique d'assistance locataire (/declaration/<token>)
