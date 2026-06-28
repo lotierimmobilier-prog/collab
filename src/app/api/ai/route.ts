@@ -188,6 +188,11 @@ const TOOLS: Anthropic.Tool[] = [
       required: ["terme", "signification"],
     },
   },
+  {
+    name: "formation_overview",
+    description: "Donne l'avancement de la formation par parrainage : pour chaque filleul, son parrain, son pourcentage d'avancement, son statut (terminé / en cours / en retard / jamais commencé), son score aux QCM et sa dernière activité. À utiliser pour 'où en est X dans sa formation', 'qui est en retard', 'qui a terminé sa formation', 'charge des parrains', etc.",
+    input_schema: { type: "object" as const, properties: {} },
+  },
 ];
 
 // ── Exécution des outils ─────────────────────────────────────
@@ -616,6 +621,25 @@ async function executeTool(
         update: { definition: signification, occurrences: { increment: 1 }, lastUsed: new Date() },
       });
       return { ok: true, message: `Terme « ${terme} » mémorisé.` };
+    }
+
+    case "formation_overview": {
+      const { computeOverview } = await import("@/lib/formation-overview");
+      const ov = await computeOverview(userId, seeAll);
+      if (!ov.filleuls.length) return { message: "Aucun filleul en formation à suivre." };
+      const STAT: Record<string, string> = { termine: "terminé", en_cours: "en cours", en_retard: "EN RETARD", jamais: "jamais commencé" };
+      return {
+        kpi: ov.kpi,
+        filleuls: ov.filleuls.map(f => ({
+          nom: `${f.prenom} ${f.nom}`.trim(),
+          parrain: f.parrain ? `${f.parrain.prenom} ${f.parrain.nom}`.trim() : null,
+          avancement: `${Math.round(f.progress * 100)}%`,
+          statut: STAT[f.status] ?? f.status,
+          qcm: f.quiz.rate === null ? null : `${Math.round(f.quiz.rate * 100)}%`,
+          derniereActivite: f.lastActivity ? f.lastActivity.slice(0, 10) : null,
+        })),
+        parrains: ov.parrains.map(p => ({ nom: `${p.prenom} ${p.nom}`.trim(), filleuls: p.filleulsCount, avancementMoyen: `${Math.round(p.avgProgress * 100)}%`, aRelancer: p.enRetard })),
+      };
     }
 
     default:

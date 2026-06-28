@@ -16,6 +16,25 @@ export async function register() {
   // Relances d'assurance : idempotentes, déclenchées peu après le boot puis
   // toutes les 12 h. (Un /api/cron dédié permet aussi un déclenchement externe.)
   scheduleInsuranceReminders();
+  // Relances de formation : digest aux parrains (1/parrain/7j), idempotent.
+  scheduleFormationReminders();
+}
+
+let formationScheduled = false;
+function scheduleFormationReminders() {
+  if (formationScheduled) return;
+  formationScheduled = true;
+  const run = async () => {
+    try {
+      const { runFormationReminders } = await import("@/lib/formation-reminders");
+      const r = await runFormationReminders();
+      if (r.sent) console.log(`[formation] relances : ${r.sent} parrain(s) notifié(s) sur ${r.parrains}`);
+    } catch (e) {
+      console.error("[formation] échec des relances :", e);
+    }
+  };
+  setTimeout(run, 90_000).unref?.();
+  setInterval(run, 24 * 60 * 60 * 1000).unref?.();
 }
 
 let insuranceScheduled = false;

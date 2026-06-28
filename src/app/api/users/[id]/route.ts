@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { auth } from "@/auth";
 import { saveUser } from "@/lib/user-write";
 import { setExtras, getExtra } from "@/lib/user-extras";
 import { isSuperAdminEmail, isAdminRole } from "@/lib/superadmin";
+import { notifyParrainageAssigned } from "@/lib/formation-notify";
 
 // PATCH /api/users/[id] — modifier un utilisateur
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -69,7 +70,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const extras: any = {};
     if (accessOverrides !== undefined) extras.accessOverrides = accessOverrides ?? null;
     if (gedAccess !== undefined) extras.gedAccess = gedAccess ?? null;
-    if (parrainId !== undefined) extras.parrainId = parrainId || null;
+    // Affectation d'un parrain : on note l'ancienne valeur pour ne notifier
+    // que sur un vrai changement vers un nouveau parrain.
+    let newParrainId: string | null = null, prevParrainId: string | null = null;
+    if (parrainId !== undefined) {
+      newParrainId = parrainId || null;
+      prevParrainId = (await getExtra(id))?.parrainId ?? null;
+      extras.parrainId = newParrainId;
+    }
     if (isEmployee !== undefined) extras.isEmployee = !!isEmployee;
     if (city !== undefined) extras.city = city?.trim() || null;
     if (superAdmin !== undefined && callerSuper) extras.superAdmin = !!superAdmin;
@@ -79,6 +87,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ? await saveUser(() => prisma.user.update({ where: { id }, data, select: sel }), data)
       : await prisma.user.findUnique({ where: { id }, select: sel });
     if (Object.keys(extras).length) await setExtras(id, extras);
+    if (newParrainId && newParrainId !== prevParrainId) {
+      after(() => notifyParrainageAssigned(id, newParrainId!));
+    }
     return NextResponse.json({ ...user, password: "••••••••" });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
