@@ -30,7 +30,7 @@ export async function runFormationReminders(): Promise<FormationReminderReport> 
 
   // Dernier rappel par parrain (anti-spam).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const nudges: any[] = await prisma.$queryRawUnsafe(`SELECT "parrainId", "lastAt" FROM formation_nudges`).catch(() => []);
+  const nudges = (await prisma.$queryRawUnsafe(`SELECT "parrainId", "lastAt" FROM formation_nudges`).catch(() => [])) as any[];
   const lastByParrain = new Map<string, number>();
   for (const n of nudges) lastByParrain.set(n.parrainId, new Date(n.lastAt).getTime());
 

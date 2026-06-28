@@ -7,7 +7,7 @@ export async function GET() {
   const client = await getClientFromCookie();
   if (!client) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows: any[] = await prisma.$queryRawUnsafe(`SELECT city FROM client_prefs WHERE "tenantId" = $1 LIMIT 1`, client.id).catch(() => []);
+  const rows = (await prisma.$queryRawUnsafe(`SELECT city FROM client_prefs WHERE "tenantId" = $1 LIMIT 1`, client.id).catch(() => [])) as any[];
   return NextResponse.json({ city: rows?.[0]?.city ?? null });
 }
 
