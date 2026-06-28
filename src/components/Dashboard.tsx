@@ -675,13 +675,19 @@ export default function Dashboard() {
           <div key={id}
             onDragOver={e => { if (dragBlock) e.preventDefault(); }}
             onDrop={e => { e.preventDefault(); if (dragBlock && dragBlock !== id) saveBlocks(reorder(ordered, dragBlock, id)); setDragBlock(null); }}
-            style={{ gridColumn: FULL_WIDTH.has(id) ? "1 / -1" : "auto", position: "relative" }}>
+            style={{ gridColumn: FULL_WIDTH.has(id) ? "1 / -1" : "auto", position: "relative",
+              outline: dragBlock && dragBlock !== id ? `2px dashed ${GOLD}` : "none", outlineOffset: 2, borderRadius: 14,
+              opacity: dragBlock === id ? 0.5 : 1, transition: "opacity 0.15s" }}>
             <span
               draggable
               onDragStart={() => setDragBlock(id)}
               onDragEnd={() => setDragBlock(null)}
               title="Glisser pour déplacer ce cadre"
-              style={{ position: "absolute", top: 10, right: 12, zIndex: 5, cursor: "grab", color: "#c4bdb0", fontSize: 15, lineHeight: 1, userSelect: "none", padding: "2px 4px" }}>⠿</span>
+              style={{ position: "absolute", top: 10, right: 12, zIndex: 5, cursor: "grab", display: "inline-flex", alignItems: "center", gap: 5,
+                background: GOLD_BG, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 999, fontSize: 11, fontWeight: 700,
+                lineHeight: 1, userSelect: "none", padding: "4px 9px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+              <span style={{ fontSize: 13 }}>⠿</span>Déplacer
+            </span>
             {nodeFor(id)}
           </div>
         ))}
