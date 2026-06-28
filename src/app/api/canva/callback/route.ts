@@ -7,8 +7,15 @@ import { exchangeCode } from "@/lib/canva";
 export async function GET(req: NextRequest) {
   const session = await auth();
   const url = new URL(req.url);
-  const back = new URL("/reseaux-sociaux", url.origin);
-  if (!session?.user?.id) return NextResponse.redirect(new URL("/", url.origin));
+  // Derrière nginx, url.origin vaut l'adresse interne (http://0.0.0.0:3000).
+  // On renvoie vers l'origine PUBLIQUE, déduite de l'URI de redirection Canva
+  // (ou d'AUTH_URL/NEXTAUTH_URL), sinon on retombe sur l'origine de la requête.
+  const publicOrigin = (() => {
+    const src = process.env.CANVA_REDIRECT_URI || process.env.AUTH_URL || process.env.NEXTAUTH_URL;
+    try { return src ? new URL(src).origin : url.origin; } catch { return url.origin; }
+  })();
+  const back = new URL("/reseaux-sociaux", publicOrigin);
+  if (!session?.user?.id) return NextResponse.redirect(new URL("/", publicOrigin));
 
   const code  = url.searchParams.get("code");
   const state = url.searchParams.get("state");
