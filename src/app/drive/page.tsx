@@ -74,7 +74,10 @@ function DriveExplorer() {
   const [aiAnswer, setAiAnswer] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [fileDrop, setFileDrop] = useState(false);
+  const [ctx, setCtx] = useState<{ x: number; y: number; item: DriveItem | null } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (!ctx) return; const close = () => setCtx(null); window.addEventListener("click", close); window.addEventListener("scroll", close, true); return () => { window.removeEventListener("click", close); window.removeEventListener("scroll", close, true); }; }, [ctx]);
+  function openCtx(e: React.MouseEvent, item: DriveItem | null) { e.preventDefault(); e.stopPropagation(); setCtx({ x: e.clientX, y: e.clientY, item }); }
   useEffect(() => { const v = typeof window !== "undefined" ? localStorage.getItem("driveView") : null; if (v === "list" || v === "grid") setView(v); }, []);
   function switchView(v: "grid" | "list") { setView(v); try { localStorage.setItem("driveView", v); } catch { /* ignore */ } }
   // Glisser-déposer de fichiers depuis l'explorateur de l'ordinateur.
@@ -229,7 +232,7 @@ function DriveExplorer() {
       ) : loading ? <div style={{ color: "#9ca3af", padding: 40, textAlign: "center" }}>Chargement…</div>
        : (items.length === 0 && shared.length === 0) ? <div style={{ color: "#9ca3af", padding: 40, textAlign: "center" }}>Dossier vide — glissez-déposez vos fichiers ou créez un dossier.</div>
        : (
-        <div style={{ display: "grid", gridTemplateColumns: view === "list" ? "1fr" : "repeat(auto-fill, minmax(190px, 1fr))", gap: view === "list" ? 6 : 12 }}>
+        <div onContextMenu={e => { if (e.target === e.currentTarget) openCtx(e, null); }} style={{ display: "grid", gridTemplateColumns: view === "list" ? "1fr" : "repeat(auto-fill, minmax(190px, 1fr))", gap: view === "list" ? 6 : 12 }}>
           {items.map(it => {
             const isFolder = it.kind === "folder";
             const isDropHere = dropTarget === it.id && isFolder;
@@ -242,6 +245,7 @@ function DriveExplorer() {
                 onDragOver={e => { if (isFolder && dragId && dragId !== it.id) { e.preventDefault(); setDropTarget(it.id); } }}
                 onDragLeave={() => setDropTarget(t => t === it.id ? null : t)}
                 onDrop={e => { if (isFolder && dragId) { e.preventDefault(); move(dragId, it.id); } setDragId(null); setDropTarget(null); }}
+                onContextMenu={e => openCtx(e, it)}
                 style={{ background: isDropHere ? GOLD_BG : "#fff", border: `1px ${isDropHere ? "dashed" : "solid"} ${isDropHere ? GOLD : BORDER}`, borderRadius: 10, padding: list ? "7px 12px" : 12, display: "flex", flexDirection: list ? "row" : "column", alignItems: list ? "center" : "stretch", gap: list ? 10 : 8, opacity: dragId === it.id ? 0.45 : 1, cursor: it.system ? "default" : "grab" }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flex: list ? 1 : undefined, minWidth: 0 }}>
                   <div style={{ fontSize: list ? 18 : 26 }}>{isFolder ? (it.system ? "🗂" : "📁") : fileIcon(it.mime)}</div>
@@ -280,6 +284,37 @@ function DriveExplorer() {
           ))}
         </div>
       )}
+
+      {/* Menu clic-droit */}
+      {ctx && (() => {
+        const it = ctx.item;
+        const items: { label: string; on: () => void; danger?: boolean; disabled?: boolean }[] = it
+          ? [
+              it.kind === "folder"
+                ? { label: "📂 Ouvrir", on: () => load(it.id, it.readonly) }
+                : { label: "↗ Ouvrir", on: () => window.open(`/api/me/drive/${it.id}`, "_blank") },
+              ...(it.kind === "file" ? [{ label: "⬇ Télécharger", on: () => window.open(`/api/me/drive/${it.id}`, "_blank") }] : []),
+              { label: "✏ Renommer", on: () => rename(it), disabled: !!it.system },
+              { label: "✕ Supprimer", on: () => remove(it), danger: true, disabled: !!it.system },
+            ]
+          : [
+              { label: "📁 Nouveau dossier", on: newFolder, disabled: !writable },
+              { label: "⬆ Téléverser", on: () => fileRef.current?.click(), disabled: !writable },
+              { label: view === "grid" ? "☰ Vue liste" : "▦ Vue vignettes", on: () => switchView(view === "grid" ? "list" : "grid") },
+            ];
+        const top = Math.min(ctx.y, (typeof window !== "undefined" ? window.innerHeight : 800) - items.length * 38 - 12);
+        const left = Math.min(ctx.x, (typeof window !== "undefined" ? window.innerWidth : 800) - 210);
+        return (
+          <div style={{ position: "fixed", top, left, zIndex: 91, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 28px rgba(0,0,0,0.16)", padding: "6px 0", minWidth: 190 }}>
+            {items.map((m, i) => (
+              <button key={i} disabled={m.disabled} onClick={() => { if (!m.disabled) { m.on(); setCtx(null); } }}
+                style={{ display: "block", width: "100%", textAlign: "left", border: "none", background: "none", padding: "8px 14px", fontSize: 13, cursor: m.disabled ? "default" : "pointer", color: m.disabled ? "#cbd5e1" : m.danger ? RED : DARK }}>
+                {m.label}
+              </button>
+            ))}
+          </div>
+        );
+      })()}
 
       {showCommon && <CommonFoldersModal onClose={() => { setShowCommon(false); load(parentId, hereReadonly); }} />}
     </div>
