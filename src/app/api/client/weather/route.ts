@@ -50,15 +50,22 @@ export async function GET() {
   const client = await getClientFromCookie();
   if (!client) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  // Adresse de l'appartement (lot du bail), sinon adresse du locataire.
+  // Adresse de l'appartement (lot du bail), sinon adresse du locataire, sinon
+  // ville saisie par le locataire (client_prefs).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const link: any = await prisma.bailTenant.findFirst({ where: { tenantId: client.id }, include: { bail: { include: { lot: true } } }, orderBy: { id: "desc" } }).catch(() => null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const t: any = await prisma.tenant.findUnique({ where: { id: client.id }, select: { address: true } }).catch(() => null);
   const address = link?.bail?.lot?.address || t?.address || "";
-  if (!address) return NextResponse.json({ error: "Adresse de l'appartement inconnue." }, { status: 404 });
 
-  const city = cityFromAddress(address);
+  let city = address ? cityFromAddress(address) : "";
+  if (!city) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pref: any[] = await prisma.$queryRawUnsafe(`SELECT city FROM client_prefs WHERE "tenantId" = $1 LIMIT 1`, client.id).catch(() => []);
+    city = (pref?.[0]?.city ?? "").trim();
+  }
+  // Aucune ville : on le signale au client (200) pour qu'il puisse la saisir.
+  if (!city) return NextResponse.json({ needsCity: true });
   const ck = city.toLowerCase();
   const hit = cache.get(ck);
   if (hit && Date.now() - hit.at < TTL) return NextResponse.json(hit.data);

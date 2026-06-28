@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
@@ -220,7 +220,10 @@ function ControleView({ modules, isAdmin }: { modules: Module[]; isAdmin: boolea
           <button onClick={() => setSel(null)} style={{ border: `1px solid ${BORDER}`, background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, cursor: "pointer", color: DARK }}>← Retour au tableau de bord</button>
           <div style={{ fontSize: 15, fontWeight: 700, color: DARK }}>{sel.prenom} {sel.nom}</div>
           {sel.parrain && <span style={{ fontSize: 12.5, color: "#6b7280" }}>Parrain : {sel.parrain.prenom} {sel.parrain.nom}</span>}
-          <a href={`/api/formation/report?filleulId=${sel.id}`} target="_blank" rel="noreferrer" style={{ marginLeft: "auto", textDecoration: "none", background: GOLD, color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600 }}>⤓ Bilan PDF</a>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            {sel.status === "termine" && <a href={`/api/formation/attestation?filleulId=${sel.id}`} target="_blank" rel="noreferrer" style={{ textDecoration: "none", background: "#2F855A", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600 }}>🎓 Attestation</a>}
+            <a href={`/api/formation/report?filleulId=${sel.id}`} target="_blank" rel="noreferrer" style={{ textDecoration: "none", background: GOLD, color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600 }}>⤓ Bilan PDF</a>
+          </div>
         </div>
         <Parcours filleulId={sel.id} modules={modules} side="parrain" canParrain={true} canFilleul={isAdmin} />
       </div>
@@ -479,6 +482,17 @@ function Parcours({ filleulId, modules, side, heading, canParrain, canFilleul }:
         </div>
       </div>
 
+      {allComps.length > 0 && done === allComps.length && (
+        <div style={{ background: "#E6F4EA", border: "1px solid #b7e1c5", borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 22 }}>🎓</span>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1e7a43" }}>Formation terminée — félicitations !</div>
+            <div style={{ fontSize: 12, color: "#3f6b4f" }}>Toutes les compétences sont validées. Vous pouvez télécharger votre attestation.</div>
+          </div>
+          <a href={`/api/formation/attestation?filleulId=${filleulId}`} target="_blank" rel="noreferrer" style={{ textDecoration: "none", background: "#2F855A", color: "#fff", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600 }}>Télécharger l'attestation</a>
+        </div>
+      )}
+
       {modules.length === 0 && (
         <div style={{ background: "#fff", borderRadius: 12, border: `1px solid ${BORDER}`, padding: 22, textAlign: "center", color: "#6b7280", fontSize: 13 }}>
           Aucun module de formation n’a encore été créé.
@@ -559,6 +573,7 @@ function CompetenceRow({ comp, val, busy, allowFilleul, allowParrain, onSetDates
 
       {open && (
         <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 14, opacity: busy ? 0.6 : 1 }}>
+          <ResourceLinks competenceId={comp.id} />
           {/* Validations croisées */}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <ValidBadge
@@ -810,6 +825,7 @@ function CompetenceEditor({ comp: c, reload }: { comp: Competence; reload: () =>
   const [title, setTitle] = useState(c.title);
   const [desc, setDesc] = useState(c.description ?? "");
   const [showQ, setShowQ] = useState(false);
+  const [showR, setShowR] = useState(false);
 
   async function save() {
     await fetch(`/api/formation/competences/${c.id}`, {
@@ -847,6 +863,7 @@ function CompetenceEditor({ comp: c, reload }: { comp: Competence; reload: () =>
             <button onClick={() => setShowQ(s => !s)} style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }}>
               Questions ({c.questions?.length ?? 0})
             </button>
+            <button onClick={() => setShowR(s => !s)} style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }}>Supports</button>
             <button onClick={() => setEditing(true)} style={{ ...btnGhost, padding: "5px 9px", fontSize: 12 }}>Modifier</button>
             <button onClick={del} style={{ ...btnGhost, color: RED, padding: "4px 9px", fontSize: 12 }}>×</button>
           </>
@@ -857,6 +874,92 @@ function CompetenceEditor({ comp: c, reload }: { comp: Competence; reload: () =>
           <QuestionsAdmin comp={c} reload={reload} />
         </div>
       )}
+      {showR && !editing && (
+        <div style={{ padding: "0 16px 14px" }}>
+          <ResourcesAdmin competenceId={c.id} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Supports de formation rattachés à une compétence ────────────────
+interface Resource { id: string; competenceId: string; title: string; url: string | null; fileName: string | null; mime: string | null; size: number | null; createdAt: string }
+
+// Lecture seule, côté filleul/parrain.
+function ResourceLinks({ competenceId }: { competenceId: string }) {
+  const [res, setRes] = useState<Resource[]>([]);
+  useEffect(() => { fetch(`/api/formation/competences/${competenceId}/resources`).then(r => r.json()).then(d => setRes(d.resources ?? [])).catch(() => {}); }, [competenceId]);
+  if (res.length === 0) return null;
+  return (
+    <div style={{ background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 12px" }}>
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>📚 Supports de formation</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {res.map(r => (
+          <a key={r.id} href={r.url || `/api/formation/resources/${r.id}`} target="_blank" rel="noreferrer"
+            style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", color: DARK, fontSize: 13, fontWeight: 500 }}>
+            <span>{r.url ? "🔗" : "📄"}</span><span style={{ borderBottom: `1px solid ${GOLD}` }}>{r.title}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Gestion (admin) des supports d'une compétence.
+function ResourcesAdmin({ competenceId }: { competenceId: string }) {
+  const [res, setRes] = useState<Resource[]>([]);
+  const [title, setTitle] = useState("");
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const load = useCallback(() => { fetch(`/api/formation/competences/${competenceId}/resources`).then(r => r.json()).then(d => setRes(d.resources ?? [])).catch(() => {}); }, [competenceId]);
+  useEffect(() => { load(); }, [load]);
+
+  async function addLink() {
+    if (!title.trim() || !url.trim()) { setErr("Titre et lien requis."); return; }
+    setBusy(true); setErr("");
+    const r = await fetch(`/api/formation/competences/${competenceId}/resources`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: title.trim(), url: url.trim() }) });
+    setBusy(false);
+    if (r.ok) { setTitle(""); setUrl(""); load(); } else { const d = await r.json().catch(() => ({})); setErr(d.error || "Échec."); }
+  }
+  async function addFile(file: File) {
+    if (file.size > 15 * 1024 * 1024) { setErr("Fichier trop volumineux (max 15 Mo)."); return; }
+    setBusy(true); setErr("");
+    try {
+      const data = await new Promise<string>((res2, rej) => { const fr = new FileReader(); fr.onload = () => res2(String(fr.result).split(",")[1] ?? ""); fr.onerror = rej; fr.readAsDataURL(file); });
+      const r = await fetch(`/api/formation/competences/${competenceId}/resources`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: title.trim() || file.name, fileName: file.name, mime: file.type, data }) });
+      if (r.ok) { setTitle(""); load(); } else { const d = await r.json().catch(() => ({})); setErr(d.error || "Échec."); }
+    } catch { setErr("Erreur lors du dépôt."); }
+    finally { setBusy(false); if (fileRef.current) fileRef.current.value = ""; }
+  }
+  async function del(id: string) { if (!confirm("Supprimer ce support ?")) return; await fetch(`/api/formation/resources/${id}`, { method: "DELETE" }); load(); }
+
+  return (
+    <div style={{ background: "#FAFAF8", border: `1px solid ${BORDER}`, borderRadius: 10, padding: 12 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", marginBottom: 8 }}>Supports de formation</div>
+      {res.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+          {res.map(r => (
+            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+              <span>{r.url ? "🔗" : "📄"}</span>
+              <a href={r.url || `/api/formation/resources/${r.id}`} target="_blank" rel="noreferrer" style={{ flex: 1, color: DARK, textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title}</a>
+              <button onClick={() => del(r.id)} style={{ ...btnGhost, color: RED, padding: "3px 8px", fontSize: 12 }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Titre du support" style={inp} />
+        <div style={{ display: "flex", gap: 6 }}>
+          <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://… (lien)" style={{ ...inp, flex: 1 }} />
+          <button onClick={addLink} disabled={busy} style={{ ...btnGold, padding: "0 12px", fontSize: 12 }}>+ Lien</button>
+        </div>
+        <input ref={fileRef} type="file" onChange={e => { const f = e.target.files?.[0]; if (f) addFile(f); }} disabled={busy} style={{ fontSize: 12 }} />
+        {err && <div style={{ fontSize: 12, color: RED }}>{err}</div>}
+      </div>
     </div>
   );
 }

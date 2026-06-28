@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { runMigrations } from "@/lib/run-migrations";
+import { notifyCompetenceValidated } from "@/lib/formation-notify";
 
 // Auto-réparation : si une colonne/table récente manque encore en base, on
 // applique les migrations puis on réessaie une fois.
@@ -125,6 +126,9 @@ export async function POST(req: NextRequest) {
       update,
       create,
     }));
+    // Email lors d'une validation (pas lors d'un retrait de validation).
+    if (action === "validateParrain" && !!body?.value) after(() => notifyCompetenceValidated(filleulId, competenceId, "parrain"));
+    if (action === "validateFilleul" && !!body?.value) after(() => notifyCompetenceValidated(filleulId, competenceId, "filleul"));
     return NextResponse.json(v);
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });

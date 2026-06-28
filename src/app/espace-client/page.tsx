@@ -96,6 +96,7 @@ const TABS = [
   { id: "accueil", label: "Accueil", icon: "⌂" },
   { id: "documents", label: "Mes documents", icon: "📄" },
   { id: "justificatifs", label: "Mes justificatifs", icon: "⬆" },
+  { id: "demandes", label: "Mes demandes", icon: "✉" },
   { id: "auguste", label: "Auguste", icon: "✦" },
 ];
 
@@ -135,6 +136,7 @@ function Portal({ prenom, onLogout }: { prenom: string; onLogout: () => void }) 
         {tab === "accueil" && <Accueil prenom={prenom} onTab={setTab} />}
         {tab === "documents" && <Documents docs={docs} />}
         {tab === "justificatifs" && <Justificatifs docs={docs} reload={loadDocs} />}
+        {tab === "demandes" && <Demandes onTab={setTab} />}
         {tab === "auguste" && <Auguste />}
       </main>
     </div>
@@ -155,10 +157,34 @@ interface Weather { city: string; current: { temp: number; label: string; emoji:
 
 function Accueil({ prenom, onTab }: { prenom: string; onTab: (t: string) => void }) {
   const [weather, setWeather] = useState<Weather | null>(null);
-  useEffect(() => { fetch("/api/client/weather").then(r => r.ok ? r.json() : null).then(d => { if (d?.current) setWeather(d); }).catch(() => {}); }, []);
+  const [wState, setWState] = useState<"loading" | "ok" | "needsCity" | "error">("loading");
+  const [cityInput, setCityInput] = useState("");
+  const [savingCity, setSavingCity] = useState(false);
+
+  const loadWeather = () => {
+    setWState("loading");
+    fetch("/api/client/weather").then(r => r.json()).then(d => {
+      if (d?.current) { setWeather(d); setWState("ok"); }
+      else if (d?.needsCity) setWState("needsCity");
+      else setWState("error");
+    }).catch(() => setWState("error"));
+  };
+  useEffect(() => { loadWeather(); }, []);
+
+  async function saveCity() {
+    if (!cityInput.trim()) return;
+    setSavingCity(true);
+    try {
+      const r = await fetch("/api/client/city", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ city: cityInput.trim() }) });
+      if (r.ok) { setCityInput(""); loadWeather(); }
+    } catch { /* silencieux */ }
+    finally { setSavingCity(false); }
+  }
+
   const tiles = [
     { id: "documents", icon: "📄", t: "Mes documents", d: "Bail, état des lieux, quittances, attestation de loyer…" },
     { id: "justificatifs", icon: "⬆", t: "Déposer un justificatif", d: "Assurance habitation, entretien chaudière/climatisation…" },
+    { id: "demandes", icon: "✉", t: "Mes demandes", d: "Suivre l'état de mes demandes : reçue, en cours, traitée." },
     { id: "auguste", icon: "✦", t: "Demander à Auguste", d: "Mon solde, mes rendez-vous, signaler un problème…" },
   ];
   const dayName = (iso: string) => new Date(iso).toLocaleDateString("fr-FR", { weekday: "short" });
@@ -171,7 +197,23 @@ function Accueil({ prenom, onTab }: { prenom: string; onTab: (t: string) => void
         </p>
       </Card>
 
-      {weather && (
+      {/* Météo : toujours présente, avec saisie de ville en secours */}
+      {wState === "loading" && (
+        <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 18, marginBottom: 14, fontSize: 13, color: "#9ca3af" }}>🌦️ Météo en cours de chargement…</div>
+      )}
+      {(wState === "needsCity" || wState === "error") && (
+        <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 18, marginBottom: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: DARK, marginBottom: 4 }}>🌦️ Météo de votre logement</div>
+          <div style={{ fontSize: 12.5, color: "#6b7280", marginBottom: 10 }}>
+            {wState === "needsCity" ? "Indiquez votre ville pour afficher la météo et des conseils adaptés à votre logement." : "Météo momentanément indisponible. Indiquez votre ville pour réessayer."}
+          </div>
+          <div style={{ display: "flex", gap: 8, maxWidth: 420 }}>
+            <input value={cityInput} onChange={e => setCityInput(e.target.value)} onKeyDown={e => e.key === "Enter" && saveCity()} placeholder="ex. Carcassonne" style={{ flex: 1, height: 42, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "0 14px", fontSize: 14, outline: "none", background: "#fff" }} />
+            <button onClick={saveCity} disabled={savingCity || !cityInput.trim()} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 10, padding: "0 18px", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>{savingCity ? "…" : "Valider"}</button>
+          </div>
+        </div>
+      )}
+      {wState === "ok" && weather && (
         <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 18, marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
             <div style={{ fontSize: 40, lineHeight: 1 }}>{weather.current.emoji}</div>
@@ -320,6 +362,58 @@ function DocRow({ d, onDelete }: { d: Doc; onDelete?: () => void }) {
       <a href={`/api/client/documents/${d.id}`} title="Télécharger" style={{ textDecoration: "none", color: GOLD, fontWeight: 700, fontSize: 13, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "6px 10px" }}>↓</a>
       {onDelete && <button onClick={onDelete} title="Supprimer" style={{ background: "none", border: `1px solid #fecaca`, borderRadius: 8, padding: "6px 9px", color: "#dc2626", cursor: "pointer", fontSize: 13 }}>🗑</button>}
     </div>
+  );
+}
+
+interface TenantRequest { ref: string; description: string | null; status: string; statusLabel: string; statusColor: string; step: number; createdAt: string; updatedAt: string }
+
+function Demandes({ onTab }: { onTab: (t: string) => void }) {
+  const [reqs, setReqs] = useState<TenantRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    fetch("/api/client/requests").then(r => r.json()).then(d => setReqs(d.requests ?? [])).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const STEPS = ["Reçue", "En cours", "Traitée"];
+
+  return (
+    <Card title="Mes demandes" sub="Suivez l'état des demandes que vous avez envoyées à l'agence (via Auguste).">
+      {loading ? (
+        <div style={{ fontSize: 13, color: "#9ca3af", padding: "10px 0" }}>Chargement…</div>
+      ) : reqs.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "16px 0" }}>
+          <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 12 }}>Vous n'avez pas encore envoyé de demande.</div>
+          <button onClick={() => onTab("auguste")} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>✦ Signaler un problème à Auguste</button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {reqs.map(r => (
+            <div key={r.ref} style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+                <span style={{ fontSize: 11.5, color: "#9ca3af" }}>Réf. {r.ref} · {new Date(r.createdAt).toLocaleDateString("fr-FR")}</span>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: r.statusColor, background: r.statusColor + "18", borderRadius: 20, padding: "3px 10px", whiteSpace: "nowrap" }}>{r.statusLabel}</span>
+              </div>
+              {r.description && <div style={{ fontSize: 13, color: "#3f3a33", lineHeight: 1.5, marginBottom: 10, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{r.description}</div>}
+              {/* Frise de progression */}
+              <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+                {STEPS.map((s, i) => {
+                  const done = r.step >= i + 1;
+                  return (
+                    <div key={s} style={{ flex: 1, display: "flex", alignItems: "center" }}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                        <span style={{ width: 16, height: 16, borderRadius: "50%", background: done ? r.statusColor : "#e5e7eb", color: "#fff", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{done ? "✓" : ""}</span>
+                        <span style={{ fontSize: 9.5, color: done ? r.statusColor : "#9ca3af", fontWeight: done ? 700 : 500, whiteSpace: "nowrap" }}>{s}</span>
+                      </div>
+                      {i < STEPS.length - 1 && <div style={{ flex: 1, height: 2, background: r.step >= i + 2 ? r.statusColor : "#e5e7eb", margin: "0 4px", marginBottom: 14 }} />}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
 

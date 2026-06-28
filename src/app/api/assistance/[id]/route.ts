@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyTenantRequestStatus } from "@/lib/tenant-request-notify";
 
 const ALLOWED = ["admin", "dirigeant", "direction", "gestionnaire", "syndic"];
 
@@ -29,7 +30,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (body?.contactPhone !== undefined) data.contactPhone = body.contactPhone || null;
   if (body?.address !== undefined) data.address = body.address || null;
   try {
+    // Statut précédent, pour ne notifier le locataire que sur un vrai changement.
+    const before = data.status ? await prisma.assistanceRequest.findUnique({ where: { id }, select: { status: true } }) : null;
     const r = await prisma.assistanceRequest.update({ where: { id }, data });
+    if (data.status && before?.status !== data.status) {
+      after(() => notifyTenantRequestStatus(id));
+    }
     return NextResponse.json(r);
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });

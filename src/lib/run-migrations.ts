@@ -47,6 +47,9 @@ const FILES = [
   "migrations_client_portal.sql",
   "migrations_tenant_documents.sql",
   "migrations_insurance_tracking.sql",
+  "migrations_client_prefs.sql",
+  "migrations_formation_nudges.sql",
+  "migrations_training_resources.sql",
 ];
 
 export interface MigrationReport {

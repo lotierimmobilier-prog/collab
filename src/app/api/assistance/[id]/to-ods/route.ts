@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyTenantRequestStatus } from "@/lib/tenant-request-notify";
 
 const ALLOWED = ["admin", "dirigeant", "direction", "gestionnaire", "syndic"];
 
@@ -50,6 +51,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   });
 
   await prisma.assistanceRequest.update({ where: { id }, data: { status: "ods_cree", odsId: order.id } });
+  // Le locataire est informé que sa demande passe « en cours de traitement ».
+  after(() => notifyTenantRequestStatus(id));
 
   return NextResponse.json({ ok: true, odsId: order.id, ref: order.ref, supplierEmail: order.supplier?.email ?? null });
 }
