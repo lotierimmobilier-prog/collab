@@ -46,6 +46,14 @@ export default function MonEspacePage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.roleId === "admin";
   const [tab, setTab] = useState<"docs" | "drive" | "compliance">("docs");
+  const [initialFolder, setInitialFolder] = useState<string | null>(null);
+
+  // Ouverture directe sur le Drive (et éventuellement un dossier) via l'URL,
+  // ex. /mon-espace?tab=drive&folder=<id> depuis l'arborescence de la barre latérale.
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("tab") === "drive") { setTab("drive"); setInitialFolder(sp.get("folder")); }
+  }, []);
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "#f9fafb", fontFamily: "'Inter', sans-serif" }}>
@@ -62,7 +70,7 @@ export default function MonEspacePage() {
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
           {tab === "docs" && <DocsTab />}
-          {tab === "drive" && <DriveTab />}
+          {tab === "drive" && <DriveTab initialFolder={initialFolder} />}
           {tab === "compliance" && isAdmin && <ComplianceTab />}
         </div>
       </div>
@@ -220,7 +228,7 @@ function VisBadge({ v }: { v?: string }) {
   return <span style={{ fontSize: 9.5, fontWeight: 700, color: "#2563eb", background: "#E8EEFB", borderRadius: 20, padding: "1px 7px", whiteSpace: "nowrap" }}>{VIS_LABEL[v] ?? v}</span>;
 }
 
-function DriveTab() {
+function DriveTab({ initialFolder }: { initialFolder?: string | null }) {
   const [parentId, setParentId] = useState<string | null>(null);
   const [path, setPath] = useState<{ id: string; name: string }[]>([]);
   const [items, setItems] = useState<DriveItem[]>([]);
@@ -243,7 +251,7 @@ function DriveTab() {
     setHereReadonly(readonly);
     setLoading(false);
   }, []);
-  useEffect(() => { load(null); }, [load]);
+  useEffect(() => { load(initialFolder ?? null); }, [load, initialFolder]);
 
   async function runSearch(ai: boolean) {
     if (!query.trim() || searching) return;
