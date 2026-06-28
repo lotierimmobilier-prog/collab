@@ -151,12 +151,17 @@ function Card({ children, title, sub }: { children: React.ReactNode; title?: str
   );
 }
 
+interface Weather { city: string; current: { temp: number; label: string; emoji: string }; daily: { date: string; tmin: number; tmax: number; emoji: string }[]; conseils: string[] }
+
 function Accueil({ prenom, onTab }: { prenom: string; onTab: (t: string) => void }) {
+  const [weather, setWeather] = useState<Weather | null>(null);
+  useEffect(() => { fetch("/api/client/weather").then(r => r.ok ? r.json() : null).then(d => { if (d?.current) setWeather(d); }).catch(() => {}); }, []);
   const tiles = [
     { id: "documents", icon: "📄", t: "Mes documents", d: "Bail, état des lieux, quittances, attestation de loyer…" },
     { id: "justificatifs", icon: "⬆", t: "Déposer un justificatif", d: "Assurance habitation, entretien chaudière/climatisation…" },
     { id: "auguste", icon: "✦", t: "Demander à Auguste", d: "Mon solde, mes rendez-vous, signaler un problème…" },
   ];
+  const dayName = (iso: string) => new Date(iso).toLocaleDateString("fr-FR", { weekday: "short" });
   return (
     <>
       <Card>
@@ -165,6 +170,35 @@ function Accueil({ prenom, onTab }: { prenom: string; onTab: (t: string) => void
           Votre portail locataire Lotier Immobilier : retrouvez vos documents, déposez vos justificatifs et posez vos questions à Auguste. Votre espace est strictement personnel.
         </p>
       </Card>
+
+      {weather && (
+        <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 18, marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 40, lineHeight: 1 }}>{weather.current.emoji}</div>
+            <div style={{ flex: 1, minWidth: 140 }}>
+              <div style={{ fontSize: 26, fontWeight: 700, color: DARK }}>{weather.current.temp}°</div>
+              <div style={{ fontSize: 12.5, color: "#6b7280" }}>{weather.current.label} · {weather.city}</div>
+            </div>
+            <div style={{ display: "flex", gap: 14 }}>
+              {weather.daily.slice(1, 3).map(d => (
+                <div key={d.date} style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 11, color: "#9ca3af", textTransform: "capitalize" }}>{dayName(d.date)}</div>
+                  <div style={{ fontSize: 18 }}>{d.emoji}</div>
+                  <div style={{ fontSize: 11.5, color: DARK }}>{d.tmax}° <span style={{ color: "#9ca3af" }}>{d.tmin}°</span></div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {weather.conseils.length > 0 && (
+            <div style={{ marginTop: 14, borderTop: `1px solid ${BORDER}`, paddingTop: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: GOLD, marginBottom: 6 }}>💡 Conseils pour votre logement</div>
+              <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 5 }}>
+                {weather.conseils.map((c, i) => <li key={i} style={{ fontSize: 12.5, color: "#3f3a33", lineHeight: 1.5 }}>{c}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
       <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
         {tiles.map(x => (
           <button key={x.id} onClick={() => onTab(x.id)} style={{ textAlign: "left", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16, cursor: "pointer", display: "flex", gap: 14, alignItems: "center" }}>
