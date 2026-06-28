@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
   const total = allCompIds.length;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const vals: any[] = await prisma.competenceValidation.findMany({ where: { filleulId }, select: { competenceId: true, parrainValidated: true, filleulValidated: true } }).catch(() => []);
-  const doneSet = new Set(vals.filter(v => v.parrainValidated && v.filleulValidated).map(v => v.competenceId));
+  const doneSet = new Set(vals.filter(v => v.parrainValidated || v.filleulValidated).map(v => v.competenceId));
   const done = allCompIds.filter(id => doneSet.has(id)).length;
 
   if (!total || done < total) {
