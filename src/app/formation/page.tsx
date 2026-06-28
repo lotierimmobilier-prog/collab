@@ -865,8 +865,10 @@ function FormationAssistant() {
   const [chat, setChat] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const [q, setQ] = useState("");
   const [thinking, setThinking] = useState(false);
+  const [avatar, setAvatar] = useState<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   useEffect(() => { boxRef.current?.scrollTo({ top: boxRef.current.scrollHeight, behavior: "smooth" }); }, [chat, thinking]);
+  useEffect(() => { fetch("/api/formation/auguste-avatar").then(r => r.ok ? r.json() : null).then(d => setAvatar(d?.url || null)).catch(() => {}); }, []);
 
   const suggestions = ["Explique-moi le mandat exclusif", "Comment réussir une estimation ?", "Donne-moi un quiz sur la loi Hoguet", "Conseils pour une première visite"];
 
@@ -888,7 +890,7 @@ function FormationAssistant() {
       {/* Conversation */}
       <div style={{ flex: "1 1 420px", minWidth: 300, background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", height: "64vh", minHeight: 380, overflow: "hidden" }}>
         <div style={{ padding: "12px 16px", borderBottom: `1px solid ${BORDER}`, background: GOLD_BG, display: "flex", alignItems: "center", gap: 10 }}>
-          <AugusteAvatar size={34} />
+          <AugusteAvatar size={34} src={avatar} />
           <div>
             <div style={{ fontSize: 14, fontWeight: 700, color: DARK }}>Auguste — votre tuteur de formation</div>
             <div style={{ fontSize: 12, color: "#6b7280", marginTop: 1 }}>Questions sur le métier, explications, exercices d’entraînement.</div>
@@ -904,7 +906,7 @@ function FormationAssistant() {
           )}
           {chat.map((m, i) => m.role === "assistant" ? (
             <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", alignSelf: "flex-start", maxWidth: "90%" }}>
-              <AugusteAvatar size={28} />
+              <AugusteAvatar size={28} src={avatar} />
               <div style={{ background: "#F4F1EC", color: DARK, borderRadius: 12, padding: "9px 13px", fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.content}</div>
             </div>
           ) : (
@@ -912,7 +914,7 @@ function FormationAssistant() {
           ))}
           {thinking && (
             <div style={{ display: "flex", gap: 8, alignItems: "center", alignSelf: "flex-start" }}>
-              <AugusteAvatar size={28} />
+              <AugusteAvatar size={28} src={avatar} />
               <span style={{ color: "#9ca3af", fontSize: 13 }}>Auguste réfléchit…</span>
             </div>
           )}
@@ -924,22 +926,24 @@ function FormationAssistant() {
       </div>
 
       {/* Présentation d'Auguste */}
-      <AugustePresentation />
+      <AugustePresentation src={avatar} />
     </div>
   );
 }
 
-// Avatar « photo » d'Auguste (cercle).
-function AugusteAvatar({ size = 28 }: { size?: number }) {
+// Avatar « photo » d'Auguste (cercle). Utilise la photo définie dans l'admin
+// si disponible, sinon une pastille dorée avec emoji.
+function AugusteAvatar({ size = 28, src }: { size?: number; src?: string | null }) {
   return (
-    <div style={{ width: size, height: size, borderRadius: "50%", background: "linear-gradient(135deg, #D8B783 0%, #A07C4B 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: Math.round(size * 0.58), flexShrink: 0, boxShadow: "0 1px 3px rgba(28,26,23,0.25)", border: "2px solid #fff" }} aria-hidden>
-      🤵
+    <div style={{ width: size, height: size, borderRadius: "50%", background: src ? "#fff" : "linear-gradient(135deg, #D8B783 0%, #A07C4B 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: Math.round(size * 0.58), flexShrink: 0, boxShadow: "0 1px 3px rgba(28,26,23,0.25)", border: "2px solid #fff", overflow: "hidden" }} aria-hidden>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {src ? <img src={src} alt="Auguste" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "🤵"}
     </div>
   );
 }
 
 // Fiche de présentation (CV imaginaire et farfelu d'Auguste).
-function AugustePresentation() {
+function AugustePresentation({ src }: { src?: string | null }) {
   const Section = ({ title, items }: { title: string; items: string[] }) => (
     <div style={{ marginTop: 14 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>{title}</div>
@@ -951,7 +955,7 @@ function AugustePresentation() {
   return (
     <div style={{ flex: "0 1 290px", minWidth: 250, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 18, alignSelf: "flex-start", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
       <div style={{ textAlign: "center" }}>
-        <div style={{ display: "inline-block" }}><AugusteAvatar size={88} /></div>
+        <div style={{ display: "inline-block" }}><AugusteAvatar size={88} src={src} /></div>
         <div style={{ fontSize: 16, fontWeight: 800, color: DARK, marginTop: 8 }}>Auguste de la Pierre</div>
         <div style={{ fontSize: 12, color: GOLD, fontWeight: 600 }}>Expert immobilier · Mentor de légende</div>
         <div style={{ fontSize: 11.5, color: "#9ca3af", marginTop: 2 }}>Carte professionnelle n° 0000-IMAGINAIRE</div>
