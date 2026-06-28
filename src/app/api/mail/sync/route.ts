@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import { resolveAccountOwner } from "@/lib/mailOwner";
+import { resolveAccountOwner, accessibleMailAccount } from "@/lib/mailOwner";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { ImapFlow } = require("imapflow");
 
@@ -160,10 +160,19 @@ export async function POST(req: NextRequest) {
   let { host, port, ssl, username, password } = body;
   const { accountId, page = 1, syncSent = true } = body;
 
-  if (accountId && (!host || !password)) {
-    const dbAcc = await prisma.mailAccountConfig.findUnique({ where: { id: accountId } });
-    if (!dbAcc) return NextResponse.json({ ok: false, error: "Compte introuvable" }, { status: 404 });
-    host = dbAcc.host; port = String(dbAcc.port); ssl = dbAcc.ssl; username = dbAcc.username; password = dbAcc.password;
+  // Cloisonnement : pour toute boîte gérée en base, l'utilisateur doit en être
+  // agent. Sans ce contrôle, on pouvait passer l'identifiant de la boîte d'un
+  // collègue et en synchroniser/lire tout le courrier.
+  if (accountId) {
+    const dbAcc = await accessibleMailAccount(session.user.id, accountId);
+    if (!dbAcc) {
+      // Boîte inconnue → 404 ; boîte existante mais non autorisée → 403.
+      const exists = await prisma.mailAccountConfig.findUnique({ where: { id: accountId }, select: { id: true } });
+      return NextResponse.json({ ok: false, error: exists ? "Accès non autorisé à cette boîte" : "Compte introuvable" }, { status: exists ? 403 : 404 });
+    }
+    if (!host || !password) {
+      host = dbAcc.host; port = String(dbAcc.port); ssl = dbAcc.ssl; username = dbAcc.username; password = dbAcc.password;
+    }
   }
 
   if (!host || !username || !password) {

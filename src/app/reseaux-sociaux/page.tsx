@@ -22,6 +22,14 @@ const EXEMPLES = [
   { titre: "Estimation offerte", texte: "💡 Vous vous demandez combien vaut votre bien aujourd'hui ? Notre équipe vous offre une estimation précise et gratuite, basée sur le marché réel de [ville]. Contactez-nous !\n#estimation #immobilier #[ville] #conseilimmo" },
 ];
 const NETWORKS = ["Instagram", "Facebook", "LinkedIn", "TikTok"];
+const STYLES = [
+  { id: "pro", label: "Professionnel", emoji: "💼", desc: "Classique et rassurant" },
+  { id: "luxe", label: "Luxe", emoji: "✨", desc: "Élégant, haut de gamme" },
+  { id: "humour", label: "Humour", emoji: "😄", desc: "Léger, trait d'esprit" },
+  { id: "jeune", label: "Jeune & punchy", emoji: "🔥", desc: "Dynamique, réseaux" },
+  { id: "coupdecoeur", label: "Coup de cœur", emoji: "❤️", desc: "Émotion, storytelling" },
+  { id: "info", label: "Informatif", emoji: "📋", desc: "Factuel, caractéristiques" },
+];
 
 export default function ReseauxPage() {
   const { data: session } = useSession();
@@ -105,31 +113,59 @@ function Accounts({ accounts, isAdmin, reload }: { accounts: Account[]; isAdmin:
 
 function Generator() {
   const [network, setNetwork] = useState("Instagram");
+  const [style, setStyle] = useState("pro");
   const [brief, setBrief] = useState("");
   const [post, setPost] = useState("");
   const [busy, setBusy] = useState(false);
-  async function gen() {
+  async function gen(forStyle?: string) {
+    const useStyle = forStyle ?? style;
     if (!brief.trim() || busy) return;
+    if (forStyle) setStyle(forStyle);
     setBusy(true); setPost("");
     try {
-      const r = await fetch("/api/reseaux", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate", brief, network }) });
+      const r = await fetch("/api/reseaux", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate", brief, network, style: useStyle }) });
       const d = await r.json().catch(() => ({}));
       setPost(d.post || d.error || "—");
     } catch { setPost("Erreur réseau."); }
     finally { setBusy(false); }
   }
   return (
-    <Card title="✦ Générateur de publication" sub="Décrivez le bien ou l'idée — Auguste rédige un post prêt à publier (texte + hashtags).">
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+    <Card title="✦ Générateur de publication" sub="Décrivez le bien ou l'idée, choisissez un style — Auguste rédige un post prêt à publier (texte + hashtags).">
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: "#6b7280" }}>Réseau</span>
           <select value={network} onChange={e => setNetwork(e.target.value)} style={inp}>{NETWORKS.map(n => <option key={n}>{n}</option>)}</select>
         </div>
+        <div>
+          <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>Style du post</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+            {STYLES.map(s => {
+              const on = style === s.id;
+              return (
+                <button key={s.id} type="button" onClick={() => setStyle(s.id)} title={s.desc}
+                  style={{ display: "flex", alignItems: "center", gap: 6, border: `1px solid ${on ? GOLD : BORDER}`, background: on ? GOLD_BG : "#fff", color: on ? DARK : "#6b7280", borderRadius: 999, padding: "6px 12px", fontSize: 12.5, fontWeight: on ? 700 : 500, cursor: "pointer" }}>
+                  <span>{s.emoji}</span>{s.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <textarea value={brief} onChange={e => setBrief(e.target.value)} placeholder="Ex. Maison T4 à Carcassonne, jardin sud 400 m², proche écoles, garage, à visiter ce week-end." rows={3} style={{ ...inp, height: "auto", padding: "10px 12px", resize: "vertical", fontFamily: "inherit" }} />
-        <button onClick={gen} disabled={!brief.trim() || busy} style={{ alignSelf: "flex-start", background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: !brief.trim() || busy ? 0.5 : 1 }}>{busy ? "Rédaction…" : "Générer le post"}</button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <button onClick={() => gen()} disabled={!brief.trim() || busy} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: !brief.trim() || busy ? 0.5 : 1 }}>{busy ? "Rédaction…" : "Générer le post"}</button>
+          {post && !busy && <button onClick={() => gen()} style={{ ...mini }}>↻ Régénérer</button>}
+        </div>
         {post && (
           <div style={{ background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px 14px", whiteSpace: "pre-wrap", fontSize: 13.5, lineHeight: 1.55, color: DARK }}>
             {post}
-            <div style={{ marginTop: 8 }}><CopyBtn text={post} /></div>
+            <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <CopyBtn text={post} />
+              <span style={{ fontSize: 11.5, color: "#9ca3af" }}>Essayer un autre style :</span>
+              {STYLES.filter(s => s.id !== style).map(s => (
+                <button key={s.id} onClick={() => gen(s.id)} disabled={busy} title={s.desc}
+                  style={{ ...mini, padding: "4px 9px", fontSize: 11.5, opacity: busy ? 0.5 : 1 }}>{s.emoji} {s.label}</button>
+              ))}
+            </div>
           </div>
         )}
       </div>

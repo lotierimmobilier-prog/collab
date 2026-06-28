@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { isSuperAdminEmail } from "@/lib/superadmin";
+import { normalizeAccountOwnership } from "@/lib/mailOwner";
 
 // Gouvernance des boîtes mail :
 //  - le super admin crée/modifie/partage les boîtes et voit tout (gestion) ;
@@ -107,10 +108,18 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json();
   const { id, sharedUserIds, isShared, label, color, active, password,
-          smtpHost, smtpPort, smtpSsl } = body;
+          smtpHost, smtpPort, smtpSsl, action } = body;
 
   const existing = await prisma.mailAccountConfig.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
+
+  // Action « réparer le cloisonnement » : ré-affecte les messages de la boîte à
+  // son agent légitime (purge les fuites héritées d'une synchro antérieure).
+  if (action === "repair") {
+    if (!isSuper(session)) return NextResponse.json({ error: "Réservé au super administrateur." }, { status: 403 });
+    const fixed = await normalizeAccountOwnership(id);
+    return NextResponse.json({ ok: true, repaired: fixed });
+  }
   // Modifier une boîte (config, mot de passe, partage) : super admin, ou le
   // créateur d'une boîte personnelle. Les utilisateurs avec qui une boîte est
   // partagée ne peuvent PAS la modifier.
@@ -136,7 +145,14 @@ export async function PATCH(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({ ...updated, password: "••••••••" });
+  // Si le partage a changé, on ré-affecte les messages de la boîte à son agent
+  // légitime : un agent retiré cesse immédiatement de voir le courrier.
+  let repaired = 0;
+  if (sharedUserIds !== undefined || isShared !== undefined) {
+    repaired = await normalizeAccountOwnership(id);
+  }
+
+  return NextResponse.json({ ...updated, password: "••••••••", repaired });
 }
 
 // DELETE

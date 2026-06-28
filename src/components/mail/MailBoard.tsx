@@ -793,8 +793,9 @@ export default function MailBoard() {
 
         {/* Layout vertical : liste en haut, vue en bas */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-          {/* Zone liste — hauteur fixe, 10 items */}
-          <div style={{ flexShrink: 0, overflow: "hidden", display: "flex", flexDirection: "column", borderBottom: "2px solid #e5e7eb" }}>
+          {/* Zone liste — occupe la hauteur dispo et défile en interne (la
+              pagination reste épinglée en bas, visible sur ordinateur). */}
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", borderBottom: "2px solid #e5e7eb" }}>
             <ThreadList
               threads={visibleThreads}
               messages={search && searchResults !== null ? [...messages, ...searchResults.filter(r => !messages.find(m => m.id === r.id))] : messages}
@@ -824,9 +825,10 @@ export default function MailBoard() {
             />
           </div>
 
-          {/* Zone liste uniquement — ThreadView en popup */}
-          <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex" }}>
-            {!hasAnyAccount && (
+          {/* Onboarding (aucun compte) — la lecture des messages se fait en popup,
+              donc cette zone ne prend de la place que s'il n'y a pas de compte. */}
+          {!hasAnyAccount && (
+            <div style={{ flexShrink: 0, minHeight: 220, overflow: "hidden", display: "flex" }}>
               <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#f9fafb", gap: 12 }}>
                 <div style={{ fontSize: 48, opacity: 0.3 }}>✉</div>
                 <div style={{ fontSize: 14, fontWeight: 500, color: "#6b7280" }}>
@@ -843,8 +845,8 @@ export default function MailBoard() {
                   </div>
                 )}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
