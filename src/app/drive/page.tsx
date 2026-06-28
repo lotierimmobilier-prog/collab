@@ -266,7 +266,8 @@ function DriveExplorer() {
 
 // Gestion des dossiers imposés (super admin) — noms non modifiables par les agents.
 function CommonFoldersModal({ onClose }: { onClose: () => void }) {
-  interface Tpl { id: string; name: string; visibility: string; readonly: boolean }
+  interface Tpl { id: string; name: string; visibility: string; readonly: boolean; parentKey?: string | null }
+  interface Parent { key: string; name: string }
   const VIS = [
     { id: "confidentiel", label: "Confidentiel (chacun le sien)" },
     { id: "gestionnaire", label: "Gestionnaires" },
@@ -274,17 +275,23 @@ function CommonFoldersModal({ onClose }: { onClose: () => void }) {
     { id: "tous", label: "Toute l'agence" },
   ];
   const [list, setList] = useState<Tpl[]>([]);
+  const [defaults, setDefaults] = useState<Parent[]>([]);
   const [name, setName] = useState("");
   const [vis, setVis] = useState("confidentiel");
   const [ro, setRo] = useState(false);
+  const [parent, setParent] = useState("");
   const [loading, setLoading] = useState(true);
-  const reload = () => fetch("/api/agency/drive/templates").then(r => r.ok ? r.json() : { templates: [] }).then(d => setList(d.templates ?? [])).finally(() => setLoading(false));
+  const reload = () => fetch("/api/agency/drive/templates").then(r => r.ok ? r.json() : { templates: [] }).then(d => { setList(d.templates ?? []); setDefaults(d.defaults ?? []); }).finally(() => setLoading(false));
   useEffect(() => { reload(); }, []);
+
+  // Parents possibles : dossiers par défaut + modèles existants.
+  const parentOptions: Parent[] = [...defaults, ...list.map(t => ({ key: `tpl:${t.id}`, name: t.name }))];
+  const parentName = (key?: string | null) => key ? (parentOptions.find(p => p.key === key)?.name ?? "—") : null;
 
   async function add() {
     if (!name.trim()) return;
-    await fetch("/api/agency/drive/templates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim(), visibility: vis, readonly: ro }) });
-    setName(""); setVis("confidentiel"); setRo(false); reload();
+    await fetch("/api/agency/drive/templates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim(), visibility: vis, readonly: ro, parentKey: parent || null }) });
+    setName(""); setVis("confidentiel"); setRo(false); setParent(""); reload();
   }
   async function rename(t: Tpl) {
     const n = prompt("Nouveau nom du dossier imposé :", t.name);
@@ -316,6 +323,10 @@ function CommonFoldersModal({ onClose }: { onClose: () => void }) {
         <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", background: "#FAFAF8", border: `1px solid ${BORDER}`, borderRadius: 10, padding: 12 }}>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Nom du dossier imposé" style={{ ...input, flex: 1, minWidth: 160 }} />
+            <select value={parent} onChange={e => setParent(e.target.value)} title="Dossier parent" style={input}>
+              <option value="">📁 Racine (aucun parent)</option>
+              {parentOptions.map(p => <option key={p.key} value={p.key}>↳ dans « {p.name} »</option>)}
+            </select>
             <select value={vis} onChange={e => setVis(e.target.value)} style={input}>{VIS.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}</select>
             <label style={{ fontSize: 12, color: DARK, display: "flex", alignItems: "center", gap: 5 }}><input type="checkbox" checked={ro} onChange={e => setRo(e.target.checked)} /> Lecture seule</label>
             <button onClick={add} disabled={!name.trim()} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Ajouter</button>
@@ -329,6 +340,7 @@ function CommonFoldersModal({ onClose }: { onClose: () => void }) {
                   <span style={{ fontSize: 20 }}>🗂</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: 13, color: DARK }}>{t.name}{t.readonly && <span style={{ fontSize: 10, color: "#9ca3af", marginLeft: 6 }}>(lecture seule)</span>}</div>
+                    {t.parentKey && <div style={{ fontSize: 10.5, color: GOLD }}>↳ sous-dossier de « {parentName(t.parentKey)} »</div>}
                   </div>
                   <select value={t.visibility} onChange={e => setVisibility(t, e.target.value)} style={{ ...input, height: 30, fontSize: 12 }}>{VIS.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}</select>
                   <button onClick={() => rename(t)} style={{ border: `1px solid ${BORDER}`, background: "#fff", borderRadius: 7, padding: "5px 9px", fontSize: 12, cursor: "pointer" }}>✏</button>

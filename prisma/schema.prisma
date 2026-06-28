@@ -1224,6 +1224,7 @@ model DriveFolderTemplate {
   visibility String   @default("confidentiel")
   readonly   Boolean  @default(false)
   order      Int      @default(0)
+  parentKey  String?  // templateKey du dossier imposé parent (null = racine)
   createdAt  DateTime @default(now())
 
   @@map("drive_folder_templates")
