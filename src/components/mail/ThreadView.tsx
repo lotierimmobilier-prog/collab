@@ -300,6 +300,31 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
     finally { setAiLoading(null); }
   }
 
+  // ── Répondre avec le document demandé (récupéré dans la GED ICS) ──
+  // Si l'expéditeur correspond à un locataire connu, le document est joint et
+  // l'agent n'a plus qu'à vérifier puis envoyer ; sinon, contrôle requis.
+  async function sendDocument() {
+    setAiLoading("ged");
+    try {
+      const m = lastMsg;
+      const r = await fetch("/api/mail/ged-reply", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fromEmail: m?.from?.email, fromName: m?.from?.name, subject: thread.subject, body: m?.bodyText || (m?.body || "").replace(/<[^>]+>/g, ""), accountId: thread.accountId }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { alert(d.error || "Préparation impossible."); return; }
+      const status = [
+        d.matched ? `✓ Expéditeur reconnu : ${d.contactName} (locataire).` : `⚠️ Expéditeur NON reconnu dans la GED — vérifiez l'identité AVANT d'envoyer.`,
+        d.found ? `📎 Document joint : ${d.attachment.filename}` : `Aucun document joint automatiquement.${d.note ? " " + d.note : ""}`,
+      ].join("\n");
+      alert(status);
+      if (onForward) {
+        onForward({ to: m.from.email, subject: reSubject(), body: d.replyHtml, accountId: thread.accountId, attachments: d.attachment ? [d.attachment] : undefined });
+      }
+    } catch { alert("Erreur réseau."); }
+    finally { setAiLoading(null); }
+  }
+
   // ── Suggérer une tâche ──────────────────────────────────────
   async function suggestTask() {
     setAiLoading("task");
@@ -859,6 +884,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
 
         <AiBtn loading={aiLoading === "summarize"} onClick={summarize}       icon="📝" label="Résumer" />
         <AiBtn loading={aiLoading === "draft"}     onClick={draftReply}      icon="✍" label="Brouillon IA" />
+        <AiBtn loading={aiLoading === "ged"}       onClick={sendDocument}    icon="📎" label="Document demandé" />
         <AiBtn loading={aiLoading === "task"}      onClick={suggestTask}     icon="✅" label="Créer une tâche" />
         <AiBtn loading={aiLoading === "rdv"}       onClick={detectRdv}       icon="📅" label="Valider un RDV" />
         <AiBtn loading={aiLoading === "full"}      onClick={runFullAnalysis} icon="🔍" label="Analyse complète" />
