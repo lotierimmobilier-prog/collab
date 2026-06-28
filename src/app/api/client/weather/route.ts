@@ -61,7 +61,7 @@ export async function GET() {
   let city = address ? cityFromAddress(address) : "";
   if (!city) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pref: any[] = await prisma.$queryRawUnsafe(`SELECT city FROM client_prefs WHERE "tenantId" = $1 LIMIT 1`, client.id).catch(() => []);
+    const pref = (await prisma.$queryRawUnsafe(`SELECT city FROM client_prefs WHERE "tenantId" = $1 LIMIT 1`, client.id).catch(() => [])) as any[];
     city = (pref?.[0]?.city ?? "").trim();
   }
   // Aucune ville : on le signale au client (200) pour qu'il puisse la saisir.
