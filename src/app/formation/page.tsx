@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
 import { validationStatus, V_STATUS_LABEL, type ValidationLike } from "@/lib/formation";
+import Markdown from "@/components/Markdown";
 
 const GOLD = "#B8966A"; const DARK = "#1C1A17"; const BORDER = "#E6E1D9";
 const GOLD_BG = "#F7F0E6"; const RED = "#9B2C2C"; const GREEN = "#2F855A";
@@ -907,7 +908,7 @@ function FormationAssistant() {
           {chat.map((m, i) => m.role === "assistant" ? (
             <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", alignSelf: "flex-start", maxWidth: "90%" }}>
               <AugusteAvatar size={28} src={avatar} />
-              <div style={{ background: "#F4F1EC", color: DARK, borderRadius: 12, padding: "9px 13px", fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.content}</div>
+              <div style={{ background: "#F4F1EC", color: DARK, borderRadius: 12, padding: "9px 13px", fontSize: 13.5, lineHeight: 1.55, wordBreak: "break-word" }}><Markdown text={m.content} /></div>
             </div>
           ) : (
             <div key={i} style={{ alignSelf: "flex-end", maxWidth: "85%", background: GOLD, color: "#fff", borderRadius: 12, padding: "9px 13px", fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.content}</div>
