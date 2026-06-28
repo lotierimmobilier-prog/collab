@@ -884,28 +884,98 @@ function FormationAssistant() {
   }
 
   return (
-    <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", height: "64vh", minHeight: 380, overflow: "hidden" }}>
-      <div style={{ padding: "12px 16px", borderBottom: `1px solid ${BORDER}`, background: GOLD_BG }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: DARK }}>✦ Auguste — votre tuteur de formation</div>
-        <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>Posez vos questions sur le métier, demandez des explications ou des exercices d’entraînement.</div>
-      </div>
-      <div ref={boxRef} style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
-        {chat.length === 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {suggestions.map(s => (
-              <button key={s} onClick={() => send(s)} style={{ border: `1px solid ${BORDER}`, background: "#FAFAF8", borderRadius: 999, padding: "7px 12px", fontSize: 12.5, color: DARK, cursor: "pointer" }}>{s}</button>
-            ))}
+    <div style={{ display: "flex", gap: 16, alignItems: "stretch", flexWrap: "wrap" }}>
+      {/* Conversation */}
+      <div style={{ flex: "1 1 420px", minWidth: 300, background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", height: "64vh", minHeight: 380, overflow: "hidden" }}>
+        <div style={{ padding: "12px 16px", borderBottom: `1px solid ${BORDER}`, background: GOLD_BG, display: "flex", alignItems: "center", gap: 10 }}>
+          <AugusteAvatar size={34} />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: DARK }}>Auguste — votre tuteur de formation</div>
+            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 1 }}>Questions sur le métier, explications, exercices d’entraînement.</div>
           </div>
-        )}
-        {chat.map((m, i) => (
-          <div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "85%", background: m.role === "user" ? GOLD : "#F4F1EC", color: m.role === "user" ? "#fff" : DARK, borderRadius: 12, padding: "9px 13px", fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.content}</div>
-        ))}
-        {thinking && <div style={{ alignSelf: "flex-start", color: "#9ca3af", fontSize: 13 }}>Auguste réfléchit…</div>}
+        </div>
+        <div ref={boxRef} style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+          {chat.length === 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {suggestions.map(s => (
+                <button key={s} onClick={() => send(s)} style={{ border: `1px solid ${BORDER}`, background: "#FAFAF8", borderRadius: 999, padding: "7px 12px", fontSize: 12.5, color: DARK, cursor: "pointer" }}>{s}</button>
+              ))}
+            </div>
+          )}
+          {chat.map((m, i) => m.role === "assistant" ? (
+            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", alignSelf: "flex-start", maxWidth: "90%" }}>
+              <AugusteAvatar size={28} />
+              <div style={{ background: "#F4F1EC", color: DARK, borderRadius: 12, padding: "9px 13px", fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.content}</div>
+            </div>
+          ) : (
+            <div key={i} style={{ alignSelf: "flex-end", maxWidth: "85%", background: GOLD, color: "#fff", borderRadius: 12, padding: "9px 13px", fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.content}</div>
+          ))}
+          {thinking && (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", alignSelf: "flex-start" }}>
+              <AugusteAvatar size={28} />
+              <span style={{ color: "#9ca3af", fontSize: 13 }}>Auguste réfléchit…</span>
+            </div>
+          )}
+        </div>
+        <div style={{ borderTop: `1px solid ${BORDER}`, padding: 12, display: "flex", gap: 8 }}>
+          <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Votre question…" style={{ flex: 1, height: 42, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "0 14px", fontSize: 14, outline: "none" }} />
+          <button onClick={() => send()} disabled={!q.trim() || thinking} style={{ ...btnGold, padding: "0 18px", opacity: !q.trim() || thinking ? 0.5 : 1 }}>Envoyer</button>
+        </div>
       </div>
-      <div style={{ borderTop: `1px solid ${BORDER}`, padding: 12, display: "flex", gap: 8 }}>
-        <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Votre question…" style={{ flex: 1, height: 42, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "0 14px", fontSize: 14, outline: "none" }} />
-        <button onClick={() => send()} disabled={!q.trim() || thinking} style={{ ...btnGold, padding: "0 18px", opacity: !q.trim() || thinking ? 0.5 : 1 }}>Envoyer</button>
+
+      {/* Présentation d'Auguste */}
+      <AugustePresentation />
+    </div>
+  );
+}
+
+// Avatar « photo » d'Auguste (cercle).
+function AugusteAvatar({ size = 28 }: { size?: number }) {
+  return (
+    <div style={{ width: size, height: size, borderRadius: "50%", background: "linear-gradient(135deg, #D8B783 0%, #A07C4B 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: Math.round(size * 0.58), flexShrink: 0, boxShadow: "0 1px 3px rgba(28,26,23,0.25)", border: "2px solid #fff" }} aria-hidden>
+      🤵
+    </div>
+  );
+}
+
+// Fiche de présentation (CV imaginaire et farfelu d'Auguste).
+function AugustePresentation() {
+  const Section = ({ title, items }: { title: string; items: string[] }) => (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>{title}</div>
+      <ul style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 5 }}>
+        {items.map((t, i) => <li key={i} style={{ fontSize: 12.5, color: "#3f3a33", lineHeight: 1.5 }}>{t}</li>)}
+      </ul>
+    </div>
+  );
+  return (
+    <div style={{ flex: "0 1 290px", minWidth: 250, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 18, alignSelf: "flex-start", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ display: "inline-block" }}><AugusteAvatar size={88} /></div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: DARK, marginTop: 8 }}>Auguste de la Pierre</div>
+        <div style={{ fontSize: 12, color: GOLD, fontWeight: 600 }}>Expert immobilier · Mentor de légende</div>
+        <div style={{ fontSize: 11.5, color: "#9ca3af", marginTop: 2 }}>Carte professionnelle n° 0000-IMAGINAIRE</div>
       </div>
+      <div style={{ height: 1, background: BORDER, margin: "14px 0 0" }} />
+      <Section title="Parcours (officieux)" items={[
+        "47 ans d'expérience, dont 3 dans une dimension parallèle où tout se vend sans rétractation.",
+        "A fait visiter la Tour Eiffel 4 fois — toutes annulées au délai de réflexion.",
+        "Ancien négociateur en chef du Royaume des Clés Perdues.",
+      ]} />
+      <Section title="Diplômes" items={[
+        "Doctorat ès Flair Immobilier (mention « nez d'or »).",
+        "Maîtrise du Compromis à l'amiable, option sourire.",
+        "Ceinture noire de négociation, 7ᵉ dan du « c'est mon dernier prix ».",
+      ]} />
+      <Section title="Exploits" items={[
+        "A vendu un studio sans fenêtre en le qualifiant de « cosy et économe en rideaux ».",
+        "Record du monde de la poignée de main de confiance (3 h 12).",
+        "Sait estimer un bien rien qu'à l'odeur du café du voisin.",
+      ]} />
+      <div style={{ marginTop: 14, background: GOLD_BG, borderRadius: 10, padding: "10px 12px" }}>
+        <div style={{ fontSize: 12.5, color: "#7a5f37", fontStyle: "italic", lineHeight: 1.5 }}>« Un bien bien présenté est déjà à moitié vendu — l'autre moitié, c'est moi. »</div>
+      </div>
+      <div style={{ fontSize: 11, color: "#b0a48d", marginTop: 10, textAlign: "center" }}>Personnage fictif — pour vous accompagner avec le sourire 😄</div>
     </div>
   );
 }
