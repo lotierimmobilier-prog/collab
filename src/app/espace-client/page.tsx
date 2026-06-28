@@ -91,7 +91,7 @@ export default function EspaceClientPage() {
 }
 
 // ════════════ Portail (après connexion) ════════════
-interface Doc { id: string; source: string; category: string; fileName: string; mime: string | null; size: number | null; createdAt: string }
+interface Doc { id: string; source: string; category: string; fileName: string; mime: string | null; size: number | null; createdAt: string; validUntil?: string | null }
 const TABS = [
   { id: "accueil", label: "Accueil", icon: "⌂" },
   { id: "documents", label: "Mes documents", icon: "📄" },
@@ -240,6 +240,7 @@ function Documents({ docs }: { docs: Doc[] }) {
 function Justificatifs({ docs, reload }: { docs: Doc[]; reload: () => void }) {
   const mine = docs.filter(d => d.source === "tenant");
   const [category, setCategory] = useState("assurance");
+  const [validUntil, setValidUntil] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -250,7 +251,7 @@ function Justificatifs({ docs, reload }: { docs: Doc[]; reload: () => void }) {
     setBusy(true);
     try {
       const data = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] ?? ""); r.onerror = rej; r.readAsDataURL(file); });
-      const r = await fetch("/api/client/documents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category, fileName: file.name, mime: file.type, size: file.size, data }) });
+      const r = await fetch("/api/client/documents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category, fileName: file.name, mime: file.type, size: file.size, data, validUntil: category === "assurance" && validUntil ? validUntil : undefined }) });
       if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || "Échec du dépôt."); return; }
       reload();
     } catch { setErr("Erreur lors du dépôt."); }
@@ -277,6 +278,12 @@ function Justificatifs({ docs, reload }: { docs: Doc[]; reload: () => void }) {
           <select value={category} onChange={e => setCategory(e.target.value)} style={{ ...inp, height: 42 }}>
             {CATS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
+          {category === "assurance" && (
+            <label style={{ fontSize: 12.5, color: "#6b6357", display: "flex", flexDirection: "column", gap: 4 }}>
+              Date de fin de validité de l'attestation (facultatif)
+              <input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} style={{ ...inp, height: 42 }} />
+            </label>
+          )}
           <input ref={fileRef} type="file" accept="application/pdf,image/*" onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); }} disabled={busy} style={{ fontSize: 13 }} />
           {busy && <div style={{ fontSize: 12.5, color: GOLD }}>Dépôt en cours…</div>}
           {err && <div style={{ fontSize: 12.5, color: "#dc2626" }}>{err}</div>}
@@ -308,6 +315,7 @@ function DocRow({ d, onDelete }: { d: Doc; onDelete?: () => void }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: DARK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.fileName}</div>
         <div style={{ fontSize: 11, color: "#9ca3af" }}>{CAT_LABEL[d.category] || "Document"} · {new Date(d.createdAt).toLocaleDateString("fr-FR")}{d.size ? ` · ${fmtSize(d.size)}` : ""}</div>
+        {d.category === "assurance" && d.validUntil && <div style={{ fontSize: 11, color: new Date(d.validUntil) < new Date() ? "#dc2626" : "#6b6357", marginTop: 1 }}>Valable jusqu'au {new Date(d.validUntil).toLocaleDateString("fr-FR")}</div>}
       </div>
       <a href={`/api/client/documents/${d.id}`} title="Télécharger" style={{ textDecoration: "none", color: GOLD, fontWeight: 700, fontSize: 13, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "6px 10px" }}>↓</a>
       {onDelete && <button onClick={onDelete} title="Supprimer" style={{ background: "none", border: `1px solid #fecaca`, borderRadius: 8, padding: "6px 9px", color: "#dc2626", cursor: "pointer", fontSize: 13 }}>🗑</button>}
