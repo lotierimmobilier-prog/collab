@@ -22,7 +22,7 @@ interface Person { id: string; prenom: string; nom: string; email?: string; acti
 interface MeInfo extends Person { roleId: string; parrainId: string | null; parrain: Person | null; }
 interface AdminUser extends Person { roleId: string; parrainId: string | null; parrain: Person | null; }
 
-type Tab = "controle" | "parcours" | "filleuls" | "suivi" | "modules" | "affectation";
+type Tab = "controle" | "parcours" | "qcm" | "diplome" | "assistant" | "filleuls" | "suivi" | "modules" | "affectation";
 
 export default function FormationPage() {
   const { data: session } = useSession();
@@ -68,6 +68,9 @@ export default function FormationPage() {
   const tabs: { id: Tab; label: string; show: boolean }[] = [
     { id: "controle", label: "Contrôle", show: !!isAdmin || filleuls.length > 0 },
     { id: "parcours", label: "Mon parcours", show: !!me?.parrainId },
+    { id: "qcm", label: "QCM", show: !!me?.parrainId },
+    { id: "diplome", label: "Mon diplôme", show: !!me?.parrainId },
+    { id: "assistant", label: "Auguste", show: !!me?.parrainId },
     { id: "filleuls", label: `Mes filleuls${filleuls.length ? ` (${filleuls.length})` : ""}`, show: filleuls.length > 0 },
     { id: "suivi", label: `Suivi des filleuls${allFilleuls.length ? ` (${allFilleuls.length})` : ""}`, show: !!isAdmin },
     { id: "modules", label: "Modules & compétences", show: !!isAdmin },
@@ -123,6 +126,18 @@ export default function FormationPage() {
                 side="filleul"
                 heading={me.parrain ? `Parrain : ${me.parrain.prenom} ${me.parrain.nom}` : undefined}
               />
+            )}
+
+            {tab === "qcm" && me?.parrainId && (
+              <MyQcm filleulId={me.id} modules={modules} />
+            )}
+
+            {tab === "diplome" && me?.parrainId && (
+              <MyDiploma filleulId={me.id} modules={modules} />
+            )}
+
+            {tab === "assistant" && me?.parrainId && (
+              <FormationAssistant />
             )}
 
             {tab === "filleuls" && (
@@ -522,11 +537,14 @@ function Parcours({ filleulId, modules, side, heading, canParrain, canFilleul }:
         </div>
       ))}
 
-      {/* Partie dédiée QCM */}
-      <QcmSection
-        modules={modules} vals={vals} canAnswer={allowFilleul} busyId={busy}
-        onAnswer={(competenceId, quiz) => act(competenceId, { action: "setQuiz", quiz })}
-      />
+      {/* QCM : pour le filleul, c'est un onglet dédié ; ici on l'affiche
+          seulement dans la vue parrain/admin (suivi des réponses). */}
+      {side === "parrain" && (
+        <QcmSection
+          modules={modules} vals={vals} canAnswer={allowFilleul} busyId={busy}
+          onAnswer={(competenceId, quiz) => act(competenceId, { action: "setQuiz", quiz })}
+        />
+      )}
     </div>
   );
 }
@@ -761,6 +779,120 @@ function QcmSection({ modules, vals, canAnswer, busyId, onAnswer }: {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Onglet QCM (filleul) : ses propres quiz ─────────────────────────
+function useMyValidations(filleulId: string) {
+  const [vals, setVals] = useState<Record<string, Validation>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/formation/validations?filleulId=${encodeURIComponent(filleulId)}`);
+      if (!r.ok) return;
+      const d = await r.json();
+      const map: Record<string, Validation> = {};
+      for (const v of (d.validations ?? []) as Validation[]) map[v.competenceId] = v;
+      setVals(map);
+    } catch { /* silencieux */ }
+  }, [filleulId]);
+  useEffect(() => { load(); }, [load]);
+  const setQuiz = useCallback(async (competenceId: string, quiz: Record<string, number>) => {
+    setBusy(competenceId);
+    try {
+      const r = await fetch("/api/formation/validations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ competenceId, filleulId, action: "setQuiz", quiz }) });
+      if (r.ok) { const v = await r.json(); setVals(prev => ({ ...prev, [competenceId]: v })); }
+    } catch { /* silencieux */ } finally { setBusy(null); }
+  }, [filleulId]);
+  return { vals, busy, setQuiz };
+}
+
+function MyQcm({ filleulId, modules }: { filleulId: string; modules: Module[] }) {
+  const { vals, busy, setQuiz } = useMyValidations(filleulId);
+  const hasQ = modules.some(m => (m.competences ?? []).some(c => (c.questions?.length ?? 0) > 0));
+  if (!hasQ) {
+    return <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, padding: 26, textAlign: "center", color: "#6b7280", fontSize: 13.5 }}>Aucun QCM n’est disponible pour le moment.</div>;
+  }
+  return <QcmSection modules={modules} vals={vals} canAnswer={true} busyId={busy} onAnswer={setQuiz} />;
+}
+
+// ─── Onglet « Mon diplôme » (filleul) ────────────────────────────────
+function MyDiploma({ filleulId, modules }: { filleulId: string; modules: Module[] }) {
+  const { vals } = useMyValidations(filleulId);
+  const allComps = modules.flatMap(m => m.competences ?? []);
+  const done = allComps.filter(c => validationStatus(vals[c.id]) === "termine").length;
+  const total = allComps.length;
+  const complete = total > 0 && done === total;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  return (
+    <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, padding: 24, textAlign: "center" }}>
+      <div style={{ fontSize: 40 }}>🎓</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: DARK, marginTop: 6 }}>Mon diplôme de formation</div>
+      {complete ? (
+        <>
+          <p style={{ fontSize: 13.5, color: "#3f6b4f", lineHeight: 1.6, margin: "8px auto 16px", maxWidth: 460 }}>Félicitations ! Vous avez validé l’ensemble de votre parcours. Votre attestation est disponible.</p>
+          <a href={`/api/formation/attestation?filleulId=${filleulId}`} target="_blank" rel="noreferrer" style={{ display: "inline-block", textDecoration: "none", background: "#2F855A", color: "#fff", borderRadius: 10, padding: "11px 22px", fontSize: 14, fontWeight: 700 }}>Télécharger mon diplôme (PDF)</a>
+        </>
+      ) : (
+        <>
+          <p style={{ fontSize: 13.5, color: "#6b7280", lineHeight: 1.6, margin: "8px auto 14px", maxWidth: 460 }}>Votre diplôme sera disponible une fois toutes les compétences validées.</p>
+          <div style={{ maxWidth: 360, margin: "0 auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#6b7280", marginBottom: 6 }}><span>Progression</span><span>{done} / {total} ({pct}%)</span></div>
+            <div style={{ height: 10, borderRadius: 999, background: "#EEE9E0", overflow: "hidden" }}><div style={{ width: `${pct}%`, height: "100%", background: GOLD }} /></div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Onglet Auguste : assistant de formation ─────────────────────────
+function FormationAssistant() {
+  const [chat, setChat] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [q, setQ] = useState("");
+  const [thinking, setThinking] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { boxRef.current?.scrollTo({ top: boxRef.current.scrollHeight, behavior: "smooth" }); }, [chat, thinking]);
+
+  const suggestions = ["Explique-moi le mandat exclusif", "Comment réussir une estimation ?", "Donne-moi un quiz sur la loi Hoguet", "Conseils pour une première visite"];
+
+  async function send(text?: string) {
+    const content = (text ?? q).trim();
+    if (!content || thinking) return;
+    const next = [...chat, { role: "user" as const, content }];
+    setChat(next); setQ(""); setThinking(true);
+    try {
+      const r = await fetch("/api/formation/assistant", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: next }) });
+      const d = await r.json().catch(() => ({}));
+      setChat(c => [...c, { role: "assistant", content: d.reply || "Désolé, je n'ai pas pu répondre." }]);
+    } catch { setChat(c => [...c, { role: "assistant", content: "Assistant momentanément indisponible." }]); }
+    finally { setThinking(false); }
+  }
+
+  return (
+    <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", height: "64vh", minHeight: 380, overflow: "hidden" }}>
+      <div style={{ padding: "12px 16px", borderBottom: `1px solid ${BORDER}`, background: GOLD_BG }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: DARK }}>✦ Auguste — votre tuteur de formation</div>
+        <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>Posez vos questions sur le métier, demandez des explications ou des exercices d’entraînement.</div>
+      </div>
+      <div ref={boxRef} style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+        {chat.length === 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {suggestions.map(s => (
+              <button key={s} onClick={() => send(s)} style={{ border: `1px solid ${BORDER}`, background: "#FAFAF8", borderRadius: 999, padding: "7px 12px", fontSize: 12.5, color: DARK, cursor: "pointer" }}>{s}</button>
+            ))}
+          </div>
+        )}
+        {chat.map((m, i) => (
+          <div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "85%", background: m.role === "user" ? GOLD : "#F4F1EC", color: m.role === "user" ? "#fff" : DARK, borderRadius: 12, padding: "9px 13px", fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.content}</div>
+        ))}
+        {thinking && <div style={{ alignSelf: "flex-start", color: "#9ca3af", fontSize: 13 }}>Auguste réfléchit…</div>}
+      </div>
+      <div style={{ borderTop: `1px solid ${BORDER}`, padding: 12, display: "flex", gap: 8 }}>
+        <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Votre question…" style={{ flex: 1, height: 42, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "0 14px", fontSize: 14, outline: "none" }} />
+        <button onClick={() => send()} disabled={!q.trim() || thinking} style={{ ...btnGold, padding: "0 18px", opacity: !q.trim() || thinking ? 0.5 : 1 }}>Envoyer</button>
       </div>
     </div>
   );
