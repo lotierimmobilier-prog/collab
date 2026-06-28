@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
     const brief = String(b?.brief ?? "").trim().slice(0, 1000);
     const network = String(b?.network ?? "Instagram").slice(0, 40);
     const styleId = String(b?.style ?? "pro").slice(0, 20);
+    const degree = Math.min(3, Math.max(1, Number(b?.degree) || 2)); // 1 discret · 2 équilibré · 3 marqué
     if (!brief) return NextResponse.json({ error: "Décrivez le bien ou l'idée du post." }, { status: 400 });
     // Consignes de ton selon le style choisi par l'agent.
     const STYLES: Record<string, string> = {
@@ -46,9 +47,15 @@ export async function POST(req: NextRequest) {
       info: "Ton informatif et factuel : on met en avant les caractéristiques clés, les atouts concrets et les chiffres fournis, de façon claire et structurée. Peu d'emphase.",
     };
     const styleHint = STYLES[styleId] ?? STYLES.pro;
+    const DEGREE: Record<number, string> = {
+      1: "DEGRÉ DISCRET : applique ce style avec retenue et subtilité — il doit rester perceptible mais léger, le post demeure très sobre.",
+      2: "DEGRÉ ÉQUILIBRÉ : applique ce style de façon nette et assumée, sans excès.",
+      3: "DEGRÉ MARQUÉ : pousse ce style à fond, qu'il soit immédiatement reconnaissable et caractéristique (tout en restant publiable par une agence sérieuse).",
+    };
     const SYSTEM = `Tu es le community manager de l'agence immobilière Lotier Immobilier. Tu produis un post ${network} en français, PRÊT À COPIER-COLLER tel quel sur le réseau social.
 
 STYLE DEMANDÉ : ${styleHint}
+${DEGREE[degree]}
 
 FORMAT IMPOSÉ (structure le post sur plusieurs lignes, avec des sauts de ligne entre les blocs pour l'aération) :
 1. Une accroche forte sur la 1re ligne, avec un emoji d'ouverture pertinent (🏡 ✨ 🔑 📍 …).

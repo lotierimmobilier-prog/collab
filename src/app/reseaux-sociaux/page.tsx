@@ -114,6 +114,7 @@ function Accounts({ accounts, isAdmin, reload }: { accounts: Account[]; isAdmin:
 function Generator() {
   const [network, setNetwork] = useState("Instagram");
   const [style, setStyle] = useState("pro");
+  const [degree, setDegree] = useState(2); // 1 discret · 2 équilibré · 3 marqué
   const [brief, setBrief] = useState("");
   const [post, setPost] = useState("");
   const [busy, setBusy] = useState(false);
@@ -123,7 +124,7 @@ function Generator() {
     if (forStyle) setStyle(forStyle);
     setBusy(true); setPost("");
     try {
-      const r = await fetch("/api/reseaux", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate", brief, network, style: useStyle }) });
+      const r = await fetch("/api/reseaux", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate", brief, network, style: useStyle, degree }) });
       const d = await r.json().catch(() => ({}));
       setPost(d.post || d.error || "—");
     } catch { setPost("Erreur réseau."); }
@@ -145,6 +146,20 @@ function Generator() {
                 <button key={s.id} type="button" onClick={() => setStyle(s.id)} title={s.desc}
                   style={{ display: "flex", alignItems: "center", gap: 6, border: `1px solid ${on ? GOLD : BORDER}`, background: on ? GOLD_BG : "#fff", color: on ? DARK : "#6b7280", borderRadius: 999, padding: "6px 12px", fontSize: 12.5, fontWeight: on ? 700 : 500, cursor: "pointer" }}>
                   <span>{s.emoji}</span>{s.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>Degré du style</div>
+          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+            {[{ d: 1, l: "Discret" }, { d: 2, l: "Équilibré" }, { d: 3, l: "Marqué" }].map(x => {
+              const on = degree === x.d;
+              return (
+                <button key={x.d} type="button" onClick={() => setDegree(x.d)}
+                  style={{ display: "flex", alignItems: "center", gap: 6, border: `1px solid ${on ? GOLD : BORDER}`, background: on ? GOLD_BG : "#fff", color: on ? DARK : "#6b7280", borderRadius: 999, padding: "6px 14px", fontSize: 12.5, fontWeight: on ? 700 : 500, cursor: "pointer" }}>
+                  <span style={{ letterSpacing: 1 }}>{"●".repeat(x.d)}<span style={{ opacity: 0.25 }}>{"●".repeat(3 - x.d)}</span></span>{x.l}
                 </button>
               );
             })}

@@ -42,12 +42,32 @@ export async function GET() {
   let odsOpen = 0;
   try { odsOpen = await prisma.serviceOrder.count({ where: { status: { notIn: ["terminé", "terminée", "annulé", "annulée"] } } }); } catch { /* ignore */ }
 
-  // ── RDV de la semaine (événements créés par l'utilisateur) ──
+  // ── RDV de la semaine ──
+  // Doit refléter l'agenda : événements créés par l'utilisateur OU auxquels il
+  // participe (attendees), + l'agenda Google connecté. On compte par
+  // chevauchement de la semaine (comme le planning).
   let rdvWeek = 0;
   try {
     const ws = new Date(now); ws.setDate(now.getDate() - ((now.getDay() + 6) % 7)); ws.setHours(0, 0, 0, 0);
     const we = new Date(ws); we.setDate(ws.getDate() + 7);
-    rdvWeek = await prisma.calendarEvent.count({ where: { createdBy: uid, start: { gte: ws, lt: we } } });
+    const myEmail = (session.user.email || "").toLowerCase();
+    // Événements internes qui recoupent la semaine.
+    const weekEvents = await prisma.calendarEvent.findMany({
+      where: { start: { lt: we }, end: { gte: ws } },
+      select: { createdBy: true, attendees: true },
+    });
+    const mine = weekEvents.filter(e => {
+      if (e.createdBy === uid) return true;
+      const att = Array.isArray(e.attendees) ? (e.attendees as Array<{ type?: string; id?: string; email?: string }>) : [];
+      return att.some(a => (a.type === "user" && a.id === uid) || (!!a.email && a.email.toLowerCase() === myEmail));
+    });
+    rdvWeek = mine.length;
+    // Agenda Google connecté (même fenêtre).
+    try {
+      const { getGoogleEvents } = await import("@/lib/googleCalendarServer");
+      const gEvents = await getGoogleEvents(uid, ws.toISOString(), we.toISOString());
+      rdvWeek += Array.isArray(gEvents) ? gEvents.length : 0;
+    } catch { /* Google non connecté → ignore */ }
   } catch { /* ignore */ }
 
   // ── CA (direction uniquement) ──

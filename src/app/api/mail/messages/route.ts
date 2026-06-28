@@ -32,6 +32,8 @@ export async function GET(req: NextRequest) {
   });
   const allowed = configs.map(c => c.id);
   where.OR = [{ accountId: { in: allowed } }, { ownerId: uid }];
+  // Ne jamais renvoyer les messages supprimés définitivement (tombstones).
+  where.NOT = { labels: { has: "deleted" } };
 
   const messages = await prisma.emailMessage.findMany({
     where,
@@ -62,9 +64,17 @@ export async function POST(req: NextRequest) {
     return !!set && !!fromEmail && set.has(fromEmail.trim().toLowerCase());
   };
 
+  // Tombstones : messages supprimés définitivement à ne pas ressusciter.
+  const tomb = await prisma.emailMessage.findMany({
+    where: { labels: { has: "deleted" }, OR: messages.map((m: { uid?: string; id?: string; accountId?: string; folder?: string }) => ({ uid: String(m.uid || m.id), accountId: m.accountId, folder: m.folder || "INBOX" })) },
+    select: { uid: true, accountId: true, folder: true },
+  }).catch(() => [] as { uid: string; accountId: string; folder: string }[]);
+  const tombSet = new Set(tomb.map(t => `${t.uid}|${t.accountId}|${t.folder}`));
+
   let saved = 0;
   for (const m of messages) {
     try {
+      if (tombSet.has(`${String(m.uid || m.id)}|${m.accountId}|${m.folder || "INBOX"}`)) continue;
       const spam = isSpam(m.accountId, m.from?.email);
       const labels = spam ? ["trash"] : (m.labels || ["inbox"]);
       const read = spam ? true : (m.status === "read");
@@ -149,6 +159,23 @@ export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id requis" }, { status: 400 });
-  await prisma.emailMessage.delete({ where: { id } }).catch(() => {});
-  return NextResponse.json({ ok: true });
+
+  const msg = await prisma.emailMessage.findUnique({ where: { id }, select: { uid: true, accountId: true, folder: true } }).catch(() => null);
+  if (!msg) return NextResponse.json({ ok: true });
+
+  // 1) Suppression côté serveur IMAP (best effort) : sans ça, le mail revient à
+  //    la prochaine synchronisation. Vaut pour tous les agents de la boîte.
+  let serverDeleted = false;
+  if (msg.accountId && msg.uid) {
+    try {
+      const { deleteFromImapServer } = await import("@/lib/mailImapDelete");
+      serverDeleted = await deleteFromImapServer(msg.accountId, msg.uid, msg.folder);
+    } catch { /* ignore */ }
+  }
+
+  // 2) Tombstone local : on garde la ligne marquée « deleted » plutôt que de la
+  //    détruire. La synchro conserve les labels existants (elle ne réécrit que
+  //    read/starred) → le message ne réapparaît plus jamais dans la boîte.
+  await prisma.emailMessage.update({ where: { id }, data: { labels: ["deleted"], read: true } }).catch(() => {});
+  return NextResponse.json({ ok: true, serverDeleted });
 }

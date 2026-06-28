@@ -24,9 +24,16 @@ export async function POST(req: NextRequest) {
   const role = session.user.roleId ?? "";
   const body = await req.json().catch(() => ({}));
 
+  // Mise à jour partielle : un champ absent du corps conserve sa valeur
+  // existante (permet de réordonner les KPI ou les blocs indépendamment).
+  const existing = await getDashPrefs(session.user.id);
   const allowedKpis = new Set(availableKpis(role).map(k => k.id));
-  const kpis = Array.isArray(body?.kpis) ? body.kpis.filter((x: unknown) => typeof x === "string" && allowedKpis.has(x)).slice(0, 4) : [];
-  const blocks = Array.isArray(body?.blocks) ? body.blocks.filter((x: unknown) => typeof x === "string" && DASH_BLOCK_IDS.includes(x as string)) : [];
+  const kpis = Array.isArray(body?.kpis)
+    ? body.kpis.filter((x: unknown) => typeof x === "string" && allowedKpis.has(x)).slice(0, 4)
+    : (existing.kpis ?? []);
+  const blocks = Array.isArray(body?.blocks)
+    ? body.blocks.filter((x: unknown) => typeof x === "string" && DASH_BLOCK_IDS.includes(x as string))
+    : (existing.blocks ?? []);
 
   try {
     await setDashPrefs(session.user.id, { kpis, blocks });
