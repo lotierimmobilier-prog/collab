@@ -678,16 +678,17 @@ export default function Dashboard() {
             style={{ gridColumn: FULL_WIDTH.has(id) ? "1 / -1" : "auto", position: "relative",
               outline: dragBlock && dragBlock !== id ? `2px dashed ${GOLD}` : "none", outlineOffset: 2, borderRadius: 14,
               opacity: dragBlock === id ? 0.5 : 1, transition: "opacity 0.15s" }}>
+            {/* Poignée ronde flottante dans le coin haut-gauche (hors de la zone
+                des contrôles des blocs, ex. le bouton « Nombre » du classement). */}
             <span
               draggable
               onDragStart={() => setDragBlock(id)}
               onDragEnd={() => setDragBlock(null)}
               title="Glisser pour déplacer ce cadre"
-              style={{ position: "absolute", top: 10, right: 12, zIndex: 5, cursor: "grab", display: "inline-flex", alignItems: "center", gap: 5,
-                background: GOLD_BG, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 999, fontSize: 11, fontWeight: 700,
-                lineHeight: 1, userSelect: "none", padding: "4px 9px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-              <span style={{ fontSize: 13 }}>⠿</span>Déplacer
-            </span>
+              style={{ position: "absolute", top: -9, left: -9, zIndex: 6, cursor: "grab",
+                width: 26, height: 26, borderRadius: "50%", background: GOLD, color: "#fff", border: "2px solid #fff",
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700,
+                lineHeight: 1, userSelect: "none", boxShadow: "0 2px 6px rgba(0,0,0,0.22)" }}>⠿</span>
             {nodeFor(id)}
           </div>
         ))}
