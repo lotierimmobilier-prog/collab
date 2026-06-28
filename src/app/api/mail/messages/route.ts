@@ -158,6 +158,11 @@ export async function DELETE(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
+  // mode=trash : mise à la corbeille (la ligne reste, libellée « trash ») ;
+  // défaut (permanent) : suppression définitive (tombstone « deleted »).
+  // Dans LES DEUX cas on supprime la copie sur le serveur IMAP, sinon elle
+  // revient à la synchronisation suivante.
+  const mode = searchParams.get("mode") === "trash" ? "trash" : "permanent";
   if (!id) return NextResponse.json({ error: "id requis" }, { status: 400 });
 
   const msg = await prisma.emailMessage.findUnique({ where: { id }, select: { uid: true, accountId: true, folder: true } }).catch(() => null);
@@ -173,9 +178,10 @@ export async function DELETE(req: NextRequest) {
     } catch { /* ignore */ }
   }
 
-  // 2) Tombstone local : on garde la ligne marquée « deleted » plutôt que de la
-  //    détruire. La synchro conserve les labels existants (elle ne réécrit que
-  //    read/starred) → le message ne réapparaît plus jamais dans la boîte.
-  await prisma.emailMessage.update({ where: { id }, data: { labels: ["deleted"], read: true } }).catch(() => {});
-  return NextResponse.json({ ok: true, serverDeleted });
+  // 2) Côté base : corbeille → on garde la ligne en « trash » (récupérable dans
+  //    l'app) ; suppression définitive → tombstone « deleted ». La synchro ne
+  //    réécrit pas les labels → le message ne réapparaît plus dans la boîte.
+  const labels = mode === "trash" ? ["trash"] : ["deleted"];
+  await prisma.emailMessage.update({ where: { id }, data: { labels, read: true } }).catch(() => {});
+  return NextResponse.json({ ok: true, serverDeleted, mode });
 }

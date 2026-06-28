@@ -47,6 +47,7 @@ export default function ReseauxPage() {
           <div style={{ maxWidth: 920, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18 }}>
             <Accounts accounts={accounts} isAdmin={isAdmin} reload={load} />
             <Generator />
+            <ImageStudio />
             <Examples />
             <Tips />
           </div>
@@ -183,6 +184,32 @@ function Generator() {
             </div>
           </div>
         )}
+      </div>
+    </Card>
+  );
+}
+
+// Édition d'images — fonctionnalité en cours ; en attendant, on oriente vers Canva.
+function ImageStudio() {
+  return (
+    <Card title="🎨 Créer un visuel" sub="Générer une image ou habiller une photo pour vos publications.">
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: GOLD, borderRadius: 999, padding: "3px 10px", whiteSpace: "nowrap" }}>En cours</span>
+          <div style={{ fontSize: 12.5, color: "#6b6357", lineHeight: 1.5 }}>
+            L'édition d'images directement dans l'application arrive bientôt. Auguste sait rédiger vos textes,
+            mais ne crée pas encore d'images.
+          </div>
+        </div>
+        <div style={{ fontSize: 13, color: DARK, lineHeight: 1.55 }}>
+          En attendant, nous vous conseillons <b>Canva</b> : reprenez le texte généré ci-dessus, choisissez un
+          modèle à votre charte (logo, couleurs Lotier), ajoutez la photo du bien, et exportez votre visuel
+          prêt à publier.
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <a href="https://www.canva.com/" target="_blank" rel="noreferrer" style={{ background: GOLD, color: "#fff", textDecoration: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600 }}>Ouvrir Canva ↗</a>
+          <a href="https://www.canva.com/fr_fr/creer/publications-instagram/" target="_blank" rel="noreferrer" style={{ ...mini, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Modèles de posts immobiliers ↗</a>
+        </div>
       </div>
     </Card>
   );
