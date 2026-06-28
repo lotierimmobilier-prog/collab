@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
+import Markdown from "@/components/Markdown";
 
 const GOLD = "#B8966A";
 const DARK = "#1C1A17";
@@ -452,7 +453,7 @@ function Auguste() {
           </div>
         )}
         {chat.map((m, i) => (
-          <div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "88%", padding: "9px 12px", borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: m.role === "user" ? GOLD : "#f3f4f6", color: m.role === "user" ? "#fff" : DARK, fontSize: 13, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{m.content}</div>
+          <div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "88%", padding: "9px 12px", borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: m.role === "user" ? GOLD : "#f3f4f6", color: m.role === "user" ? "#fff" : DARK, fontSize: 13, lineHeight: 1.55, ...(m.role === "user" ? { whiteSpace: "pre-wrap" as const } : {}) }}>{m.role === "user" ? m.content : <Markdown text={m.content} />}</div>
         ))}
         {thinking && <div style={{ alignSelf: "flex-start", padding: "9px 12px", borderRadius: 12, background: "#f3f4f6", color: "#9ca3af", fontSize: 13 }}>Auguste réfléchit…</div>}
         <div ref={endRef} />

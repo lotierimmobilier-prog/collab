@@ -12,9 +12,10 @@ export interface Extras {
   superAdmin: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   accessOverrides: any;
+  hiddenMenus: string | null; // JSON: ids de menus masqués pour cet utilisateur
 }
 
-const FIELDS = ["parrainId", "city", "isEmployee", "gedAccess", "superAdmin", "accessOverrides"] as const;
+const FIELDS = ["parrainId", "city", "isEmployee", "gedAccess", "superAdmin", "accessOverrides", "hiddenMenus"] as const;
 
 export async function getExtras(userIds: string[]): Promise<Map<string, Partial<Extras>>> {
   const map = new Map<string, Partial<Extras>>();
@@ -22,7 +23,7 @@ export async function getExtras(userIds: string[]): Promise<Map<string, Partial<
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rows: any[] = await prisma.$queryRawUnsafe(
-      `SELECT "userId","parrainId","city","isEmployee","gedAccess","superAdmin","accessOverrides" FROM user_extras WHERE "userId" = ANY($1::text[])`,
+      `SELECT "userId","parrainId","city","isEmployee","gedAccess","superAdmin","accessOverrides","hiddenMenus" FROM user_extras WHERE "userId" = ANY($1::text[])`,
       userIds,
     );
     for (const r of rows) map.set(r.userId, r);
@@ -45,6 +46,9 @@ export async function setExtras(userId: string, fields: Record<string, any>): Pr
       const v = fields[k];
       if (k === "accessOverrides") {
         await prisma.$executeRawUnsafe(`UPDATE user_extras SET "accessOverrides" = $1::jsonb, "updatedAt" = now() WHERE "userId" = $2`, v == null ? null : JSON.stringify(v), userId);
+      } else if (k === "hiddenMenus") {
+        // Liste d'ids de menus masqués, stockée en TEXT (JSON).
+        await prisma.$executeRawUnsafe(`UPDATE user_extras SET "hiddenMenus" = $1, "updatedAt" = now() WHERE "userId" = $2`, Array.isArray(v) ? JSON.stringify(v) : (v ?? null) || null, userId);
       } else if (k === "isEmployee" || k === "superAdmin") {
         await prisma.$executeRawUnsafe(`UPDATE user_extras SET "${k}" = $1, "updatedAt" = now() WHERE "userId" = $2`, !!v, userId);
       } else {

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { User, Role, ModuleAccess, Right, MODULES, RIGHTS, avatarColor, getInitials, getRightStyle, getUserRight } from "@/lib/admin";
+import { User, Role, ModuleAccess, Right, MODULES, RIGHTS, HIDEABLE_MENUS, avatarColor, getInitials, getRightStyle, getUserRight } from "@/lib/admin";
 import { isAdminRole, isSuperAdminEmail } from "@/lib/superadmin";
 
 interface Props {
@@ -29,6 +29,8 @@ export default function UserModal({ user, roles, allUsers = [], isSuper = false,
   });
   const bootstrapSuper = isSuperAdminEmail(user?.email);
   const [overrides, setOverrides] = useState<ModuleAccess[]>(user?.accessOverrides ?? []);
+  const [hiddenMenus, setHiddenMenus] = useState<string[]>((user as { hiddenMenus?: string[] } | null)?.hiddenMenus ?? []);
+  const toggleMenu = (id: string) => setHiddenMenus(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   const [showPwd, setShowPwd] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -89,6 +91,7 @@ export default function UserModal({ user, roles, allUsers = [], isSuper = false,
       gedAccess: f.gedAccess || null,
       parrainId: f.parrainId || null,
       superAdmin: f.superAdmin,
+      hiddenMenus,
     } as User);
   }
 
@@ -289,6 +292,32 @@ export default function UserModal({ user, roles, allUsers = [], isSuper = false,
                     <option value="aucun">Aucun accès</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Menus visibles dans la barre latérale */}
+              <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: "12px 14px", marginBottom: 14, background: "#FAFAF8" }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#1C1A17" }}>👁 Menus visibles</div>
+                <div style={{ fontSize: 11, color: "#9ca3af", margin: "2px 0 10px" }}>Décochez un menu pour le masquer à cet utilisateur. « Principal » et « Personnel » restent toujours visibles.</div>
+                {["Gestion locative", "Agence", "Réseaux sociaux"].map(grp => {
+                  const items = HIDEABLE_MENUS.filter(m => m.group === grp);
+                  if (!items.length) return null;
+                  return (
+                    <div key={grp} style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, color: "#B8966A", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>{grp}</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {items.map(m => {
+                          const visible = !hiddenMenus.includes(m.id);
+                          return (
+                            <button key={m.id} type="button" onClick={() => toggleMenu(m.id)}
+                              style={{ display: "flex", alignItems: "center", gap: 6, border: `1px solid ${visible ? "#B8966A" : "#e5e7eb"}`, background: visible ? "#F7F0E6" : "#fff", color: visible ? "#1C1A17" : "#9ca3af", borderRadius: 999, padding: "5px 11px", fontSize: 12, cursor: "pointer" }}>
+                              <span>{visible ? "✓" : "○"}</span>{m.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Tableau des modules */}

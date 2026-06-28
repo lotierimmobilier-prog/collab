@@ -17,7 +17,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const callerSuper = session.user.superAdmin === true || isSuperAdminEmail(session.user.email);
 
     const body = await req.json();
-    const { prenom, nom, email, password, roleId, active, accessOverrides, gedAccess, parrainId, isEmployee, city, superAdmin } = body;
+    const { prenom, nom, email, password, roleId, active, accessOverrides, gedAccess, parrainId, isEmployee, city, superAdmin, hiddenMenus } = body;
 
     // État actuel de la cible (rôle, adresse, statut super) pour la gouvernance.
     const target = await prisma.user.findUnique({ where: { id }, select: { roleId: true, email: true } });
@@ -81,6 +81,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (isEmployee !== undefined) extras.isEmployee = !!isEmployee;
     if (city !== undefined) extras.city = city?.trim() || null;
     if (superAdmin !== undefined && callerSuper) extras.superAdmin = !!superAdmin;
+    if (hiddenMenus !== undefined) extras.hiddenMenus = Array.isArray(hiddenMenus) ? hiddenMenus.map(String) : [];
 
     const sel = { id: true, prenom: true, nom: true, email: true, roleId: true, active: true };
     const user = Object.keys(data).length

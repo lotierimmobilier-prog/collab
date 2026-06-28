@@ -51,6 +51,7 @@ const FILES = [
   "migrations_formation_nudges.sql",
   "migrations_training_resources.sql",
   "migrations_drive_governance.sql",
+  "migrations_user_menu.sql",
 ];
 
 export interface MigrationReport {
