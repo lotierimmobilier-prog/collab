@@ -101,6 +101,7 @@ export default function MailBoard() {
             active:   Boolean(a.active ?? true),
             isShared: Boolean(a.isShared ?? false),
             sharedUserIds: (a.sharedUserIds as string[]) ?? [],
+            canManage: a.canManage !== false,
           }));
           setAccounts(mapped);
         } else {
@@ -1041,14 +1042,34 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
     return localStorage.getItem(SIG_KEY) ?? sig;
   });
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem(SIG_KEY);
+    // Source de vérité : signature serveur de l'UTILISATEUR pour ce compte
+    // (chacun a la sienne, même sur une boîte partagée). Repli local sinon.
+    let alive = true;
+    const fallback = () => {
+      const stored = typeof window !== "undefined" ? localStorage.getItem(SIG_KEY) : null;
       setEditSig(stored ?? (acct?.signature ?? ""));
-    }
+    };
+    if (!accountId) { fallback(); return; }
+    fetch(`/api/mail/signature?accountId=${encodeURIComponent(accountId)}`)
+      .then(r => r.json())
+      .then(d => {
+        if (!alive) return;
+        if (typeof d?.signature === "string") {
+          setEditSig(d.signature);
+          if (typeof window !== "undefined") localStorage.setItem(SIG_KEY, d.signature);
+        } else fallback();
+      })
+      .catch(fallback);
+    return () => { alive = false; };
   }, [accountId, SIG_KEY, acct?.signature]);
 
-  function saveSig() {
+  async function saveSig() {
     if (typeof window !== "undefined") localStorage.setItem(SIG_KEY, editSig);
+    if (accountId) {
+      try {
+        await fetch("/api/mail/signature", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accountId, signature: editSig }) });
+      } catch { /* cache local conservé */ }
+    }
     setShowSig(false);
   }
 
@@ -1057,7 +1078,7 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
     setSending(true);
     setError("");
 
-    const storedSig = typeof window !== "undefined" ? (localStorage.getItem(SIG_KEY) ?? "") : "";
+    const storedSig = editSig || "";   // signature de l'utilisateur pour ce compte
     const sigIsHtml = storedSig.trim().startsWith("<");
     const sigHtml   = sigIsHtml ? storedSig : storedSig.replace(/\n/g, "<br/>");
     const sigText   = storedSig.replace(/<[^>]+>/g, "");
@@ -1193,7 +1214,7 @@ function ComposeModal({ accounts, gmailConfigs, labels, onClose, onSend, replyTo
 
           {/* Aperçu signature */}
           {(() => {
-            const s = typeof window !== "undefined" ? (localStorage.getItem(SIG_KEY) ?? "") : "";
+            const s = editSig || "";
             if (!s) return null;
             const isHtml = s.trim().startsWith("<");
             return (
