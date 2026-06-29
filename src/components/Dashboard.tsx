@@ -521,6 +521,12 @@ function PodiumBlock({ refreshKey }: { refreshKey: number }) {
     .filter(x => x.value > 0)
     .sort((a, b) => b.value - a.value)
     .slice(0, 3);
+  // Classement général (tous les agents) pour la colonne de droite.
+  const ranking = d.negociateurs.map(r => {
+    const tx = period === "year" ? r.transaction : (r.t[period] ?? 0);
+    const ge = period === "year" ? r.gestion : (r.g[period] ?? 0);
+    return { name: r.negociateur, tx, ge, total: tx + ge };
+  }).filter(x => x.total > 0).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
 
   const TabBtn = ({ id, label }: { id: "year" | 0 | 1 | 2 | 3; label: string }) => (
     <button onClick={() => setPeriod(id)} style={{
@@ -548,15 +554,59 @@ function PodiumBlock({ refreshKey }: { refreshKey: number }) {
           <TabBtn id="year" label="Année" /><TabBtn id={0} label="1T" /><TabBtn id={1} label="2T" /><TabBtn id={2} label="3T" /><TabBtn id={3} label="4T" />
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
-        <Podium icon="🤝" title="Transaction" rows={top3("t", "transaction")} divider />
-        <Podium icon="🏠" title="Gestion" rows={top3("g", "gestion")} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", alignItems: "stretch" }}>
+        {/* Colonne gauche : podiums empilés (Transaction puis Gestion) */}
+        <div style={{ borderRight: "1px solid #f0e8d8" }}>
+          <Podium icon="🤝" title="Transaction" rows={top3("t", "transaction")} />
+          <div style={{ borderTop: "1px dashed #ece1cd", margin: "0 14px" }} />
+          <Podium icon="🏠" title="Gestion" rows={top3("g", "gestion")} />
+        </div>
+        {/* Colonne droite : classement général */}
+        <RankingList rows={ranking} />
       </div>
     </div>
   );
 }
 
-function Podium({ title, icon, rows, divider }: { title: string; icon: string; rows: { name: string; value: number }[]; divider?: boolean }) {
+// Classement général de tous les négociateurs (colonne droite du podium).
+function RankingList({ rows }: { rows: { name: string; tx: number; ge: number; total: number }[] }) {
+  const medal = (i: number) => (i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}`);
+  const cell: React.CSSProperties = { padding: "5px 8px", fontSize: 12, textAlign: "right", whiteSpace: "nowrap" };
+  const head: React.CSSProperties = { ...cell, fontSize: 9.5, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.3 };
+  return (
+    <div style={{ padding: "8px 14px 14px" }}>
+      <div style={{ textAlign: "center", fontSize: 13, fontWeight: 800, color: DARK, marginBottom: 6 }}>📊 Classement général</div>
+      {!rows.length ? (
+        <div style={{ textAlign: "center", color: "#b9b2a6", fontSize: 12, padding: "30px 0" }}>Aucun mandat sur la période 🤷</div>
+      ) : (
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={{ ...head, width: 26, textAlign: "center" }}>#</th>
+              <th style={{ ...head, textAlign: "left" }}>Négociateur</th>
+              <th style={head}>T</th>
+              <th style={head}>G</th>
+              <th style={{ ...head, color: GOLD }}>Tot.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.name} style={{ borderTop: "1px solid #f6f1e8", background: i < 3 ? "#fffaf0" : "transparent" }}>
+                <td style={{ ...cell, textAlign: "center", fontWeight: 700, fontSize: i < 3 ? 14 : 11, color: "#6b7280" }}>{medal(i)}</td>
+                <td style={{ ...cell, textAlign: "left", fontWeight: i < 3 ? 700 : 600, color: "#111827" }}>{r.name}</td>
+                <td style={cell}>{r.tx}</td>
+                <td style={cell}>{r.ge}</td>
+                <td style={{ ...cell, fontWeight: 800, color: GOLD }}>{r.total}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function Podium({ title, icon, rows }: { title: string; icon: string; rows: { name: string; value: number }[] }) {
   // [2e argent, 1er or, 3e bronze]
   const palette = [
     { ring: "#C7CDD6", bar: ["#E2E7EE", "#AEB6C2"], txt: "#6B7280" },
@@ -569,7 +619,7 @@ function Podium({ title, icon, rows, divider }: { title: string; icon: string; r
   const ranks = ["2", "1", "3"];
   const initials = (n: string) => n.split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase();
   return (
-    <div style={{ padding: "8px 14px 16px", borderLeft: divider ? "none" : "1px solid #f0e8d8" }}>
+    <div style={{ padding: "8px 14px 16px" }}>
       <div style={{ textAlign: "center", fontSize: 13, fontWeight: 800, color: DARK, marginBottom: 4 }}>{icon} {title}</div>
       {!rows.length ? (
         <div style={{ textAlign: "center", color: "#b9b2a6", fontSize: 12, padding: "30px 0" }}>Aucun mandat sur la période 🤷</div>
