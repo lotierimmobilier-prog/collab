@@ -620,6 +620,57 @@ function Block({ title, count, href, loading, empty, emptyMsg, children, action 
 const inp: React.CSSProperties = { height: 32, border: `1px solid ${BORDER}`, borderRadius: 6, padding: "0 8px", fontSize: 12, outline: "none", background: "#fff", width: "100%", boxSizing: "border-box" };
 
 // ─── Dashboard principal ────────────────────────────────────────
+// Mandats signés par négociateur, synchronisés depuis Protexa (T / G).
+// Réservé à la direction : l'API renvoie 403 sinon → le bloc s'auto-masque.
+function ProtexaMandatesBlock({ refreshKey }: { refreshKey: number }) {
+  const [d, setD] = useState<{ negociateurs: { negociateur: string; transaction: number; gestion: number; total: number }[]; totals: { transaction: number; gestion: number; total: number }; syncedAt: string | null } | null>(null);
+  useEffect(() => { fetch("/api/protexa/mandates").then(r => r.ok ? r.json() : null).then(setD).catch(() => {}); }, [refreshKey]);
+  if (!d || !d.negociateurs?.length) return null;
+
+  const sync = d.syncedAt ? new Date(d.syncedAt).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : null;
+  const cell: React.CSSProperties = { padding: "6px 10px", fontSize: 12, textAlign: "right", whiteSpace: "nowrap" };
+  const head: React.CSSProperties = { ...cell, fontSize: 10.5, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.3 };
+
+  return (
+    <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, boxShadow: "0 1px 4px rgba(0,0,0,0.05)", overflow: "hidden", marginBottom: 16 }}>
+      <div style={{ padding: "14px 16px 10px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>📑 Mandats signés par négociateur</span>
+        <span style={{ background: GOLD_BG, color: GOLD, borderRadius: 8, padding: "1px 8px", fontSize: 10, fontWeight: 700 }}>
+          Protexa{sync ? ` · maj ${sync}` : ""}
+        </span>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid #f3f4f6" }}>
+              <th style={{ ...head, textAlign: "left" }}>Négociateur</th>
+              <th style={head}>Transaction</th>
+              <th style={head}>Gestion</th>
+              <th style={{ ...head, color: GOLD }}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {d.negociateurs.map((r, i) => (
+              <tr key={r.negociateur} style={{ borderBottom: "1px solid #f9fafb", background: i % 2 ? "#fcfbf9" : "#fff" }}>
+                <td style={{ ...cell, textAlign: "left", fontWeight: 600, color: "#111827" }}>{r.negociateur}</td>
+                <td style={cell}>{r.transaction}</td>
+                <td style={cell}>{r.gestion}</td>
+                <td style={{ ...cell, fontWeight: 700, color: GOLD }}>{r.total}</td>
+              </tr>
+            ))}
+            <tr style={{ borderTop: `2px solid ${BORDER}`, background: GOLD_BG }}>
+              <td style={{ ...cell, textAlign: "left", fontWeight: 700 }}>Total agence</td>
+              <td style={{ ...cell, fontWeight: 700 }}>{d.totals.transaction}</td>
+              <td style={{ ...cell, fontWeight: 700 }}>{d.totals.gestion}</td>
+              <td style={{ ...cell, fontWeight: 800, color: GOLD }}>{d.totals.total}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { data: session } = useSession();
   const firstName = (session?.user as { prenom?: string })?.prenom ?? session?.user?.name?.split(" ")[0] ?? "vous";
@@ -668,6 +719,9 @@ export default function Dashboard() {
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
       {/* Bannière d'accueil — citation + météo + indicateurs (réordonnables) */}
       <Banner firstName={firstName} kpis={dash?.kpis ?? []} onCustomize={() => setShowCustom(true)} onReorderKpis={reorderKpis} />
+
+      {/* Mandats signés par négociateur (Protexa) — visible direction uniquement */}
+      <ProtexaMandatesBlock refreshKey={refreshKey} />
 
       {/* Blocs du tableau de bord — dans l'ordre choisi, déplaçables par la poignée ⠿ */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>

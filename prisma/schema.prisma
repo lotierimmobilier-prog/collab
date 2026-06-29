@@ -1220,6 +1220,19 @@ model DriveItem {
   @@map("drive_items")
 }
 
+/// Mandats signés par négociateur, synchronisés automatiquement depuis Protexa
+/// (registre Transaction et registre Gestion). Une ligne par négociateur.
+model ProtexaMandate {
+  id          String   @id @default(cuid())
+  negociateur String   @unique          // nom tel qu'affiché dans Protexa ("Barbara BOUBA")
+  transaction Int      @default(0)       // nb de mandats de transaction (registre T)
+  gestion     Int      @default(0)       // nb de mandats de gestion (registre G)
+  userId      String?                    // utilisateur Collab rapproché (si trouvé)
+  updatedAt   DateTime @updatedAt
+
+  @@map("protexa_mandates")
+}
+
 // Dossiers communs définis par le super admin, poussés sur tous les drives.
 model DriveFolderTemplate {
   id         String   @id @default(cuid())

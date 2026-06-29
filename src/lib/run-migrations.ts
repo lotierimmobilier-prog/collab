@@ -55,6 +55,7 @@ const FILES = [
   "migrations_portal_listings.sql",
   "migrations_drive_template_parent.sql",
   "migrations_auguste_tokens.sql",
+  "migrations_protexa_mandates.sql",
 ];
 
 export interface MigrationReport {
