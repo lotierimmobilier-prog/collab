@@ -1267,6 +1267,61 @@ model SuggestionVote {
   @@map("suggestion_votes")
 }
 
+// ════════════ Boutique : objets logotés de l'agence ════════════
+
+// Article de la boutique (gourde, tote bag, dessous de verre…).
+model ShopProduct {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Float    @default(0)   // prix unitaire en euros
+  category    String?                 // textile | accessoire | bureau | autre
+  image       String?                 // URL d'image OU emoji (fallback visuel)
+  active      Boolean  @default(true)
+  order       Int      @default(0)    // tri d'affichage
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items       ShopOrderItem[]
+
+  @@index([active])
+  @@map("shop_products")
+}
+
+// Commande passée par un utilisateur.
+model ShopOrder {
+  id        String   @id @default(cuid())
+  userId    String
+  userName  String                       // nom figé de l'auteur
+  status    String   @default("nouveau") // nouveau | preparation | pret | remis | annule
+  total     Float    @default(0)
+  note      String?                       // message de l'utilisateur
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items     ShopOrderItem[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("shop_orders")
+}
+
+// Ligne d'une commande (nom/prix figés à l'instant de la commande).
+model ShopOrderItem {
+  id        String      @id @default(cuid())
+  orderId   String
+  productId String?
+  name      String
+  unitPrice Float       @default(0)
+  qty       Int         @default(1)
+
+  order     ShopOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   ShopProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@map("shop_order_items")
+}
+
 // Dossiers communs définis par le super admin, poussés sur tous les drives.
 model DriveFolderTemplate {
   id         String   @id @default(cuid())
