@@ -32,7 +32,13 @@ export async function POST(req: NextRequest) {
   const fromName = String(b?.fromName ?? "").trim();
   const text = `${String(b?.subject ?? "")}\n${String(b?.body ?? "")}`;
 
-  const doc = detectDocType(text);
+  // Étape 2 (confirmation) : l'agent a validé QUI / QUEL document chercher.
+  const confirmTenantId = b?.confirmTenantId ? String(b.confirmTenantId) : "";
+  const doc = (() => {
+    const forced = b?.confirmDocType ? String(b.confirmDocType) : "";
+    if (forced) { const d = detectDocType(forced); if (d.gedRegex || forced) return d; }
+    return detectDocType(text);
+  })();
 
   // 1a) Correspondance par E-MAIL (la plus fiable) : l'expéditeur est-il le
   //     locataire enregistré ?
@@ -40,32 +46,77 @@ export async function POST(req: NextRequest) {
     ? await prisma.icsTenant.findFirst({ where: { email: { equals: fromEmail, mode: "insensitive" } } }).catch(() => null)
     : null;
 
-  // 1b) Correspondance par NOM / SIGNATURE : on lit le nom dans le nom
-  //     d'expéditeur + les dernières lignes du corps (signature). Validée
-  //     seulement si le PRÉNOM et le NOM du locataire apparaissent tous deux.
-  // On scanne tout le corps (et l'expéditeur) pour repérer un nom de locataire.
+  // 1b) Correspondance par NOM / SIGNATURE : on repère TOUS les locataires dont
+  //     le prénom ET le nom apparaissent dans l'expéditeur ou le corps.
   const hints = `${fromName} ${String(b?.body ?? "")}`.toLowerCase();
   const words = [...new Set(hints.split(/[^a-zàâäéèêëïîôöùûüç]+/i).filter(w => w.length >= 3))].slice(0, 12);
-  let nameTenant: typeof emailTenant = null;
-  if (!emailTenant && words.length) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let nameCands: any[] = [];
+  if (words.length) {
     const cands = await prisma.icsTenant.findMany({
       where: { OR: words.flatMap(w => [{ nomLocataire: { contains: w, mode: "insensitive" as const } }, { prenomLocataire: { contains: w, mode: "insensitive" as const } }]) },
       take: 25,
     }).catch(() => []);
-    nameTenant = cands.find(t => {
+    nameCands = cands.filter(t => {
       const nom = (t.nomLocataire ?? "").toLowerCase(), pre = (t.prenomLocataire ?? "").toLowerCase();
       return nom.length >= 2 && pre.length >= 2 && hints.includes(nom) && hints.includes(pre);
-    }) ?? null;
+    });
   }
+  const nameTenant = nameCands.find(t => !emailTenant || t.id === emailTenant.id) ?? (emailTenant ? null : nameCands[0] ?? null);
 
-  const tenant = emailTenant ?? nameTenant;
+  // Résolution du locataire : confirmé par l'agent > e-mail > nom unique.
+  const confirmed = confirmTenantId
+    ? await prisma.icsTenant.findUnique({ where: { id: confirmTenantId } }).catch(() => null)
+    : null;
+  const tenant = confirmed ?? emailTenant ?? nameTenant;
   const emailMatch = !!emailTenant;
   const nameMatch = !!nameTenant;
   // Incohérence : le nom/signature correspond à un locataire, mais l'e-mail
   // expéditeur n'est PAS le sien → contrôle d'identité requis.
   const mismatch = !emailMatch && nameMatch;
   const tenantEmail = nameTenant?.email ?? null;
-  const matched = emailMatch; // seul l'e-mail vérifié autorise l'envoi auto
+
+  // CONTRÔLE DU NOM dans le mail (expéditeur) ET dans le texte (corps/signature).
+  // Pour l'envoi AUTO, on exige que le nom du locataire (prénom + nom) apparaisse
+  // bien dans le message — sinon, même si l'e-mail correspond, on demande un
+  // contrôle (ex. boîte partagée, transfert interne…).
+  const tNom = (tenant?.nomLocataire ?? "").toLowerCase();
+  const tPre = (tenant?.prenomLocataire ?? "").toLowerCase();
+  const fromLc = (fromName || "").toLowerCase();
+  const nameInText = !!tenant && tNom.length >= 2 && tPre.length >= 2 && hints.includes(tNom) && hints.includes(tPre);
+  const nameInSender = !!tenant && tNom.length >= 2 && (fromLc.includes(tNom) || fromLc.includes(tPre));
+  // Envoi auto autorisé seulement si : e-mail vérifié ET nom présent dans le texte.
+  const matched = emailMatch && nameInText;
+
+  // ── EN CAS DE DOUTE : Auguste DEMANDE avant de chercher dans la GED ──
+  // Tant que l'agent n'a pas confirmé, si l'identité OU le type de document ne
+  // sont pas certains, on renvoie une demande de confirmation SANS lancer la
+  // recherche GED.
+  const confident = emailMatch && nameInText && !!doc.gedRegex;
+  if (!confirmed && !confident) {
+    const seen = new Set<string>();
+    const candidates = [emailTenant, ...nameCands].filter(Boolean).filter(t => { if (seen.has(t.id)) return false; seen.add(t.id); return true; })
+      .map(t => ({ id: t.id as string, name: `${t.prenomLocataire ?? ""} ${t.nomLocataire ?? ""}`.trim() || "—", email: t.email ?? null, owner: t.nomProprietaire ?? null }));
+    const reason = !doc.gedRegex
+      ? `Le document demandé n'est pas clairement identifié (${doc.label}).`
+      : candidates.length === 0
+        ? "Je n'ai pas identifié le locataire concerné avec certitude dans le message."
+        : candidates.length > 1
+          ? "Plusieurs locataires correspondent — précisez lequel."
+          : (emailMatch && !nameInText)
+            ? "L'e-mail correspond à un locataire, mais son nom n'apparaît pas dans le message (mail transféré ?)."
+            : "Je préfère confirmer le locataire avant de chercher dans la GED.";
+    return NextResponse.json({
+      ok: true,
+      needConfirm: true,
+      docType: doc.type,
+      docLabel: doc.label,
+      gedSearchable: !!doc.gedRegex,
+      candidates,
+      proposedTenantId: tenant?.id ?? null,
+      reason,
+    });
+  }
 
   const clientName = tenant
     ? `${tenant.prenomLocataire ?? ""} ${tenant.nomLocataire ?? ""}`.trim() || fromName || "Madame, Monsieur"
@@ -118,19 +169,32 @@ ${augusteSignatureHtml(logo?.value || null)}`.trim();
   const autoSetting = await prisma.setting.findUnique({ where: { key: "auguste_auto_send_ged" } }).catch(() => null);
   const autoSend = autoSetting?.value === "1";
 
-  // Avertissement d'incohérence d'identité (nom OK mais e-mail différent).
-  const warning = mismatch
-    ? `Le nom/la signature correspond au locataire ${clientName}, mais l'adresse e-mail expéditrice (${fromEmail || "inconnue"}) n'est PAS celle enregistrée (${tenantEmail || "non renseignée"}). Vérifiez l'identité avant d'envoyer.`
-    : "";
+  // Bilan des CONTRÔLES effectués avant de répondre.
+  const controls = {
+    email: emailMatch,        // l'e-mail expéditeur = locataire enregistré
+    nameInSender,             // le nom du locataire est dans le nom d'expéditeur
+    nameInText,               // le nom du locataire est dans le corps/signature
+    gedFound: !!attachment,   // le document a été trouvé dans la GED
+  };
+  // Avertissement de contrôle (raison du blocage de l'envoi auto).
+  let warning = "";
+  if (mismatch) {
+    warning = `Le nom/la signature correspond au locataire ${clientName}, mais l'adresse e-mail expéditrice (${fromEmail || "inconnue"}) n'est PAS celle enregistrée (${tenantEmail || "non renseignée"}). Vérifiez l'identité avant d'envoyer.`;
+  } else if (emailMatch && !nameInText) {
+    warning = `L'adresse e-mail correspond au locataire ${clientName}, mais son nom n'apparaît pas clairement dans le message (mail transféré ? boîte partagée ?). Vérifiez avant d'envoyer.`;
+  } else if (!attachment && tenant) {
+    warning = `Aucun document « ${doc.label} » trouvé dans la GED pour ${clientName}. Vérifiez avant de répondre.`;
+  }
 
   return NextResponse.json({
     ok: true,
     isRequest: doc.type !== "autre",
     docType: doc.type,
     docLabel: doc.label,
-    matched,            // e-mail expéditeur = locataire enregistré (sûr)
+    matched,            // e-mail + nom dans le texte vérifiés → envoi auto possible
     nameMatch,          // nom/signature = locataire (mais e-mail à vérifier)
     mismatch,           // nom OK mais e-mail différent → contrôle requis
+    controls,
     warning,
     contactName: clientName,
     found: !!attachment,
@@ -138,7 +202,7 @@ ${augusteSignatureHtml(logo?.value || null)}`.trim();
     replyHtml,
     note: gedNote,
     autoSend,           // réglage admin : envoi auto autorisé
-    // Envoi auto seulement si e-mail vérifié (pas seulement le nom).
+    // Envoi auto seulement si TOUS les contrôles passent (e-mail + nom + GED).
     mode: matched && attachment ? "ready" : "review",
   });
 }
