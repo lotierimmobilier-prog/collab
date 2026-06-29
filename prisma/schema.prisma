@@ -1276,7 +1276,9 @@ model AiAgent {
   name         String
   specialty    String?                       // accroche courte (ex. « Juridique location »)
   description  String?                        // présentation affichée sur la carte
-  icon         String?                        // emoji
+  icon         String?                        // emoji (fallback si pas de photo)
+  photo        String?                        // photo de l'agent : URL ou data-URL (base64)
+  cv           String?                        // CV à l'humour (présentation des compétences)
   color        String?                        // couleur d'accent (hex)
   model        String   @default("smart")     // fast | smart | max (mappé vers un modèle Anthropic)
   systemPrompt String                         // personnalité + règles (réservé admin)
