@@ -58,6 +58,7 @@ const FILES = [
   "migrations_protexa_mandates.sql",
   "migrations_suggestions.sql",
   "migrations_shop.sql",
+  "migrations_ai_agents.sql",
 ];
 
 export interface MigrationReport {
