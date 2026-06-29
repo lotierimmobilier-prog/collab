@@ -63,11 +63,15 @@ export interface MigrationReport {
   files: number;
   columns: Record<string, boolean>;
   tables: Record<string, boolean>;
+  // Erreurs rencontrées (diagnostic) : fichier, message PostgreSQL et début de
+  // l'instruction. Permet de comprendre POURQUOI une migration est ignorée
+  // (ex. droits insuffisants sur une table). Plafonné pour rester lisible.
+  failures?: { file: string; error: string; stmt: string }[];
   error?: string;
 }
 
 export async function runMigrations(): Promise<MigrationReport> {
-  const report: MigrationReport = { applied: 0, ignored: 0, files: 0, columns: {}, tables: {} };
+  const report: MigrationReport = { applied: 0, ignored: 0, files: 0, columns: {}, tables: {}, failures: [] };
   try {
     const { readFileSync, existsSync } = await import("node:fs");
     const { join } = await import("node:path");
@@ -79,7 +83,15 @@ export async function runMigrations(): Promise<MigrationReport> {
       const sql = readFileSync(p, "utf8");
       for (const stmt of splitSql(sql)) {
         try { await prisma.$executeRawUnsafe(stmt); report.applied++; }
-        catch { report.ignored++; }
+        catch (e) {
+          report.ignored++;
+          // On ne retient pas les « déjà appliqué » (IF NOT EXISTS) ; on garde
+          // les vraies erreurs (droits, syntaxe…) pour diagnostic.
+          const msg = (e instanceof Error ? e.message : String(e)).replace(/\s+/g, " ").trim();
+          if (report.failures && report.failures.length < 30) {
+            report.failures.push({ file: f, error: msg.slice(0, 400), stmt: stmt.slice(0, 160) });
+          }
+        }
       }
     }
 
