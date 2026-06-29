@@ -135,6 +135,13 @@ async function dumpLinks(page, tag) {
   log(`  [liens ${tag}] ${[...new Set(links)].slice(0, 50).join(" | ")}`);
 }
 
+// Journalise le texte visible de l'écran (diagnostic du modal de paramètres).
+async function dumpText(page, tag) {
+  if (!DIAG) return;
+  const t = await page.evaluate(() => (document.body.innerText || "").replace(/\s+/g, " ").trim().slice(0, 1400)).catch(() => "");
+  log(`  [texte ${tag}] ${t}`);
+}
+
 // Clique un élément par son libellé, en ne ciblant que les éléments VISIBLES
 // (WinDev rend de nombreux doublons cachés du même menu → le premier élément
 // correspondant est souvent invisible et non cliquable). Renvoie true si un
@@ -197,6 +204,7 @@ async function readRegistre(page, registre) {
   log(`   clic « Stats par tiers négociateurs » : ${okLink}`);
   await snap(page, `stat-${registre}-2-params`);
   await dumpInputs(page, `${registre}-params`);
+  await dumpText(page, `${registre}-params`);
 
   // 4) Paramètres : décocher « Inclure les réservations » et « Inclure les avenants ».
   for (const label of ["réservations", "reservations", "avenants"]) {
