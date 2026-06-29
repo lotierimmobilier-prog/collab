@@ -159,7 +159,9 @@ async function parseResultTable(page) {
   const map = new Map();
   let m;
   while ((m = re.exec(txt))) {
-    const name = m[1].replace(/\s+/g, " ").trim();
+    // Un négociateur Protexa = « Prénom NOM » → on ne garde que les 2 derniers
+    // mots, ce qui élimine un éventuel libellé collé devant (ex. « Exporter »).
+    const name = m[1].trim().split(/\s+/).slice(-2).join(" ");
     const cnt = Number(m[2]) + Number(m[3]) + Number(m[4]);
     map.set(name, (map.get(name) || 0) + cnt);
   }
