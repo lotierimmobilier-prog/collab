@@ -140,28 +140,31 @@ async function dumpLinks(page, tag) {
 // correspondant est souvent invisible et non cliquable). Renvoie true si un
 // clic a abouti.
 async function clickByText(page, text, exact = false) {
-  // On NE peut PAS chaîner :visible:text-is en WinDev ; on parcourt les
-  // candidats par texte et on clique le premier RÉELLEMENT visible (isVisible),
-  // en vérifiant le texte exact si demandé.
-  const groups = [
-    page.locator("button", { hasText: text }),
-    page.locator("a", { hasText: text }),
-    page.locator("[onclick]", { hasText: text }),
-    page.getByText(text),
-  ];
-  for (const g of groups) {
-    const n = Math.min(await g.count().catch(() => 0), 15);
-    for (let i = 0; i < n; i++) {
-      const el = g.nth(i);
-      if (!(await el.isVisible().catch(() => false))) continue;
-      if (exact) {
-        const t = ((await el.innerText().catch(() => "")) || "").replace(/\s+/g, " ").trim();
-        if (t !== text) continue;
-      }
-      try { await el.click({ timeout: 5000 }); return true; } catch { /* candidat suivant */ }
+  // Les clics Playwright échouent sur les boutons WinDev (overlays /
+  // actionability). On déclenche le clic DANS la page : on trouve l'élément
+  // VISIBLE le plus précis dont le texte correspond, et on appelle .click()
+  // (déclenche le onclick WinDev). On envoie aussi une séquence souris au cas où
+  // le handler écoute mousedown/mouseup plutôt que click.
+  const kind = await page.evaluate(({ text, exact }) => {
+    const vis = (e) => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden"; };
+    const norm = (s) => (s || "").replace(/\s+/g, " ").trim();
+    const fire = (e) => {
+      const opt = { bubbles: true, cancelable: true, view: window };
+      for (const t of ["mousedown", "mouseup", "click"]) e.dispatchEvent(new MouseEvent(t, opt));
+      if (typeof e.click === "function") { try { e.click(); } catch { /* ignore */ } }
+    };
+    for (const sel of ["a", "button", "[onclick]", "[role=button]", "li", "div", "span", "td"]) {
+      const els = Array.from(document.querySelectorAll(sel)).filter((e) => {
+        if (!vis(e)) return false;
+        const t = norm(e.innerText || e.textContent);
+        return exact ? t === text : t.includes(text);
+      });
+      els.sort((a, b) => norm(a.innerText || a.textContent).length - norm(b.innerText || b.textContent).length);
+      if (els[0]) { fire(els[0]); return sel; }
     }
-  }
-  return false;
+    return null;
+  }, { text, exact }).catch(() => null);
+  return !!kind;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
