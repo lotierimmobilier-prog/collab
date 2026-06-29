@@ -508,7 +508,9 @@ function PodiumBlock({ refreshKey }: { refreshKey: number }) {
   type Row = { negociateur: string; transaction: number; gestion: number; t: number[]; g: number[] };
   const [d, setD] = useState<{ negociateurs: Row[]; syncedAt: string | null } | null>(null);
   const [period, setPeriod] = useState<"year" | 0 | 1 | 2 | 3>("year");
-  useEffect(() => { fetch("/api/protexa/podium").then(r => r.ok ? r.json() : null).then(setD).catch(() => {}); }, [refreshKey]);
+  // On ne remplace les données que si la réponse est exploitable : un
+  // rafraîchissement qui échoue ne doit pas faire disparaître le bloc.
+  useEffect(() => { fetch("/api/protexa/podium").then(r => r.ok ? r.json() : null).then(x => { if (x?.negociateurs?.length) setD(x); }).catch(() => {}); }, [refreshKey]);
   if (!d || !d.negociateurs?.length) return null;
 
   const year = d.syncedAt ? new Date(d.syncedAt).getFullYear() : new Date().getFullYear();
@@ -580,7 +582,7 @@ function ProtexaMandatesBlock({ refreshKey }: { refreshKey: number }) {
   const [d, setD] = useState<{ negociateurs: Row[]; totals: { transaction: number; gestion: number; total: number }; syncedAt: string | null } | null>(null);
   // period : "year" = total année ; 0..3 = trimestre T1..T4.
   const [period, setPeriod] = useState<"year" | 0 | 1 | 2 | 3>("year");
-  useEffect(() => { fetch("/api/protexa/mandates").then(r => r.ok ? r.json() : null).then(setD).catch(() => {}); }, [refreshKey]);
+  useEffect(() => { fetch("/api/protexa/mandates").then(r => r.ok ? r.json() : null).then(x => { if (x?.negociateurs?.length) setD(x); }).catch(() => {}); }, [refreshKey]);
   if (!d || !d.negociateurs?.length) return null;
 
   const sync = d.syncedAt ? new Date(d.syncedAt).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : null;
