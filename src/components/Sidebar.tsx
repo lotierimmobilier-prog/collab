@@ -39,6 +39,7 @@ const nav: NavItem[] = [
   { id: "suggestions", label: "Idées & améliorations", icon: "💡", href: "/suggestions",      group: "Agence" },
   { id: "reseaux",   label: "Réseaux sociaux",      icon: "⌘",  href: "/reseaux-sociaux",   group: "Réseaux sociaux" },
   { id: "espace",    label: "Mon espace",           icon: "🗂", href: "/mon-espace",         group: "Personnel" },
+  { id: "outils",    label: "Ma boîte à outils",    icon: "🧰", href: "/boite-a-outils",     group: "Personnel" },
   { id: "echeances", label: "Échéances",            icon: "⏰", href: "/echeances",          group: "Personnel" },
   { id: "rh",        label: "Congés & heures",      icon: "💼", href: "/rh",                 group: "Personnel" },
 ];
