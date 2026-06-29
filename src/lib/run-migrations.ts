@@ -57,6 +57,7 @@ const FILES = [
   "migrations_auguste_tokens.sql",
   "migrations_protexa_mandates.sql",
   "migrations_suggestions.sql",
+  "migrations_shop.sql",
 ];
 
 export interface MigrationReport {
