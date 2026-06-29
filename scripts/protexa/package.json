@@ -1,0 +1,13 @@
+{
+  "name": "collab-protexa-sync",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Robot de synchronisation des mandats Protexa vers Collab",
+  "scripts": {
+    "sync": "node sync.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.61.1"
+  }
+}
