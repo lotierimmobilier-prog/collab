@@ -1225,12 +1225,46 @@ model DriveItem {
 model ProtexaMandate {
   id          String   @id @default(cuid())
   negociateur String   @unique          // nom tel qu'affiché dans Protexa ("Barbara BOUBA")
-  transaction Int      @default(0)       // nb de mandats de transaction (registre T)
-  gestion     Int      @default(0)       // nb de mandats de gestion (registre G)
+  transaction Int      @default(0)       // total année — mandats de transaction (registre T)
+  gestion     Int      @default(0)       // total année — mandats de gestion (registre G)
+  quarters    Json?                      // détail par trimestre : { t: [T1,T2,T3,T4], g: [T1,T2,T3,T4] }
   userId      String?                    // utilisateur Collab rapproché (si trouvé)
   updatedAt   DateTime @updatedAt
 
   @@map("protexa_mandates")
+}
+
+/// Suggestions d'amélioration proposées par les utilisateurs (roadmap interne).
+/// Chaque utilisateur peut proposer une idée, voter pour celles des autres, et
+/// l'administration fait évoluer le statut.
+model Suggestion {
+  id          String   @id @default(cuid())
+  userId      String                       // auteur
+  userName    String                       // nom affiché (figé)
+  title       String
+  description String?
+  category    String?  // fonctionnalite | amelioration | bug | autre
+  status      String   @default("nouveau") // nouveau | a_l_etude | planifie | realise | refuse
+  adminNote   String?                       // réponse / commentaire de l'administration
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  votes       SuggestionVote[]
+
+  @@index([status])
+  @@map("suggestions")
+}
+
+model SuggestionVote {
+  id           String     @id @default(cuid())
+  suggestionId String
+  userId       String
+  createdAt    DateTime   @default(now())
+
+  suggestion   Suggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+
+  @@unique([suggestionId, userId])
+  @@map("suggestion_votes")
 }
 
 // Dossiers communs définis par le super admin, poussés sur tous les drives.

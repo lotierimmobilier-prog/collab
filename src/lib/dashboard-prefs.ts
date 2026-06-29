@@ -6,7 +6,7 @@ export interface DashPrefs { kpis?: string[]; blocks?: string[] }
 
 // Catalogue des blocs du tableau de bord.
 export const DASH_BLOCKS: { id: string; label: string }[] = [
-  { id: "ranking", label: "Classement du trimestre" },
+  { id: "podium", label: "Podium des mandats" },
   { id: "mails", label: "Mails" },
   { id: "tasks", label: "Tâches" },
   { id: "agenda", label: "Agenda de la semaine" },

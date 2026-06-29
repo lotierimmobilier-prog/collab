@@ -6,17 +6,28 @@ import { prisma } from "@/lib/prisma";
 // partagé (en-tête « x-protexa-secret » == variable d'env PROTEXA_SYNC_SECRET).
 // Aucune session utilisateur : c'est un appel machine-à-machine.
 //
-// Corps attendu :
-//   { negociateurs: [{ name: "Barbara BOUBA", transaction: 12, gestion: 8 }, …] }
+// Corps attendu (par trimestre — t/g = [T1, T2, T3, T4]) :
+//   { negociateurs: [{ name: "Barbara BOUBA", t: [3,5,2,1], g: [4,6,0,0] }, …] }
+// Rétro-compatible avec l'ancien format { transaction, gestion } (totaux).
 //
 // Comportement : remplace l'ensemble des compteurs (les négociateurs absents du
 // payload sont supprimés), et tente de rapprocher chaque nom d'un utilisateur
 // Collab via prénom + nom (insensible à la casse/aux accents).
 
-interface Incoming { name?: string; negociateur?: string; transaction?: number; gestion?: number }
+interface Incoming { name?: string; negociateur?: string; transaction?: number; gestion?: number; t?: number[]; g?: number[] }
 
 function norm(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+// Normalise un tableau de 4 trimestres (entiers ≥ 0).
+function quad(arr: unknown, total: number): number[] {
+  const a = Array.isArray(arr) ? arr.slice(0, 4).map((x) => Math.max(0, Math.round(Number(x) || 0))) : [];
+  while (a.length < 4) a.push(0);
+  // Si aucun détail trimestriel mais un total fourni, on met tout en année (T?) : on
+  // laisse à zéro les trimestres et on s'appuiera sur le total annuel.
+  void total;
+  return a;
 }
 
 export async function POST(req: NextRequest) {
@@ -41,14 +52,20 @@ export async function POST(req: NextRequest) {
   for (const r of rows) {
     const name = (r.name || r.negociateur || "").toString().trim();
     if (!name) continue;
-    const transaction = Math.max(0, Math.round(Number(r.transaction) || 0));
-    const gestion = Math.max(0, Math.round(Number(r.gestion) || 0));
+    const tQ = quad(r.t, Number(r.transaction) || 0);
+    const gQ = quad(r.g, Number(r.gestion) || 0);
+    // Total annuel = somme des trimestres si fournis, sinon le total transmis.
+    const tSum = tQ.reduce((s, x) => s + x, 0);
+    const gSum = gQ.reduce((s, x) => s + x, 0);
+    const transaction = tSum || Math.max(0, Math.round(Number(r.transaction) || 0));
+    const gestion = gSum || Math.max(0, Math.round(Number(r.gestion) || 0));
+    const quarters = { t: tQ, g: gQ };
     const userId = byName.get(norm(name)) ?? null;
     seen.push(name);
     await prisma.protexaMandate.upsert({
       where: { negociateur: name },
-      create: { negociateur: name, transaction, gestion, userId },
-      update: { transaction, gestion, userId },
+      create: { negociateur: name, transaction, gestion, quarters, userId },
+      update: { transaction, gestion, quarters, userId },
     }).catch(() => {});
   }
 
