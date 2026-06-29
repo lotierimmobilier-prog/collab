@@ -237,12 +237,25 @@ function Chat({ agent, onBack }: { agent: AgentPublic; onBack: () => void }) {
     const mine = atts;
     const next = [...messages, { role: "user" as const, content: text, attachments: mine.length ? mine : undefined }];
     setMessages(next); setInput(""); setAtts([]); setBusy(true);
-    const res = await fetch(`/api/ai-agents/${agent.id}/chat`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: next }),
-    }).then(r => r.json()).catch(() => null);
+    // On n'envoie les pièces jointes que sur le dernier message (allège la requête).
+    const payload = next.map((m, i) => i === next.length - 1 ? m : { role: m.role, content: m.content });
+    let res: { reply?: string; error?: string } | null = null;
+    try {
+      const r = await fetch(`/api/ai-agents/${agent.id}/chat`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: payload }),
+      });
+      try { res = await r.json(); } catch { res = null; }
+      if (!r.ok && !res?.error) {
+        res = { error:
+          r.status === 413 ? "Fichier trop volumineux pour être analysé. Essayez un fichier plus léger."
+          : (r.status === 504 || r.status === 408 || r.status === 524) ? "L'analyse a pris trop de temps. Réessayez, ou joignez un document plus léger."
+          : r.status >= 500 ? "Le service IA est momentanément indisponible. Réessayez dans un instant."
+          : "Une erreur est survenue." };
+      }
+    } catch { res = { error: "Connexion impossible. Vérifiez votre réseau et réessayez." }; }
     setBusy(false);
-    if (res?.reply) setMessages(m => [...m, { role: "assistant", content: res.reply }]);
+    if (res?.reply) setMessages(m => [...m, { role: "assistant", content: res!.reply! }]);
     else { setErr(res?.error || "Une erreur est survenue."); setMessages(m => m.slice(0, -1)); setInput(text); setAtts(mine); }
   };
 
