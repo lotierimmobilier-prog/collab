@@ -130,9 +130,11 @@ async function readStat(page, registre, statLabel) {
   // Étape 2 — période = « Année en cours » (= année civile en cours).
   const okYear = await clickByText(page, "Année en cours", true);
   await page.waitForTimeout(1000);
-  const okResult = await clickByText(page, "Résultat", true);
+  // Transaction : bouton « Résultat ». Gestion (Liste) : « Suivant ».
+  let okFinal = await clickByText(page, "Résultat", true);
+  if (!okFinal) okFinal = await clickByText(page, "Suivant", true);
   await page.waitForTimeout(3800);
-  log(`   Année en cours : ${okYear} | Résultat : ${okResult}`);
+  log(`   Année en cours : ${okYear} | Résultat/Suivant : ${okFinal}`);
   await snap(page, `${registre}-2-result`);
   await dumpText(page, `${registre}-result`);
 
@@ -141,28 +143,29 @@ async function readStat(page, registre, statLabel) {
   return rows;
 }
 
-// Parse le tableau de résultats en Map(nom → nombre). On ne retient que les
-// lignes « NOM Prénom … <entier> » dont le nom ressemble à un négociateur connu
-// (deux mots de lettres), pour éviter le bruit (menus, libellés).
+// Parse le tableau de résultats en Map(nom → nb total de mandats).
+// Tableau Protexa « par tiers négociateur » : Nom négo | Période (AAAAMM) |
+// Nb Papier | Nb Tablette | Nb SAD. Une ligne par négociateur ET par mois.
+// → on additionne (Papier+Tablette+SAD) de toutes les lignes ayant une période
+//   AAAAMM, regroupé par négociateur. Le filtre « période AAAAMM » élimine le
+//   bruit (menus, en-têtes).
 async function parseResultTable(page) {
   const data = await page.evaluate(() => {
-    const out = [];
-    const isInt = (s) => /^\d{1,5}$/.test(s.trim());
+    const norm = (s) => (s || "").replace(/\s+/g, " ").trim();
     const looksName = (s) => /^[A-Za-zÀ-ÿ'’-]{2,}(\s+[A-Za-zÀ-ÿ'’-]{2,})+$/.test(s) || /^NON AFFECTE$/i.test(s);
+    const out = [];
     for (const tr of Array.from(document.querySelectorAll("tr"))) {
-      const cells = Array.from(tr.querySelectorAll("td, th")).map((c) => (c.innerText || "").replace(/\s+/g, " ").trim());
-      if (cells.length < 2) continue;
+      const cells = Array.from(tr.querySelectorAll("td, th")).map((c) => norm(c.innerText));
       const name = cells.find((c) => looksName(c) && c.length <= 40);
-      const nums = cells.filter(isInt).map(Number);
-      if (name && nums.length) out.push([name, nums[nums.length - 1]]);
+      const hasPeriode = cells.some((c) => /^20\d{4}$/.test(c));     // AAAAMM
+      if (!name || !hasPeriode) continue;
+      const cnt = cells.filter((c) => /^\d{1,3}$/.test(c)).reduce((s, c) => s + Number(c), 0);
+      out.push([name, cnt]);
     }
     return out;
   }).catch(() => []);
   const map = new Map();
-  for (const [name, n] of data) {
-    const key = name.replace(/\s+/g, " ").trim();
-    map.set(key, Math.max(map.get(key) || 0, n));
-  }
+  for (const [name, n] of data) map.set(name, (map.get(name) || 0) + n);
   return map;
 }
 
