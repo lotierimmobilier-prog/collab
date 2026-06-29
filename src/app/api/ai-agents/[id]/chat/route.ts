@@ -8,12 +8,13 @@ import { resolveModel, agentAllowed, retrieveContext } from "@/lib/ai-agents";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
-interface Att { name?: string; mediaType: string; data: string }
+interface Att { name?: string; mediaType: string; data?: string; text?: string }
 interface Msg { role: "user" | "assistant"; content: string; attachments?: Att[] }
 
 const IMG_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const MAX_ATT = 5;
-const MAX_ATT_CHARS = 7_500_000; // ~5,6 Mo par fichier (base64)
+const MAX_ATT_CHARS = 7_500_000; // ~5,6 Mo par fichier binaire (base64)
+const MAX_TEXT_CHARS = 400_000;  // ~400 Ko par fichier texte
 
 // POST /api/ai-agents/[id]/chat — discuter avec un assistant spécialisé.
 // body : { messages: [{ role, content, attachments?: [{ name, mediaType, data }] }] }
@@ -42,9 +43,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   // Pièces jointes : uniquement sur le dernier message (la question courante),
   // pour borner la taille de la requête.
+  const isBinaryAtt = (a: Att) => typeof a.data === "string" && a.data.length <= MAX_ATT_CHARS
+    && (a.mediaType === "application/pdf" || IMG_TYPES.includes(a.mediaType));
+  const isTextAtt = (a: Att) => typeof a.text === "string" && a.text.length > 0 && a.text.length <= MAX_TEXT_CHARS;
   const lastAtts = (norm[norm.length - 1].attachments || [])
-    .filter((a) => a && typeof a.data === "string" && a.data.length <= MAX_ATT_CHARS
-      && (a.mediaType === "application/pdf" || IMG_TYPES.includes(a.mediaType)))
+    .filter((a) => a && (isBinaryAtt(a) || isTextAtt(a)))
     .slice(0, MAX_ATT);
   const hasPdf = lastAtts.some((a) => a.mediaType === "application/pdf");
 
@@ -69,11 +72,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const atts = idx === norm.length - 1 ? lastAtts : [];
     if (!atts.length) return { role: m.role, content: m.content };
     const blocks: Anthropic.ContentBlockParam[] = [];
+    // Documents binaires (PDF, images) en premier.
     for (const a of atts) {
-      if (a.mediaType === "application/pdf") {
+      if (a.mediaType === "application/pdf" && a.data) {
         blocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: a.data } });
-      } else {
+      } else if (a.data && IMG_TYPES.includes(a.mediaType)) {
         blocks.push({ type: "image", source: { type: "base64", media_type: a.mediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp", data: a.data } });
+      }
+    }
+    // Fichiers texte : injectés comme blocs de texte étiquetés.
+    for (const a of atts) {
+      if (typeof a.text === "string" && a.text) {
+        blocks.push({ type: "text", text: `Fichier joint « ${a.name || "document"} » :\n\n"""\n${a.text}\n"""` });
       }
     }
     blocks.push({ type: "text", text: m.content || "Analyse le(s) document(s) ci-joint(s) et donne-moi ton avis." });

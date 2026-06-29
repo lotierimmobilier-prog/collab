@@ -56,11 +56,22 @@ function fileToAvatar(file: File, max = 512): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
-interface ChatAtt { name: string; mediaType: string; data: string }
+interface ChatAtt { name: string; mediaType: string; data?: string; text?: string }
 interface ChatMsg { role: "user" | "assistant"; content: string; attachments?: ChatAtt[] }
 
 const ATT_IMG = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-const ATT_OK = ["application/pdf", ...ATT_IMG];
+const TEXT_EXT = /\.(txt|text|md|markdown|json|csv|tsv|log|xml|ya?ml|html?|ini|conf|cfg|tex|srt|vtt)$/i;
+const TEXT_MIME = ["application/json", "application/xml", "application/x-yaml", "application/yaml", "application/csv", "application/rtf"];
+const MAX_TEXT_CHARS = 400_000;
+
+type AttKind = "pdf" | "image" | "text" | null;
+function attKind(f: File): AttKind {
+  if (f.type === "application/pdf") return "pdf";
+  if (ATT_IMG.includes(f.type)) return "image";
+  if (f.type.startsWith("text/") || TEXT_MIME.includes(f.type)) return "text";
+  if (TEXT_EXT.test(f.name)) return "text";
+  return null;
+}
 
 function fileToBase64(f: File): Promise<string> {
   return new Promise((res, rej) => {
@@ -68,6 +79,14 @@ function fileToBase64(f: File): Promise<string> {
     r.onload = () => res(String(r.result).split(",")[1] || "");
     r.onerror = () => rej(new Error("lecture"));
     r.readAsDataURL(f);
+  });
+}
+function fileToText(f: File): Promise<string> {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result || ""));
+    r.onerror = () => rej(new Error("lecture"));
+    r.readAsText(f);
   });
 }
 
@@ -199,9 +218,13 @@ function Chat({ agent, onBack }: { agent: AgentPublic; onBack: () => void }) {
     const out = [...atts];
     for (const f of Array.from(files)) {
       if (out.length >= 5) { setErr("5 fichiers maximum."); break; }
-      if (!ATT_OK.includes(f.type)) { setErr("Formats acceptés : PDF, JPG, PNG, GIF, WEBP."); continue; }
+      const kind = attKind(f);
+      if (!kind) { setErr("Formats acceptés : PDF, image, ou texte (txt, md, json, csv, xml…)."); continue; }
       if (f.size > 8 * 1024 * 1024) { setErr(`« ${f.name} » dépasse 8 Mo.`); continue; }
-      try { out.push({ name: f.name, mediaType: f.type, data: await fileToBase64(f) }); } catch { /* ignore */ }
+      try {
+        if (kind === "text") out.push({ name: f.name, mediaType: f.type || "text/plain", text: (await fileToText(f)).slice(0, MAX_TEXT_CHARS) });
+        else out.push({ name: f.name, mediaType: f.type, data: await fileToBase64(f) });
+      } catch { /* ignore */ }
     }
     setAtts(out);
     if (fileRef.current) fileRef.current.value = "";
@@ -238,7 +261,7 @@ function Chat({ agent, onBack }: { agent: AgentPublic; onBack: () => void }) {
         {!messages.length && (
           <div style={{ color: "#9ca3af", fontSize: 13, textAlign: "center", margin: "auto", maxWidth: 420 }}>
             👋 Bonjour, je suis <b style={{ color: DARK }}>{agent.name}</b>. {agent.description || "Posez-moi votre question."}
-            <div style={{ marginTop: 8, fontSize: 12 }}>📎 Vous pouvez joindre un PDF ou une image (DPE, compromis, diagnostic…) à analyser.</div>
+            <div style={{ marginTop: 8, fontSize: 12 }}>📎 Vous pouvez joindre un PDF, une image ou un fichier texte (txt, json, md, csv…) à analyser — DPE, compromis, diagnostic…</div>
           </div>
         )}
         {messages.map((m, i) => (
@@ -263,7 +286,7 @@ function Chat({ agent, onBack }: { agent: AgentPublic; onBack: () => void }) {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
             {atts.map((a, i) => (
               <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "5px 9px", fontSize: 12, color: DARK, maxWidth: 200 }}>
-                <span>{a.mediaType === "application/pdf" ? "📄" : "🖼️"}</span>
+                <span>{a.mediaType === "application/pdf" ? "📄" : a.text !== undefined ? "📝" : "🖼️"}</span>
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
                 <button onClick={() => setAtts(p => p.filter((_, j) => j !== i))} style={{ border: "none", background: "none", color: RED, cursor: "pointer", fontSize: 14, lineHeight: 1 }}>×</button>
               </span>
@@ -271,8 +294,8 @@ function Chat({ agent, onBack }: { agent: AgentPublic; onBack: () => void }) {
           </div>
         )}
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-          <input ref={fileRef} type="file" accept=".pdf,image/*" multiple onChange={e => onFiles(e.target.files)} style={{ display: "none" }} />
-          <button onClick={() => fileRef.current?.click()} title="Joindre un fichier (PDF, image)" style={{ background: "#fff", color: c, border: `1px solid ${BORDER}`, borderRadius: 11, padding: "10px 13px", fontSize: 16, cursor: "pointer", lineHeight: 1 }}>📎</button>
+          <input ref={fileRef} type="file" accept=".pdf,image/*,text/*,.txt,.md,.markdown,.json,.csv,.tsv,.log,.xml,.yaml,.yml,.html,.htm" multiple onChange={e => onFiles(e.target.files)} style={{ display: "none" }} />
+          <button onClick={() => fileRef.current?.click()} title="Joindre un fichier (PDF, image, texte)" style={{ background: "#fff", color: c, border: `1px solid ${BORDER}`, borderRadius: 11, padding: "10px 13px", fontSize: 16, cursor: "pointer", lineHeight: 1 }}>📎</button>
           <textarea value={input} onChange={e => setInput(e.target.value)} rows={1}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
             placeholder={`Écrire à ${agent.name}…`}
@@ -291,12 +314,12 @@ function AttachmentRow({ atts, onUser }: { atts: ChatAtt[]; onUser: boolean }) {
   const txt = onUser ? "#fff" : DARK;
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-      {atts.map((a, i) => a.mediaType !== "application/pdf" ? (
+      {atts.map((a, i) => a.data && a.mediaType !== "application/pdf" ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img key={i} src={`data:${a.mediaType};base64,${a.data}`} alt={a.name} style={{ maxWidth: 130, maxHeight: 130, borderRadius: 9, border: `1px solid ${border}` }} />
       ) : (
         <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, border: `1px solid ${border}`, borderRadius: 8, padding: "5px 9px", fontSize: 12, color: txt, maxWidth: 200 }}>
-          <span>📄</span><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+          <span>{a.mediaType === "application/pdf" ? "📄" : "📝"}</span><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
         </span>
       ))}
     </div>
