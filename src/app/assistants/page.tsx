@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Sidebar from "@/components/Sidebar";
+import Markdown from "@/components/Markdown";
 
 const GOLD = "#B8966A"; const DARK = "#1C1A17"; const BORDER = "#E6E1D9"; const GOLD_BG = "#F7F0E6";
 const RED = "#DC2626"; const BLUE = "#2563EB"; const GREEN = "#2F855A";
@@ -212,10 +213,11 @@ function Chat({ agent, onBack }: { agent: AgentPublic; onBack: () => void }) {
         {messages.map((m, i) => (
           <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
             <div style={{
-              maxWidth: "82%", padding: "10px 13px", borderRadius: 13, fontSize: 13.5, lineHeight: 1.5, whiteSpace: "pre-wrap",
+              maxWidth: "82%", padding: "10px 13px", borderRadius: 13, fontSize: 13.5, lineHeight: 1.5,
+              whiteSpace: m.role === "user" ? "pre-wrap" : "normal", wordBreak: "break-word",
               background: m.role === "user" ? c : "#F4F1EC", color: m.role === "user" ? "#fff" : DARK,
               borderBottomRightRadius: m.role === "user" ? 4 : 13, borderBottomLeftRadius: m.role === "user" ? 13 : 4,
-            }}>{m.content}</div>
+            }}>{m.role === "assistant" ? <Markdown text={m.content} /> : m.content}</div>
           </div>
         ))}
         {busy && <div style={{ fontSize: 12.5, color: "#9ca3af", fontStyle: "italic" }}>{agent.name} réfléchit…</div>}
