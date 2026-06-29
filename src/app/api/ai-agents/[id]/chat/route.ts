@@ -5,6 +5,9 @@ import { auth } from "@/auth";
 import { augusteText, AugusteError, normalizeError, MODELS } from "@/lib/auguste";
 import { resolveModel, agentAllowed, retrieveContext } from "@/lib/ai-agents";
 
+// Analyse de pièces jointes (PDF) : laisser le temps au modèle de répondre.
+export const maxDuration = 60;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
