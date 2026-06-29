@@ -130,11 +130,14 @@ async function readStat(page, registre, statLabel) {
   // Étape 2 — période = « Année en cours » (= année civile en cours).
   const okYear = await clickByText(page, "Année en cours", true);
   await page.waitForTimeout(1000);
-  // Transaction : bouton « Résultat ». Gestion (Liste) : « Suivant ».
+  // Transaction : bouton « Résultat ». Gestion (Liste) : étape « 3. Options »
+  // supplémentaire → on enchaîne Suivant puis Résultat (best-effort).
   let okFinal = await clickByText(page, "Résultat", true);
   if (!okFinal) okFinal = await clickByText(page, "Suivant", true);
-  await page.waitForTimeout(3800);
-  log(`   Année en cours : ${okYear} | Résultat/Suivant : ${okFinal}`);
+  await page.waitForTimeout(2500);
+  await clickByText(page, "Résultat", true);  // au cas où une étape « Options » reste
+  await page.waitForTimeout(3500);
+  log(`   Année en cours : ${okYear} | Final : ${okFinal}`);
   await snap(page, `${registre}-2-result`);
   await dumpText(page, `${registre}-result`);
 
@@ -143,29 +146,23 @@ async function readStat(page, registre, statLabel) {
   return rows;
 }
 
-// Parse le tableau de résultats en Map(nom → nb total de mandats).
-// Tableau Protexa « par tiers négociateur » : Nom négo | Période (AAAAMM) |
-// Nb Papier | Nb Tablette | Nb SAD. Une ligne par négociateur ET par mois.
-// → on additionne (Papier+Tablette+SAD) de toutes les lignes ayant une période
-//   AAAAMM, regroupé par négociateur. Le filtre « période AAAAMM » élimine le
-//   bruit (menus, en-têtes).
+// Parse le résultat « par tiers négociateur » en Map(nom → nb total de mandats).
+// Le tableau Protexa est rendu en texte « Nom négo · Période(AAAAMM) · Papier ·
+// Tablette · SAD », répété par négociateur ET par mois. On l'extrait par regex
+// sur le texte de la page (plus fiable que le DOM WinDev) et on additionne
+// Papier+Tablette+SAD de toutes les lignes, regroupé par négociateur.
 async function parseResultTable(page) {
-  const data = await page.evaluate(() => {
-    const norm = (s) => (s || "").replace(/\s+/g, " ").trim();
-    const looksName = (s) => /^[A-Za-zÀ-ÿ'’-]{2,}(\s+[A-Za-zÀ-ÿ'’-]{2,})+$/.test(s) || /^NON AFFECTE$/i.test(s);
-    const out = [];
-    for (const tr of Array.from(document.querySelectorAll("tr"))) {
-      const cells = Array.from(tr.querySelectorAll("td, th")).map((c) => norm(c.innerText));
-      const name = cells.find((c) => looksName(c) && c.length <= 40);
-      const hasPeriode = cells.some((c) => /^20\d{4}$/.test(c));     // AAAAMM
-      if (!name || !hasPeriode) continue;
-      const cnt = cells.filter((c) => /^\d{1,3}$/.test(c)).reduce((s, c) => s + Number(c), 0);
-      out.push([name, cnt]);
-    }
-    return out;
-  }).catch(() => []);
+  const txt = await page.evaluate(() => (document.body.innerText || "").replace(/\s+/g, " ").trim()).catch(() => "");
+  // Nom = au moins deux mots commençant par une majuscule (ex. « Barbara BOUBA »,
+  // « NON AFFECTE »), suivi d'une période AAAAMM puis de 3 entiers.
+  const re = /([A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’-]+(?:\s+[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’-]+)+)\s+20\d{4}\s+(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})/g;
   const map = new Map();
-  for (const [name, n] of data) map.set(name, (map.get(name) || 0) + n);
+  let m;
+  while ((m = re.exec(txt))) {
+    const name = m[1].replace(/\s+/g, " ").trim();
+    const cnt = Number(m[2]) + Number(m[3]) + Number(m[4]);
+    map.set(name, (map.get(name) || 0) + cnt);
+  }
   return map;
 }
 
