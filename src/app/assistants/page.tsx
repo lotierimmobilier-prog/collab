@@ -56,7 +56,20 @@ function fileToAvatar(file: File, max = 512): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
-interface ChatMsg { role: "user" | "assistant"; content: string }
+interface ChatAtt { name: string; mediaType: string; data: string }
+interface ChatMsg { role: "user" | "assistant"; content: string; attachments?: ChatAtt[] }
+
+const ATT_IMG = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+const ATT_OK = ["application/pdf", ...ATT_IMG];
+
+function fileToBase64(f: File): Promise<string> {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(",")[1] || "");
+    r.onerror = () => rej(new Error("lecture"));
+    r.readAsDataURL(f);
+  });
+}
 
 export default function AssistantsPage() {
   const { data: session } = useSession();
@@ -172,25 +185,42 @@ function Chat({ agent, onBack }: { agent: AgentPublic; onBack: () => void }) {
   const c = agent.color || GOLD;
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
+  const [atts, setAtts] = useState<ChatAtt[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [messages, busy]);
 
+  const onFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setErr("");
+    const out = [...atts];
+    for (const f of Array.from(files)) {
+      if (out.length >= 5) { setErr("5 fichiers maximum."); break; }
+      if (!ATT_OK.includes(f.type)) { setErr("Formats acceptés : PDF, JPG, PNG, GIF, WEBP."); continue; }
+      if (f.size > 8 * 1024 * 1024) { setErr(`« ${f.name} » dépasse 8 Mo.`); continue; }
+      try { out.push({ name: f.name, mediaType: f.type, data: await fileToBase64(f) }); } catch { /* ignore */ }
+    }
+    setAtts(out);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
   const send = async () => {
     const text = input.trim();
-    if (!text || busy) return;
+    if ((!text && !atts.length) || busy) return;
     setErr("");
-    const next = [...messages, { role: "user" as const, content: text }];
-    setMessages(next); setInput(""); setBusy(true);
+    const mine = atts;
+    const next = [...messages, { role: "user" as const, content: text, attachments: mine.length ? mine : undefined }];
+    setMessages(next); setInput(""); setAtts([]); setBusy(true);
     const res = await fetch(`/api/ai-agents/${agent.id}/chat`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messages: next }),
     }).then(r => r.json()).catch(() => null);
     setBusy(false);
     if (res?.reply) setMessages(m => [...m, { role: "assistant", content: res.reply }]);
-    else { setErr(res?.error || "Une erreur est survenue."); setMessages(m => m.slice(0, -1)); setInput(text); }
+    else { setErr(res?.error || "Une erreur est survenue."); setMessages(m => m.slice(0, -1)); setInput(text); setAtts(mine); }
   };
 
   return (
@@ -208,6 +238,7 @@ function Chat({ agent, onBack }: { agent: AgentPublic; onBack: () => void }) {
         {!messages.length && (
           <div style={{ color: "#9ca3af", fontSize: 13, textAlign: "center", margin: "auto", maxWidth: 420 }}>
             👋 Bonjour, je suis <b style={{ color: DARK }}>{agent.name}</b>. {agent.description || "Posez-moi votre question."}
+            <div style={{ marginTop: 8, fontSize: 12 }}>📎 Vous pouvez joindre un PDF ou une image (DPE, compromis, diagnostic…) à analyser.</div>
           </div>
         )}
         {messages.map((m, i) => (
@@ -217,22 +248,57 @@ function Chat({ agent, onBack }: { agent: AgentPublic; onBack: () => void }) {
               whiteSpace: m.role === "user" ? "pre-wrap" : "normal", wordBreak: "break-word",
               background: m.role === "user" ? c : "#F4F1EC", color: m.role === "user" ? "#fff" : DARK,
               borderBottomRightRadius: m.role === "user" ? 4 : 13, borderBottomLeftRadius: m.role === "user" ? 13 : 4,
-            }}>{m.role === "assistant" ? <Markdown text={m.content} /> : m.content}</div>
+            }}>
+              {!!m.attachments?.length && <AttachmentRow atts={m.attachments} onUser={m.role === "user"} />}
+              {m.role === "assistant" ? <Markdown text={m.content} /> : (m.content || null)}
+            </div>
           </div>
         ))}
         {busy && <div style={{ fontSize: 12.5, color: "#9ca3af", fontStyle: "italic" }}>{agent.name} réfléchit…</div>}
         {err && <div style={{ fontSize: 12.5, color: RED, background: "#FEE2E2", borderRadius: 9, padding: "8px 12px" }}>{err}</div>}
       </div>
 
-      <div style={{ borderTop: `1px solid ${BORDER}`, padding: 12, display: "flex", gap: 8, alignItems: "flex-end" }}>
-        <textarea value={input} onChange={e => setInput(e.target.value)} rows={1}
-          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder={`Écrire à ${agent.name}…`}
-          style={{ flex: 1, padding: "10px 12px", border: `1px solid ${BORDER}`, borderRadius: 11, fontSize: 13.5, resize: "none", maxHeight: 140, boxSizing: "border-box", fontFamily: "inherit" }} />
-        <button onClick={send} disabled={busy || !input.trim()} style={{
-          background: busy || !input.trim() ? "#d1d5db" : c, color: "#fff", border: "none", borderRadius: 11, padding: "10px 16px", fontSize: 14, fontWeight: 700, cursor: busy || !input.trim() ? "default" : "pointer",
-        }}>Envoyer</button>
+      <div style={{ borderTop: `1px solid ${BORDER}`, padding: 12 }}>
+        {!!atts.length && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+            {atts.map((a, i) => (
+              <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "5px 9px", fontSize: 12, color: DARK, maxWidth: 200 }}>
+                <span>{a.mediaType === "application/pdf" ? "📄" : "🖼️"}</span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+                <button onClick={() => setAtts(p => p.filter((_, j) => j !== i))} style={{ border: "none", background: "none", color: RED, cursor: "pointer", fontSize: 14, lineHeight: 1 }}>×</button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+          <input ref={fileRef} type="file" accept=".pdf,image/*" multiple onChange={e => onFiles(e.target.files)} style={{ display: "none" }} />
+          <button onClick={() => fileRef.current?.click()} title="Joindre un fichier (PDF, image)" style={{ background: "#fff", color: c, border: `1px solid ${BORDER}`, borderRadius: 11, padding: "10px 13px", fontSize: 16, cursor: "pointer", lineHeight: 1 }}>📎</button>
+          <textarea value={input} onChange={e => setInput(e.target.value)} rows={1}
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+            placeholder={`Écrire à ${agent.name}…`}
+            style={{ flex: 1, padding: "10px 12px", border: `1px solid ${BORDER}`, borderRadius: 11, fontSize: 13.5, resize: "none", maxHeight: 140, boxSizing: "border-box", fontFamily: "inherit" }} />
+          <button onClick={send} disabled={busy || (!input.trim() && !atts.length)} style={{
+            background: busy || (!input.trim() && !atts.length) ? "#d1d5db" : c, color: "#fff", border: "none", borderRadius: 11, padding: "10px 16px", fontSize: 14, fontWeight: 700, cursor: busy || (!input.trim() && !atts.length) ? "default" : "pointer",
+          }}>Envoyer</button>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function AttachmentRow({ atts, onUser }: { atts: ChatAtt[]; onUser: boolean }) {
+  const border = onUser ? "rgba(255,255,255,0.4)" : BORDER;
+  const txt = onUser ? "#fff" : DARK;
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+      {atts.map((a, i) => a.mediaType !== "application/pdf" ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img key={i} src={`data:${a.mediaType};base64,${a.data}`} alt={a.name} style={{ maxWidth: 130, maxHeight: 130, borderRadius: 9, border: `1px solid ${border}` }} />
+      ) : (
+        <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, border: `1px solid ${border}`, borderRadius: 8, padding: "5px 9px", fontSize: 12, color: txt, maxWidth: 200 }}>
+          <span>📄</span><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+        </span>
+      ))}
     </div>
   );
 }
