@@ -537,18 +537,11 @@ function PodiumBlock({ refreshKey }: { refreshKey: number }) {
   );
 
   return (
-    <div style={{ background: "linear-gradient(135deg,#fffdf8,#fbf3e4)", borderRadius: 18, border: "1px solid #efe4cf", boxShadow: "0 4px 18px rgba(184,150,106,0.16)", overflow: "hidden", marginBottom: 16 }}>
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes podRise{from{transform:translateY(24px);opacity:0}to{transform:translateY(0);opacity:1}}
-        @keyframes podCrown{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-4px) rotate(5deg)}}
-        @keyframes podShine{0%{background-position:-180% 0}60%,100%{background-position:180% 0}}
-      ` }} />
-      {/* bandeau festif */}
-      <div style={{ height: 6, background: "linear-gradient(90deg,#F5B301,#FF8A00,#FFD24A,#F5B301)" }} />
-      <div style={{ padding: "12px 18px 6px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 16, fontWeight: 900, color: DARK }}>🏆 Podium des mandats</span>
-          <span style={{ fontSize: 11.5, fontWeight: 800, color: "#fff", background: GOLD, borderRadius: 20, padding: "2px 11px" }}>{periodLabel}</span>
+    <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, boxShadow: "0 1px 4px rgba(0,0,0,0.05)", overflow: "hidden", marginBottom: 16 }}>
+      <div style={{ padding: "13px 16px 9px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 9, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>🏆 Podium des mandats</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: GOLD, background: GOLD_BG, borderRadius: 8, padding: "1px 8px" }}>{periodLabel}</span>
         </div>
         <div style={{ display: "flex", gap: 4 }}>
           <TabBtn id="year" label="Année" /><TabBtn id={0} label="1T" /><TabBtn id={1} label="2T" /><TabBtn id={2} label="3T" /><TabBtn id={3} label="4T" />
@@ -607,40 +600,37 @@ function RankingList({ rows }: { rows: { name: string; tx: number; ge: number; t
 }
 
 function Podium({ title, icon, rows }: { title: string; icon: string; rows: { name: string; value: number }[] }) {
-  // [2e argent, 1er or, 3e bronze]
+  // Palette feutrée [2e argent · 1er or agence · 3e bronze]
   const palette = [
-    { ring: "#C7CDD6", bar: ["#E2E7EE", "#AEB6C2"], txt: "#6B7280" },
-    { ring: "#F5B301", bar: ["#FFE08A", "#F5A623"], txt: "#B8860B" },
-    { ring: "#CD7F32", bar: ["#E9B07A", "#C2410C"], txt: "#B45309" },
+    { ring: "#CBD0D8", step: "#EEF1F4", txt: "#6B7280" },
+    { ring: GOLD,      step: GOLD_BG,   txt: GOLD },
+    { ring: "#CDB79E", step: "#F2EBE0", txt: "#9C7A55" },
   ];
   const slots = [rows[1], rows[0], rows[2]];
-  const heights = [44, 66, 32];
+  const heights = [38, 54, 28];
   const medals = ["🥈", "🥇", "🥉"];
   const ranks = ["2", "1", "3"];
   const initials = (n: string) => n.split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase();
   return (
-    <div style={{ padding: "4px 14px 10px" }}>
-      <div style={{ textAlign: "center", fontSize: 12, fontWeight: 800, color: DARK, marginBottom: 2 }}>{icon} {title}</div>
+    <div style={{ padding: "6px 14px 12px" }}>
+      <div style={{ textAlign: "center", fontSize: 11.5, fontWeight: 700, color: "#6b7280", marginBottom: 4 }}>{icon} {title}</div>
       {!rows.length ? (
-        <div style={{ textAlign: "center", color: "#b9b2a6", fontSize: 11.5, padding: "16px 0" }}>Aucun mandat sur la période 🤷</div>
+        <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 11.5, padding: "18px 0" }}>Aucun mandat sur la période.</div>
       ) : (
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 10 }}>
           {slots.map((r, i) => {
-            if (!r) return <div key={i} style={{ flex: 1, maxWidth: 88 }} />;
+            if (!r) return <div key={i} style={{ flex: 1, maxWidth: 84 }} />;
             const p = palette[i], first = i === 1;
             return (
-              <div key={i} style={{ flex: 1, maxWidth: 88, display: "flex", flexDirection: "column", alignItems: "center", animation: `podRise .55s ${(0.1 + i * 0.12).toFixed(2)}s both` }}>
-                <div style={{ height: 16 }}>{first && <span style={{ fontSize: 15, display: "inline-block", animation: "podCrown 2.2s ease-in-out infinite" }}>👑</span>}</div>
-                <div style={{ position: "relative", width: first ? 42 : 34, height: first ? 42 : 34, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: first ? 14 : 11, background: `linear-gradient(145deg,${p.bar[0]},${p.bar[1]})`, border: `2.5px solid ${p.ring}`, boxShadow: `0 2px 7px ${p.ring}66` }}>
+              <div key={i} style={{ flex: 1, maxWidth: 84, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <div style={{ position: "relative", width: first ? 38 : 32, height: first ? 38 : 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: p.txt, fontWeight: 700, fontSize: first ? 12.5 : 10.5, background: p.step, border: `2px solid ${p.ring}` }}>
                   {initials(r.name)}
-                  <span style={{ position: "absolute", bottom: -6, right: -6, fontSize: 15, filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.2))" }}>{medals[i]}</span>
+                  <span style={{ position: "absolute", bottom: -5, right: -6, fontSize: 13 }}>{medals[i]}</span>
                 </div>
-                <div style={{ fontSize: 10.5, fontWeight: 700, color: DARK, textAlign: "center", marginTop: 4, lineHeight: 1.1, minHeight: 24 }}>{r.name}</div>
-                <div style={{ fontSize: first ? 18 : 15, fontWeight: 900, color: p.txt, lineHeight: 1 }}>{r.value}</div>
-                <div style={{ fontSize: 8.5, color: "#9ca3af", fontWeight: 600, marginBottom: 3 }}>mandat{r.value > 1 ? "s" : ""}</div>
-                <div style={{ width: "100%", height: heights[i], borderRadius: "8px 8px 0 0", background: `linear-gradient(180deg,${p.bar[0]},${p.bar[1]})`, position: "relative", overflow: "hidden", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 4, color: "#fff", fontWeight: 900, fontSize: 17, textShadow: "0 1px 2px rgba(0,0,0,0.25)", boxShadow: "inset 0 2px 6px rgba(255,255,255,0.45)" }}>
+                <div style={{ fontSize: 10.5, fontWeight: 600, color: "#111827", textAlign: "center", marginTop: 4, lineHeight: 1.1, minHeight: 24 }}>{r.name}</div>
+                <div style={{ fontSize: first ? 16 : 14, fontWeight: 800, color: p.txt, lineHeight: 1, marginBottom: 3 }}>{r.value}</div>
+                <div style={{ width: "100%", height: heights[i], borderRadius: "6px 6px 0 0", background: p.step, border: `1px solid ${p.ring}`, borderBottom: "none", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 3, color: p.txt, fontWeight: 700, fontSize: 13 }}>
                   {ranks[i]}
-                  <span style={{ position: "absolute", inset: 0, background: "linear-gradient(110deg,transparent 35%,rgba(255,255,255,0.55) 50%,transparent 65%)", backgroundSize: "200% 100%", animation: `podShine 3.6s ${i * 0.4}s ease-in-out infinite` }} />
                 </div>
               </div>
             );
