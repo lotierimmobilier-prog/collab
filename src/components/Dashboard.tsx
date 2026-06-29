@@ -614,31 +614,31 @@ function Podium({ title, icon, rows }: { title: string; icon: string; rows: { na
     { ring: "#CD7F32", bar: ["#E9B07A", "#C2410C"], txt: "#B45309" },
   ];
   const slots = [rows[1], rows[0], rows[2]];
-  const heights = [78, 116, 58];
+  const heights = [44, 66, 32];
   const medals = ["🥈", "🥇", "🥉"];
   const ranks = ["2", "1", "3"];
   const initials = (n: string) => n.split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase();
   return (
-    <div style={{ padding: "8px 14px 16px" }}>
-      <div style={{ textAlign: "center", fontSize: 13, fontWeight: 800, color: DARK, marginBottom: 4 }}>{icon} {title}</div>
+    <div style={{ padding: "4px 14px 10px" }}>
+      <div style={{ textAlign: "center", fontSize: 12, fontWeight: 800, color: DARK, marginBottom: 2 }}>{icon} {title}</div>
       {!rows.length ? (
-        <div style={{ textAlign: "center", color: "#b9b2a6", fontSize: 12, padding: "30px 0" }}>Aucun mandat sur la période 🤷</div>
+        <div style={{ textAlign: "center", color: "#b9b2a6", fontSize: 11.5, padding: "16px 0" }}>Aucun mandat sur la période 🤷</div>
       ) : (
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 8 }}>
           {slots.map((r, i) => {
-            if (!r) return <div key={i} style={{ flex: 1, maxWidth: 112 }} />;
+            if (!r) return <div key={i} style={{ flex: 1, maxWidth: 88 }} />;
             const p = palette[i], first = i === 1;
             return (
-              <div key={i} style={{ flex: 1, maxWidth: 112, display: "flex", flexDirection: "column", alignItems: "center", animation: `podRise .55s ${(0.1 + i * 0.12).toFixed(2)}s both` }}>
-                <div style={{ height: 22 }}>{first && <span style={{ fontSize: 21, display: "inline-block", animation: "podCrown 2.2s ease-in-out infinite" }}>👑</span>}</div>
-                <div style={{ position: "relative", width: first ? 58 : 46, height: first ? 58 : 46, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: first ? 18 : 14, background: `linear-gradient(145deg,${p.bar[0]},${p.bar[1]})`, border: `3px solid ${p.ring}`, boxShadow: `0 3px 10px ${p.ring}66` }}>
+              <div key={i} style={{ flex: 1, maxWidth: 88, display: "flex", flexDirection: "column", alignItems: "center", animation: `podRise .55s ${(0.1 + i * 0.12).toFixed(2)}s both` }}>
+                <div style={{ height: 16 }}>{first && <span style={{ fontSize: 15, display: "inline-block", animation: "podCrown 2.2s ease-in-out infinite" }}>👑</span>}</div>
+                <div style={{ position: "relative", width: first ? 42 : 34, height: first ? 42 : 34, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: first ? 14 : 11, background: `linear-gradient(145deg,${p.bar[0]},${p.bar[1]})`, border: `2.5px solid ${p.ring}`, boxShadow: `0 2px 7px ${p.ring}66` }}>
                   {initials(r.name)}
-                  <span style={{ position: "absolute", bottom: -8, right: -8, fontSize: 21, filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.2))" }}>{medals[i]}</span>
+                  <span style={{ position: "absolute", bottom: -6, right: -6, fontSize: 15, filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.2))" }}>{medals[i]}</span>
                 </div>
-                <div style={{ fontSize: 11.5, fontWeight: 700, color: DARK, textAlign: "center", marginTop: 6, lineHeight: 1.15, minHeight: 28 }}>{r.name}</div>
-                <div style={{ fontSize: first ? 23 : 18, fontWeight: 900, color: p.txt, lineHeight: 1 }}>{r.value}</div>
-                <div style={{ fontSize: 9, color: "#9ca3af", fontWeight: 600, marginBottom: 4 }}>mandat{r.value > 1 ? "s" : ""}</div>
-                <div style={{ width: "100%", height: heights[i], borderRadius: "10px 10px 0 0", background: `linear-gradient(180deg,${p.bar[0]},${p.bar[1]})`, position: "relative", overflow: "hidden", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 6, color: "#fff", fontWeight: 900, fontSize: 22, textShadow: "0 1px 2px rgba(0,0,0,0.25)", boxShadow: "inset 0 3px 8px rgba(255,255,255,0.45)" }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: DARK, textAlign: "center", marginTop: 4, lineHeight: 1.1, minHeight: 24 }}>{r.name}</div>
+                <div style={{ fontSize: first ? 18 : 15, fontWeight: 900, color: p.txt, lineHeight: 1 }}>{r.value}</div>
+                <div style={{ fontSize: 8.5, color: "#9ca3af", fontWeight: 600, marginBottom: 3 }}>mandat{r.value > 1 ? "s" : ""}</div>
+                <div style={{ width: "100%", height: heights[i], borderRadius: "8px 8px 0 0", background: `linear-gradient(180deg,${p.bar[0]},${p.bar[1]})`, position: "relative", overflow: "hidden", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 4, color: "#fff", fontWeight: 900, fontSize: 17, textShadow: "0 1px 2px rgba(0,0,0,0.25)", boxShadow: "inset 0 2px 6px rgba(255,255,255,0.45)" }}>
                   {ranks[i]}
                   <span style={{ position: "absolute", inset: 0, background: "linear-gradient(110deg,transparent 35%,rgba(255,255,255,0.55) 50%,transparent 65%)", backgroundSize: "200% 100%", animation: `podShine 3.6s ${i * 0.4}s ease-in-out infinite` }} />
                 </div>
@@ -647,89 +647,6 @@ function Podium({ title, icon, rows }: { title: string; icon: string; rows: { na
           })}
         </div>
       )}
-    </div>
-  );
-}
-
-function ProtexaMandatesBlock({ refreshKey }: { refreshKey: number }) {
-  type Row = { negociateur: string; transaction: number; gestion: number; total: number; t?: number[]; g?: number[] };
-  const [d, setD] = useState<{ negociateurs: Row[]; totals: { transaction: number; gestion: number; total: number }; syncedAt: string | null } | null>(null);
-  // period : "year" = total année ; 0..3 = trimestre T1..T4.
-  const [period, setPeriod] = useState<"year" | 0 | 1 | 2 | 3>("year");
-  useEffect(() => { fetch("/api/protexa/mandates").then(r => r.ok ? r.json() : null).then(x => { if (x?.negociateurs?.length) setD(x); }).catch(() => {}); }, [refreshKey]);
-  if (!d || !d.negociateurs?.length) return null;
-
-  const sync = d.syncedAt ? new Date(d.syncedAt).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : null;
-  const cell: React.CSSProperties = { padding: "6px 10px", fontSize: 12, textAlign: "right", whiteSpace: "nowrap" };
-  const head: React.CSSProperties = { ...cell, fontSize: 10.5, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.3 };
-
-  // Valeurs T/G selon la période sélectionnée.
-  const valOf = (r: Row): { tx: number; ge: number } =>
-    period === "year"
-      ? { tx: r.transaction, ge: r.gestion }
-      : { tx: (r.t?.[period] ?? 0), ge: (r.g?.[period] ?? 0) };
-  const rows = d.negociateurs.map(r => ({ r, ...valOf(r) }))
-    .map(x => ({ ...x, tot: x.tx + x.ge }))
-    .filter(x => period === "year" ? true : x.tot > 0)
-    .sort((a, b) => b.tot - a.tot || a.r.negociateur.localeCompare(b.r.negociateur));
-  const tot = rows.reduce((s, x) => ({ tx: s.tx + x.tx, ge: s.ge + x.ge, tot: s.tot + x.tot }), { tx: 0, ge: 0, tot: 0 });
-
-  const TabBtn = ({ id, label }: { id: "year" | 0 | 1 | 2 | 3; label: string }) => (
-    <button onClick={() => setPeriod(id)} style={{
-      background: period === id ? GOLD : "#fff", color: period === id ? "#fff" : "#6b7280",
-      border: `1px solid ${period === id ? GOLD : BORDER}`, borderRadius: 7, padding: "3px 9px",
-      fontSize: 10.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
-    }}>{label}</button>
-  );
-
-  return (
-    <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, boxShadow: "0 1px 4px rgba(0,0,0,0.05)", overflow: "hidden", marginBottom: 16 }}>
-      <div style={{ padding: "14px 16px 10px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>📑 Mandats signés par négociateur</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: 4 }}>
-            <TabBtn id="year" label="Année" />
-            <TabBtn id={0} label="1T" />
-            <TabBtn id={1} label="2T" />
-            <TabBtn id={2} label="3T" />
-            <TabBtn id={3} label="4T" />
-          </div>
-          <span style={{ background: GOLD_BG, color: GOLD, borderRadius: 8, padding: "1px 8px", fontSize: 10, fontWeight: 700 }}>
-            Protexa{sync ? ` · maj ${sync}` : ""}
-          </span>
-        </div>
-      </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid #f3f4f6" }}>
-              <th style={{ ...head, textAlign: "left" }}>Négociateur</th>
-              <th style={head}>Transaction</th>
-              <th style={head}>Gestion</th>
-              <th style={{ ...head, color: GOLD }}>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((x, i) => (
-              <tr key={x.r.negociateur} style={{ borderBottom: "1px solid #f9fafb", background: i % 2 ? "#fcfbf9" : "#fff" }}>
-                <td style={{ ...cell, textAlign: "left", fontWeight: 600, color: "#111827" }}>{x.r.negociateur}</td>
-                <td style={cell}>{x.tx}</td>
-                <td style={cell}>{x.ge}</td>
-                <td style={{ ...cell, fontWeight: 700, color: GOLD }}>{x.tot}</td>
-              </tr>
-            ))}
-            {!rows.length && (
-              <tr><td colSpan={4} style={{ ...cell, textAlign: "center", color: "#9ca3af" }}>Aucun mandat sur ce trimestre.</td></tr>
-            )}
-            <tr style={{ borderTop: `2px solid ${BORDER}`, background: GOLD_BG }}>
-              <td style={{ ...cell, textAlign: "left", fontWeight: 700 }}>Total agence</td>
-              <td style={{ ...cell, fontWeight: 700 }}>{tot.tx}</td>
-              <td style={{ ...cell, fontWeight: 700 }}>{tot.ge}</td>
-              <td style={{ ...cell, fontWeight: 800, color: GOLD }}>{tot.tot}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }
@@ -784,11 +701,8 @@ export default function Dashboard() {
       {/* Bannière d'accueil — citation + météo + indicateurs (réordonnables) */}
       <Banner firstName={firstName} kpis={dash?.kpis ?? []} onCustomize={() => setShowCustom(true)} onReorderKpis={reorderKpis} />
 
-      {/* Podium des mandats (top 3 transaction / gestion) — visible par tous */}
+      {/* Podium des mandats + classement général (top 3 + tous les agents) — visible par tous */}
       <PodiumBlock refreshKey={refreshKey} />
-
-      {/* Tableau détaillé des mandats par négociateur — visible direction uniquement */}
-      <ProtexaMandatesBlock refreshKey={refreshKey} />
 
       {/* Blocs du tableau de bord — dans l'ordre choisi, déplaçables par la poignée ⠿ */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
