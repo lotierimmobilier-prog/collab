@@ -107,7 +107,7 @@ async function clickByText(page, text, exact = false) {
 //   Statistiques → onglet (Transaction|Gestion) → <statLabel>
 //   → étape 1 « Sélectionner » (tous les négociateurs) → Suivant
 //   → étape 2 « Année en cours » → Résultat → lecture du tableau.
-async function readStat(page, registre, statLabel) {
+async function readStat(page, registre, statLabel, mode = "stat") {
   log(`▶ Statistiques — ${registre} (${statLabel})…`);
   await clickByText(page, "Statistiques", true);
   await page.waitForLoadState("networkidle").catch(() => {});
@@ -138,12 +138,39 @@ async function readStat(page, registre, statLabel) {
   await clickByText(page, "Résultat", true);  // au cas où une étape « Options » reste
   await page.waitForTimeout(3500);
   log(`   Année en cours : ${okYear} | Final : ${okFinal}`);
+
+  // Liste de gestion = grille potentiellement longue → on défile pour charger
+  // toutes les lignes avant de compter.
+  if (mode === "list") {
+    for (let i = 0; i < 12; i++) {
+      await page.evaluate(() => {
+        document.querySelectorAll("*").forEach((e) => { if (e.scrollHeight > e.clientHeight + 40) e.scrollTop = e.scrollHeight; });
+        window.scrollTo(0, document.body.scrollHeight);
+      }).catch(() => {});
+      await page.waitForTimeout(350);
+    }
+  }
   await snap(page, `${registre}-2-result`);
   await dumpText(page, `${registre}-result`);
 
-  const rows = await parseResultTable(page);
+  const rows = mode === "list" ? await parseList(page) : await parseResultTable(page);
   log(`  ✓ ${registre} : ${rows.size} négociateur(s) lus.`);
   return rows;
+}
+
+// Parse une LISTE de mandats (registre Gestion) en Map(nom → nb de mandats).
+// Format Protexa : « … <négociateur> Début : JJ/MM/AAAA … » par mandat. On
+// compte une unité par occurrence « <Prénom NOM> Début : ».
+async function parseList(page) {
+  const txt = await page.evaluate(() => (document.body.innerText || "").replace(/\s+/g, " ").trim()).catch(() => "");
+  const re = /([A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’-]+(?:\s+[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’-]+)+)\s+Début\s*:/g;
+  const map = new Map();
+  let m;
+  while ((m = re.exec(txt))) {
+    const name = m[1].trim().split(/\s+/).slice(-2).join(" ");
+    map.set(name, (map.get(name) || 0) + 1);
+  }
+  return map;
 }
 
 // Parse le résultat « par tiers négociateur » en Map(nom → nb total de mandats).
@@ -174,8 +201,8 @@ async function main() {
   const page = await ctx.newPage();
   try {
     await login(page);
-    const tx = await readStat(page, "Transaction", "Stats par tiers négociateurs");
-    const ge = await readStat(page, "Gestion", "Liste des mandats par tiers négociateurs");
+    const tx = await readStat(page, "Transaction", "Stats par tiers négociateurs", "stat");
+    const ge = await readStat(page, "Gestion", "Liste des mandats par tiers négociateurs", "list");
 
     const names = new Set([...tx.keys(), ...ge.keys()]);
     const negociateurs = [...names].map((name) => ({
