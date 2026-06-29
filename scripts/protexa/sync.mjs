@@ -2,24 +2,16 @@
 /**
  * Robot de synchronisation Protexa → Collab.
  *
- * Se connecte à Protexa (production.protexa.fr), lit « Statistiques → Stats par
- * tiers négociateurs » pour les registres Transaction et Gestion sur l'année
- * civile en cours (réservations ET avenants EXCLUS), puis envoie les compteurs
- * par négociateur à Collab via POST /api/protexa/sync.
+ * Se connecte à Protexa (production.protexa.fr), lit les statistiques de mandats
+ * par tiers négociateur (registre Transaction et Gestion) sur l'année civile en
+ * cours, puis envoie les compteurs par négociateur à Collab via
+ * POST /api/protexa/sync.
  *
  * À lancer SUR LE VPS (réseau ouvert vers Protexa), idéalement via cron quotidien.
  * Identifiants et secret passés en VARIABLES D'ENVIRONNEMENT — jamais en clair.
  *
- *   PROTEXA_LOGIN        identifiant Protexa
- *   PROTEXA_PASS         mot de passe Protexa
- *   COLLAB_URL           ex. https://collab.lotier-immobilier.com
- *   PROTEXA_SYNC_SECRET  même valeur que la variable du serveur Collab
- *   PROTEXA_BASE         (optionnel) défaut https://production.protexa.fr/ProtexaFullWeb
- *   PROTEXA_YEAR         (optionnel) année civile, défaut = année courante
- *   DIAG                 (optionnel) 1 = captures d'écran + HTML dans ./diag
- *   HEADFUL              (optionnel) 1 = navigateur visible (debug local)
- *
- * Dépendance : playwright (voir README.md).
+ *   PROTEXA_LOGIN  PROTEXA_PASS  COLLAB_URL  PROTEXA_SYNC_SECRET
+ *   PROTEXA_BASE (optionnel)  PROTEXA_YEAR (optionnel)  DIAG=1 (captures)
  */
 import { chromium } from "playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -45,172 +37,153 @@ async function snap(page, tag) {
   step++;
   const n = String(step).padStart(2, "0");
   try { await page.screenshot({ path: `diag/${n}-${tag}.png`, fullPage: true }); } catch { /* ignore */ }
-  try { writeFileSync(`diag/${n}-${tag}.html`, await page.content()); } catch { /* ignore */ }
-  log(`  · diag/${n}-${tag}.{png,html}`);
+  log(`  · diag/${n}-${tag}.png`);
+}
+async function dumpText(page, tag) {
+  if (!DIAG) return;
+  const t = await page.evaluate(() => (document.body.innerText || "").replace(/\s+/g, " ").trim().slice(0, 4000)).catch(() => "");
+  log(`  [texte ${tag}] ${t}`);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Connexion (formulaire WinDev en deux écrans : identifiant puis mot de passe).
-// ─────────────────────────────────────────────────────────────────────────────
+// Connexion (formulaire WinDev : identifiant « SPxxxxx » puis mot de passe).
 async function login(page) {
   log("▶ Connexion à Protexa…");
   await page.goto(BASE, { waitUntil: "networkidle", timeout: 60000 });
-  await snap(page, "login-1-landing");
-
-  // Écran 1 : identifiant
-  const loginInput = page.locator("input[type=email], input[type=text]:not([type=hidden])").first();
-  await loginInput.waitFor({ timeout: 20000 });
-  await loginInput.fill(LOGIN);
-  await submitStep(page);
-  await page.waitForTimeout(2500);
-  await snap(page, "login-2-after-id");
-
-  // Écran 2 : mot de passe
-  const passInput = page.locator("input[type=password]").first();
-  await passInput.waitFor({ timeout: 20000 });
-  await passInput.fill(PASS);
-  await submitStep(page);
-  await page.waitForTimeout(3500);
-  await snap(page, "login-3-after-pass");
-
-  // Vérif sommaire : on doit voir le menu (Registre T, Statistiques…).
+  let loginField = page.locator('input[placeholder*="SP"]:visible, input[placeholder*="12345"]:visible').first();
+  if (!(await loginField.count().catch(() => 0))) {
+    loginField = page.locator("input[type=email]:visible, input[type=text]:visible").first();
+  }
+  await loginField.waitFor({ timeout: 20000 });
+  await loginField.fill(LOGIN);
+  let pass = page.locator("input[type=password]:visible").first();
+  if (!(await pass.count().catch(() => 0))) {
+    await clickPrimary(page);
+    await page.waitForTimeout(3000);
+    pass = page.locator("input[type=password]:visible").first();
+  }
+  await pass.waitFor({ timeout: 20000 });
+  await pass.fill(PASS);
+  await clickPrimary(page);
+  await page.waitForTimeout(4000);
   const ok = await page.locator("text=/Statistiques|Registre/i").count().catch(() => 0);
-  if (!ok) log("  ⚠ Menu non détecté après connexion — vérifier diag/login-3.");
-  else log("  ✓ Connecté.");
+  log(ok ? "  ✓ Connecté." : "  ⚠ Menu non détecté.");
 }
 
-// Valide un écran : bouton « Valider/Suivant/Connexion/OK » sinon Entrée.
-async function submitStep(page) {
-  const btn = page.locator(
-    "button:has-text('Valider'), button:has-text('Suivant'), button:has-text('Connexion'),"
-    + " button:has-text('Se connecter'), button:has-text('OK'), input[type=submit],"
-    + " a:has-text('Valider'), a:has-text('Connexion')"
-  ).first();
-  if (await btn.count().catch(() => 0)) { await btn.click().catch(() => {}); return; }
+async function clickPrimary(page) {
+  const byText = page.locator('a:visible:has-text("Se connecter"), button:visible:has-text("Se connecter"), a:visible:has-text("Valider")').first();
+  if (await byText.count().catch(() => 0)) { await byText.click().catch(() => {}); return; }
+  const b = page.locator('a.font-white:visible, .font-white:visible').first();
+  if (await b.count().catch(() => 0)) { await b.click().catch(() => {}); return; }
   await page.keyboard.press("Enter").catch(() => {});
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Lecture du récap par négociateur pour un registre (Transaction | Gestion).
-// Renvoie une Map nom → nombre de mandats signés sur l'année.
-//
-// ⚠ Sélecteurs à confirmer sur le VPS (page non accessible en dev) : lancer une
-//   première fois avec DIAG=1 et m'envoyer les captures pour ajuster.
-// ─────────────────────────────────────────────────────────────────────────────
-async function readRegistre(page, registre) {
-  log(`▶ Statistiques — ${registre}…`);
-  // 1) Aller sur Statistiques.
-  await page.locator("text=/^Statistiques$/").first().click({ timeout: 20000 }).catch(() => {});
-  await page.waitForTimeout(2000);
-  await snap(page, `stat-${registre}-1-menu`);
-
-  // 2) Choisir l'onglet (Transaction / Gestion).
-  await page.locator(`text=/^${registre}$/`).first().click({ timeout: 15000 }).catch(() => {});
-  await page.waitForTimeout(1500);
-
-  // 3) Ouvrir « Stats par tiers négociateurs ».
-  await page.locator("text=/Stats par tiers n[ée]gociateurs/i").first().click({ timeout: 15000 }).catch(() => {});
-  await page.waitForTimeout(2000);
-  await snap(page, `stat-${registre}-2-params`);
-
-  // 4) Paramètres : décocher « Inclure les réservations » et « Inclure les avenants ».
-  for (const label of ["réservations", "reservations", "avenants"]) {
-    const cb = page.locator(`label:has-text('${label}') input[type=checkbox], input[type=checkbox]`).first();
-    // On ne décoche que si c'est coché (best-effort, ciblage par libellé proche).
-    const box = page.locator(`text=/Inclure les ${label}/i`).locator("xpath=preceding::input[@type='checkbox'][1]").first();
-    const target = (await box.count().catch(() => 0)) ? box : cb;
-    if (await target.count().catch(() => 0) && await target.isChecked().catch(() => false)) {
-      await target.uncheck().catch(() => {});
+// Clique l'élément VISIBLE le plus précis dont le texte correspond, en
+// déclenchant le clic DANS la page (les boutons WinDev résistent au clic
+// Playwright). exact=true → texte identique ; sinon « contient ».
+async function clickByText(page, text, exact = false) {
+  const ok = await page.evaluate(({ text, exact }) => {
+    const vis = (e) => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden"; };
+    const norm = (s) => (s || "").replace(/\s+/g, " ").trim();
+    const fire = (e) => {
+      const opt = { bubbles: true, cancelable: true, view: window };
+      for (const t of ["mousedown", "mouseup", "click", "mousedown", "mouseup", "click", "dblclick"]) e.dispatchEvent(new MouseEvent(t, opt));
+      if (typeof e.click === "function") { try { e.click(); } catch { /* ignore */ } }
+    };
+    for (const sel of ["a", "button", "[onclick]", "[role=button]", "li", "div", "span", "td"]) {
+      const els = Array.from(document.querySelectorAll(sel)).filter((e) => {
+        if (!vis(e)) return false;
+        const t = norm(e.innerText || e.textContent);
+        return exact ? t === text : t.includes(text);
+      });
+      els.sort((a, b) => norm(a.innerText || a.textContent).length - norm(b.innerText || b.textContent).length);
+      if (els[0]) { fire(els[0]); return true; }
     }
-  }
+    return false;
+  }, { text, exact }).catch(() => false);
+  return ok;
+}
 
-  // 5) Période = année civile en cours (du 01/01 au 31/12 de YEAR).
-  //    Le sélecteur de dates dépend de la page — on tente de remplir d'éventuels
-  //    champs date « du / au ». À ajuster selon diag.
-  await setPeriode(page, registre);
+// Lit une statistique « par tiers négociateur » via l'assistant Protexa :
+//   Statistiques → onglet (Transaction|Gestion) → <statLabel>
+//   → étape 1 « Sélectionner » (tous les négociateurs) → Suivant
+//   → étape 2 « Année en cours » → Résultat → lecture du tableau.
+async function readStat(page, registre, statLabel) {
+  log(`▶ Statistiques — ${registre} (${statLabel})…`);
+  await clickByText(page, "Statistiques", true);
+  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForTimeout(2500);
+  const okTab = await clickByText(page, registre, true);
+  await page.waitForTimeout(2000);
+  const okStat = await clickByText(page, statLabel, false);
+  await page.waitForTimeout(2000);
+  log(`   onglet « ${registre} » : ${okTab} | stat « ${statLabel} » : ${okStat}`);
 
-  // 6) Lancer le résultat.
-  await page.locator("text=/^R[ée]sultat$/i, a:has-text('Résultat'), button:has-text('Résultat')").first()
-    .click({ timeout: 15000 }).catch(() => {});
+  // Étape 1 — sélection des négociateurs : « Sélectionner » = tout sélectionner.
+  const okSel = await clickByText(page, "Sélectionner", true);
+  await page.waitForTimeout(1200);
+  const okNext = await clickByText(page, "Suivant", true);
+  await page.waitForTimeout(2200);
+  log(`   Sélectionner : ${okSel} | Suivant : ${okNext}`);
+  await snap(page, `${registre}-1-periode`);
+  await dumpText(page, `${registre}-periode`);
+
+  // Étape 2 — période = « Année en cours » (= année civile en cours).
+  const okYear = await clickByText(page, "Année en cours", true);
+  await page.waitForTimeout(1000);
+  // Transaction : bouton « Résultat ». Gestion (Liste) : étape « 3. Options »
+  // supplémentaire → on enchaîne Suivant puis Résultat (best-effort).
+  let okFinal = await clickByText(page, "Résultat", true);
+  if (!okFinal) okFinal = await clickByText(page, "Suivant", true);
+  await page.waitForTimeout(2500);
+  await clickByText(page, "Résultat", true);  // au cas où une étape « Options » reste
   await page.waitForTimeout(3500);
-  await snap(page, `stat-${registre}-3-result`);
+  log(`   Année en cours : ${okYear} | Final : ${okFinal}`);
+  await snap(page, `${registre}-2-result`);
+  await dumpText(page, `${registre}-result`);
 
-  // 7) Lire le tableau résultat : nom de négociateur + nombre.
   const rows = await parseResultTable(page);
   log(`  ✓ ${registre} : ${rows.size} négociateur(s) lus.`);
   return rows;
 }
 
-// Tente de fixer la période sur l'année civile YEAR (du 01/01 au 31/12).
-async function setPeriode(page, registre) {
-  const from = `01/01/${YEAR}`;
-  const to = `31/12/${YEAR}`;
-  // Heuristique : champs date visibles (jj/mm/aaaa). Best-effort.
-  const dates = page.locator("input[type=text]").filter({ hasText: "" });
-  const n = await dates.count().catch(() => 0);
-  // On remplit au plus les deux premiers champs ressemblant à des dates.
-  let filled = 0;
-  for (let i = 0; i < n && filled < 2; i++) {
-    const el = dates.nth(i);
-    const ph = (await el.getAttribute("placeholder").catch(() => "")) || "";
-    const val = (await el.inputValue().catch(() => "")) || "";
-    if (/\/|date|jj|mm/i.test(ph) || /\d{2}\/\d{2}\/\d{4}/.test(val)) {
-      await el.fill(filled === 0 ? from : to).catch(() => {});
-      filled++;
-    }
-  }
-  await snap(page, `stat-${registre}-2b-periode`);
-}
-
-// Parse un tableau de résultats en Map(nom → nombre). Générique : prend chaque
-// ligne dont une cellule est un nom (lettres/espaces) et une autre un entier.
+// Parse le résultat « par tiers négociateur » en Map(nom → nb total de mandats).
+// Le tableau Protexa est rendu en texte « Nom négo · Période(AAAAMM) · Papier ·
+// Tablette · SAD », répété par négociateur ET par mois. On l'extrait par regex
+// sur le texte de la page (plus fiable que le DOM WinDev) et on additionne
+// Papier+Tablette+SAD de toutes les lignes, regroupé par négociateur.
 async function parseResultTable(page) {
-  const data = await page.evaluate(() => {
-    const out = [];
-    const isInt = (s) => /^\d{1,5}$/.test(s.trim());
-    const isName = (s) => /[A-Za-zÀ-ÿ]{2,}/.test(s) && !/\d{2}\/\d{2}/.test(s);
-    for (const tr of Array.from(document.querySelectorAll("tr"))) {
-      const cells = Array.from(tr.querySelectorAll("td, th")).map((c) => (c.innerText || "").trim());
-      if (cells.length < 2) continue;
-      const name = cells.find((c) => isName(c) && c.length <= 60);
-      // le dernier entier de la ligne = total (souvent en fin de ligne)
-      const nums = cells.filter(isInt).map(Number);
-      if (name && nums.length) out.push([name, nums[nums.length - 1]]);
-    }
-    return out;
-  }).catch(() => []);
+  const txt = await page.evaluate(() => (document.body.innerText || "").replace(/\s+/g, " ").trim()).catch(() => "");
+  // Nom = au moins deux mots commençant par une majuscule (ex. « Barbara BOUBA »,
+  // « NON AFFECTE »), suivi d'une période AAAAMM puis de 3 entiers.
+  const re = /([A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’-]+(?:\s+[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’-]+)+)\s+20\d{4}\s+(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})/g;
   const map = new Map();
-  for (const [name, n] of data) {
-    const key = name.replace(/\s+/g, " ").trim();
-    map.set(key, (map.get(key) || 0) + n);
+  let m;
+  while ((m = re.exec(txt))) {
+    const name = m[1].replace(/\s+/g, " ").trim();
+    const cnt = Number(m[2]) + Number(m[3]) + Number(m[4]);
+    map.set(name, (map.get(name) || 0) + cnt);
   }
   return map;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 async function main() {
   const browser = await chromium.launch({ headless: !HEADFUL, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
   const ctx = await browser.newContext({ ignoreHTTPSErrors: true, locale: "fr-FR" });
   const page = await ctx.newPage();
   try {
     await login(page);
-    const tx = await readRegistre(page, "Transaction");
-    const ge = await readRegistre(page, "Gestion");
+    const tx = await readStat(page, "Transaction", "Stats par tiers négociateurs");
+    const ge = await readStat(page, "Gestion", "Liste des mandats par tiers négociateurs");
 
-    // Fusion par négociateur.
     const names = new Set([...tx.keys(), ...ge.keys()]);
     const negociateurs = [...names].map((name) => ({
-      name,
-      transaction: tx.get(name) || 0,
-      gestion: ge.get(name) || 0,
+      name, transaction: tx.get(name) || 0, gestion: ge.get(name) || 0,
     })).filter((r) => r.transaction || r.gestion);
 
     log("▶ Résultat :");
     for (const r of negociateurs) log(`   ${r.name} — T:${r.transaction} G:${r.gestion}`);
+    if (!negociateurs.length) fail("Aucun négociateur lu.");
 
-    if (!negociateurs.length) fail("Aucun négociateur lu — relancer avec DIAG=1 et m'envoyer le dossier diag/.");
-
-    // Envoi à Collab.
     log(`▶ Envoi à Collab (${COLLAB_URL})…`);
     const res = await fetch(`${COLLAB_URL}/api/protexa/sync`, {
       method: "POST",
