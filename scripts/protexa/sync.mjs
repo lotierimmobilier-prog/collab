@@ -157,7 +157,11 @@ async function clickByText(page, text, exact = false) {
     const norm = (s) => (s || "").replace(/\s+/g, " ").trim();
     const fire = (e) => {
       const opt = { bubbles: true, cancelable: true, view: window };
-      for (const t of ["mousedown", "mouseup", "click"]) e.dispatchEvent(new MouseEvent(t, opt));
+      // séquence simple + double-clic (les listes de stats WinDev s'ouvrent
+      // souvent au double-clic).
+      for (const t of ["mousedown", "mouseup", "click", "mousedown", "mouseup", "click", "dblclick"]) {
+        e.dispatchEvent(new MouseEvent(t, opt));
+      }
       if (typeof e.click === "function") { try { e.click(); } catch { /* ignore */ } }
     };
     for (const sel of ["a", "button", "[onclick]", "[role=button]", "li", "div", "span", "td"]) {
@@ -202,6 +206,13 @@ async function readRegistre(page, registre) {
   await page.waitForLoadState("networkidle").catch(() => {});
   await page.waitForTimeout(2500);
   log(`   clic « Stats par tiers négociateurs » : ${okLink}`);
+  await page.waitForTimeout(1500);
+  await dumpLinks(page, `${registre}-apres-stat`);
+  await dumpText(page, `${registre}-apres-stat`);
+  // Certains écrans WinDev demandent « Suivant » après la sélection.
+  const okNext = await clickByText(page, "Suivant", true);
+  await page.waitForTimeout(2000);
+  log(`   clic « Suivant » : ${okNext}`);
   await snap(page, `stat-${registre}-2-params`);
   await dumpInputs(page, `${registre}-params`);
   await dumpText(page, `${registre}-params`);
