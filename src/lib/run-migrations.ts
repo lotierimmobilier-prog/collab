@@ -61,6 +61,7 @@ const FILES = [
   "migrations_ai_agents.sql",
   "migrations_ai_agents_cv.sql",
   "migrations_ai_agents_more.sql",
+  "migrations_ai_agents_trio.sql",
 ];
 
 export interface MigrationReport {
