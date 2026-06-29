@@ -672,8 +672,9 @@ export default function Dashboard() {
   useEffect(() => { loadDash(); }, [refreshKey]);
 
   // Migration douce : l'ancien bloc « ranking » devient « podium ».
-  const rawBlocks = dash?.blocks ?? ["podium", "mails", "tasks", "agenda", "calls", "notes"];
-  const blocks = [...new Set(rawBlocks.map(b => b === "ranking" ? "podium" : b))];
+  // Le podium est affiché en permanence en tête (hors système de blocs).
+  const rawBlocks = dash?.blocks ?? ["mails", "tasks", "agenda", "calls", "notes"];
+  const blocks = [...new Set(rawBlocks)].filter(b => b !== "ranking" && b !== "podium");
 
   // Réordonnancement (glisser-déposer) — persistance des préférences.
   const reorder = (list: string[], from: string, to: string) => {
@@ -691,10 +692,9 @@ export default function Dashboard() {
   };
 
   // Rendu d'un bloc selon son identifiant.
-  const FULL_WIDTH = new Set(["podium", "notes"]);
+  const FULL_WIDTH = new Set(["notes"]);
   const nodeFor = (id: string) => {
     switch (id) {
-      case "podium":  return <PodiumBlock refreshKey={refreshKey} />;
       case "mails":   return <MailsBlock refreshKey={refreshKey} />;
       case "tasks":   return <TasksBlock refreshKey={refreshKey} />;
       case "agenda":  return <AgendaBlock refreshKey={refreshKey} />;
@@ -710,7 +710,10 @@ export default function Dashboard() {
       {/* Bannière d'accueil — citation + météo + indicateurs (réordonnables) */}
       <Banner firstName={firstName} kpis={dash?.kpis ?? []} onCustomize={() => setShowCustom(true)} onReorderKpis={reorderKpis} />
 
-      {/* Mandats signés par négociateur (Protexa) — visible direction uniquement */}
+      {/* Podium des mandats (top 3 transaction / gestion) — visible par tous */}
+      <PodiumBlock refreshKey={refreshKey} />
+
+      {/* Tableau détaillé des mandats par négociateur — visible direction uniquement */}
       <ProtexaMandatesBlock refreshKey={refreshKey} />
 
       {/* Blocs du tableau de bord — dans l'ordre choisi, déplaçables par la poignée ⠿ */}
