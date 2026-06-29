@@ -124,6 +124,34 @@ async function dumpInputs(page, tag) {
   info.btns.slice(0, 30).forEach(b => log(`     ${b}`));
 }
 
+// Journalise les libellés cliquables visibles (diagnostic de navigation).
+async function dumpLinks(page, tag) {
+  if (!DIAG) return;
+  const links = await page.evaluate(() => {
+    const vis = (e) => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden"; };
+    return Array.from(document.querySelectorAll("a,button")).filter(vis)
+      .map(e => (e.innerText || "").trim()).filter(t => t && t.length < 60 && /[A-Za-zÀ-ÿ]/.test(t));
+  }).catch(() => []);
+  log(`  [liens ${tag}] ${[...new Set(links)].slice(0, 50).join(" | ")}`);
+}
+
+// Clique un élément par son libellé, en privilégiant les éléments VISIBLES :
+// bouton (rôle), lien (rôle), puis texte. Renvoie true si un clic a abouti.
+async function clickByText(page, text, exact = false) {
+  const cands = [
+    page.getByRole("button", { name: text, exact }),
+    page.getByRole("link", { name: text, exact }),
+    page.getByText(text, { exact }),
+  ];
+  for (const loc of cands) {
+    const el = loc.first();
+    if (await el.count().catch(() => 0)) {
+      try { await el.click({ timeout: 7000 }); return true; } catch { /* candidat suivant */ }
+    }
+  }
+  return false;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Lecture du récap par négociateur pour un registre (Transaction | Gestion).
 // Renvoie une Map nom → nombre de mandats signés sur l'année.
@@ -133,19 +161,27 @@ async function dumpInputs(page, tag) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function readRegistre(page, registre) {
   log(`▶ Statistiques — ${registre}…`);
-  // 1) Aller sur Statistiques.
-  await page.locator("text=/^Statistiques$/").first().click({ timeout: 20000 }).catch(() => {});
-  await page.waitForTimeout(2000);
+  // 1) Menu gauche « Statistiques » (bouton WinDev visible, libellé exact).
+  const okStat = await clickByText(page, "Statistiques", true);
+  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForTimeout(2500);
+  log(`   clic « Statistiques » : ${okStat}`);
   await snap(page, `stat-${registre}-1-menu`);
+  await dumpLinks(page, `${registre}-page-stat`);
 
-  // 2) Choisir l'onglet (Transaction / Gestion).
-  await page.locator(`text=/^${registre}$/`).first().click({ timeout: 15000 }).catch(() => {});
-  await page.waitForTimeout(1500);
-
-  // 3) Ouvrir « Stats par tiers négociateurs ».
-  await page.locator("text=/Stats par tiers n[ée]gociateurs/i").first().click({ timeout: 15000 }).catch(() => {});
+  // 2) Onglet Transaction / Gestion.
+  const okTab = await clickByText(page, registre, true);
   await page.waitForTimeout(2000);
+  log(`   clic onglet « ${registre} » : ${okTab}`);
+  await dumpLinks(page, `${registre}-apres-onglet`);
+
+  // 3) Lien « Stats par tiers négociateurs ».
+  const okLink = await clickByText(page, "Stats par tiers négociateurs", false);
+  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForTimeout(2500);
+  log(`   clic « Stats par tiers négociateurs » : ${okLink}`);
   await snap(page, `stat-${registre}-2-params`);
+  await dumpInputs(page, `${registre}-params`);
 
   // 4) Paramètres : décocher « Inclure les réservations » et « Inclure les avenants ».
   for (const label of ["réservations", "reservations", "avenants"]) {

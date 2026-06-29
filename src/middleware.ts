@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 const PUBLIC_PATHS = [
   "/api/auth",
   "/api/public",       // endpoints publics (assistance locataire par lien)
+  "/api/protexa/sync", // synchro mandats Protexa (auth par secret partagé, sans session)
   "/api/client",       // espace client (locataires) — session propre par cookie
   "/espace-client",    // page publique de l'espace locataire
   "/login",
