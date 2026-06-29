@@ -308,10 +308,10 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
     try {
       const m = lastMsg;
       const body = m?.bodyText || (m?.body || "").replace(/<[^>]+>/g, "");
-      const call = async (confirmTenantId?: string) => {
+      const call = async (confirm?: { id?: string; name?: string }) => {
         const r = await fetch("/api/mail/ged-reply", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fromEmail: m?.from?.email, fromName: m?.from?.name, subject: thread.subject, body, accountId: thread.accountId, ...(confirmTenantId ? { confirmTenantId } : {}) }),
+          body: JSON.stringify({ fromEmail: m?.from?.email, fromName: m?.from?.name, subject: thread.subject, body, accountId: thread.accountId, ...(confirm?.id ? { confirmTenantId: confirm.id } : {}), ...(confirm && !confirm.id && confirm.name ? { confirmName: confirm.name } : {}) }),
         });
         return { ok: r.ok, d: await r.json().catch(() => ({})) };
       };
@@ -321,17 +321,17 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
       // EN CAS DE DOUTE : Auguste demande qui/quoi avant de chercher dans la GED.
       if (d.needConfirm) {
         const cands: { id: string; name: string; email?: string | null }[] = d.candidates || [];
-        if (cands.length === 0) { alert(`🤔 Auguste a un doute : ${d.reason}\n\nAucun locataire identifié — à vérifier manuellement.`); return; }
-        let chosen = "";
+        if (cands.length === 0) { alert(`🤔 Auguste a un doute : ${d.reason}\n\nAucun nom identifié — à vérifier manuellement.`); return; }
+        let chosen: { id?: string; name?: string };
         if (cands.length === 1) {
           if (!confirm(`🤔 Auguste a un doute : ${d.reason}\n\nChercher « ${d.docLabel} » dans la GED pour :\n${cands[0].name}${cands[0].email ? ` <${cands[0].email}>` : ""} ?`)) return;
-          chosen = cands[0].id;
+          chosen = { id: cands[0].id, name: cands[0].name };
         } else {
           const list = cands.map((c, i) => `${i + 1}. ${c.name}${c.email ? ` <${c.email}>` : ""}`).join("\n");
-          const ans = prompt(`🤔 Auguste a un doute : ${d.reason}\n\nPour quel locataire chercher « ${d.docLabel} » ?\n${list}\n\nEntrez le numéro :`);
+          const ans = prompt(`🤔 Auguste a un doute : ${d.reason}\n\nPour quel nom chercher « ${d.docLabel} » ?\n${list}\n\nEntrez le numéro :`);
           const idx = ans ? parseInt(ans, 10) - 1 : -1;
           if (idx < 0 || idx >= cands.length) return;
-          chosen = cands[idx].id;
+          chosen = { id: cands[idx].id, name: cands[idx].name };
         }
         ({ ok, d } = await call(chosen));
         if (!ok) { alert(d.error || "Préparation impossible."); return; }

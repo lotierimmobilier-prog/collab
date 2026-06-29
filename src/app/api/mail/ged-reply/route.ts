@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
 
   // Étape 2 (confirmation) : l'agent a validé QUI / QUEL document chercher.
   const confirmTenantId = b?.confirmTenantId ? String(b.confirmTenantId) : "";
+  const confirmName = b?.confirmName ? String(b.confirmName).trim() : ""; // nom libre validé (hors ICS)
   const doc = (() => {
     const forced = b?.confirmDocType ? String(b.confirmDocType) : "";
     if (forced) { const d = detectDocType(forced); if (d.gedRegex || forced) return d; }
@@ -64,6 +65,17 @@ export async function POST(req: NextRequest) {
   }
   const nameTenant = nameCands.find(t => !emailTenant || t.id === emailTenant.id) ?? (emailTenant ? null : nameCands[0] ?? null);
 
+  // Nom détecté dans la SIGNATURE (2 mots en fin de message), même s'il n'est
+  // pas dans la base ICS — pour le proposer en confirmation (ex. « Cyril Chapuis »).
+  const sigName = (() => {
+    const lines = String(b?.body ?? "").split("\n").map(l => l.trim()).filter(Boolean);
+    for (const l of lines.slice(-3).reverse()) {
+      const m = l.match(/^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’-]{1,})\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’-]{1,})$/);
+      if (m && !/cordial|bonjour|merci|salut/i.test(l)) return `${m[1]} ${m[2]}`;
+    }
+    return "";
+  })();
+
   // Résolution du locataire : confirmé par l'agent > e-mail > nom unique.
   const confirmed = confirmTenantId
     ? await prisma.icsTenant.findUnique({ where: { id: confirmTenantId } }).catch(() => null)
@@ -92,19 +104,26 @@ export async function POST(req: NextRequest) {
   // Tant que l'agent n'a pas confirmé, si l'identité OU le type de document ne
   // sont pas certains, on renvoie une demande de confirmation SANS lancer la
   // recherche GED.
+  const isConfirmed = !!confirmed || !!confirmName;
   const confident = emailMatch && nameInText && !!doc.gedRegex;
-  if (!confirmed && !confident) {
+  if (!isConfirmed && !confident) {
     const seen = new Set<string>();
-    const candidates = [emailTenant, ...nameCands].filter(Boolean).filter(t => { if (seen.has(t.id)) return false; seen.add(t.id); return true; })
-      .map(t => ({ id: t.id as string, name: `${t.prenomLocataire ?? ""} ${t.nomLocataire ?? ""}`.trim() || "—", email: t.email ?? null, owner: t.nomProprietaire ?? null }));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const candidates: { id: string; name: string; email: string | null; owner: string | null }[] = [emailTenant, ...nameCands].filter(Boolean).filter((t: any) => { if (seen.has(t.id)) return false; seen.add(t.id); return true; })
+      .map((t: any) => ({ id: t.id as string, name: `${t.prenomLocataire ?? ""} ${t.nomLocataire ?? ""}`.trim() || "—", email: t.email ?? null, owner: t.nomProprietaire ?? null }));
+    // Nom de signature détecté mais absent de l'ICS → on le propose quand même
+    // (id vide = recherche GED par nom libre après validation).
+    if (sigName && !candidates.some(c => c.name.toLowerCase() === sigName.toLowerCase())) {
+      candidates.push({ id: "", name: sigName, email: null, owner: null });
+    }
     const reason = !doc.gedRegex
       ? `Le document demandé n'est pas clairement identifié (${doc.label}).`
-      : candidates.length === 0
-        ? "Je n'ai pas identifié le locataire concerné avec certitude dans le message."
-        : candidates.length > 1
-          ? "Plusieurs locataires correspondent — précisez lequel."
-          : (emailMatch && !nameInText)
-            ? "L'e-mail correspond à un locataire, mais son nom n'apparaît pas dans le message (mail transféré ?)."
+      : (emailMatch && !nameInText && sigName)
+        ? `L'e-mail vient de ${fromEmail || "?"} mais le message est signé « ${sigName} » : l'expéditeur ne correspond pas. Confirmez le locataire avant de chercher.`
+        : candidates.length === 0
+          ? "Je n'ai pas identifié le locataire concerné avec certitude dans le message."
+          : candidates.length > 1
+            ? "Plusieurs locataires possibles — précisez lequel."
             : "Je préfère confirmer le locataire avant de chercher dans la GED.";
     return NextResponse.json({
       ok: true,
@@ -113,16 +132,20 @@ export async function POST(req: NextRequest) {
       docLabel: doc.label,
       gedSearchable: !!doc.gedRegex,
       candidates,
+      proposedName: sigName || null,
       proposedTenantId: tenant?.id ?? null,
       reason,
     });
   }
 
-  const clientName = tenant
-    ? `${tenant.prenomLocataire ?? ""} ${tenant.nomLocataire ?? ""}`.trim() || fromName || "Madame, Monsieur"
-    : (fromName || "Madame, Monsieur");
-  // La GED est rangée par propriétaire : on cherche par propriétaire, sinon par locataire.
-  const searchName = tenant?.nomProprietaire || (tenant ? `${tenant.prenomLocataire ?? ""} ${tenant.nomLocataire ?? ""}`.trim() : fromName);
+  const clientName = confirmName
+    ? confirmName
+    : tenant
+      ? `${tenant.prenomLocataire ?? ""} ${tenant.nomLocataire ?? ""}`.trim() || fromName || "Madame, Monsieur"
+      : (fromName || "Madame, Monsieur");
+  // La GED est rangée par propriétaire : on cherche par propriétaire, sinon par
+  // locataire ; si l'agent a validé un nom libre, on cherche par ce nom.
+  const searchName = tenant?.nomProprietaire || (tenant ? `${tenant.prenomLocataire ?? ""} ${tenant.nomLocataire ?? ""}`.trim() : (confirmName || fromName));
 
   // 2) Récupération du document dans la GED (bail / état des lieux uniquement).
   let attachment: { filename: string; mime: string; size: number; content: string } | null = null;
