@@ -32,20 +32,31 @@ Sans `PROTEXA_SYNC_SECRET`, l'endpoint `/api/protexa/sync` répond « non config
 
 ## 2. Installation du robot (sur le VPS)
 
-### Option A — Docker (recommandé, aucune dépendance système à gérer)
+### Option A — Script tout-en-un `run.sh` (recommandé, VPS, Docker)
+
+Aucune installation : le script utilise l'image Docker officielle de Playwright.
+
+```bash
+# 1) Créer le fichier de secrets (une seule fois), lisible par root uniquement
+sudo install -d -m 700 /etc/collab
+sudo cp /chemin/vers/collab/scripts/protexa/protexa.env.example /etc/collab/protexa.env
+sudo nano /etc/collab/protexa.env        # remplir PROTEXA_PASS + PROTEXA_SYNC_SECRET
+sudo chmod 600 /etc/collab/protexa.env
+
+# 2) Lancer — diagnostic la 1re fois, puis normal
+cd /chemin/vers/collab/scripts/protexa
+./run.sh diag      # captures dans ./diag pour valider les sélecteurs
+./run.sh           # synchronisation réelle (une fois validé)
+```
+
+### Option A-bis — Docker en une commande (sans run.sh)
 
 ```bash
 cd /chemin/vers/collab/scripts/protexa
-
-# Image officielle Playwright (Chromium + libs déjà incluses)
-docker run --rm \
-  -e PROTEXA_LOGIN="VOTRE_LOGIN" \
-  -e PROTEXA_PASS="VOTRE_MDP" \
-  -e COLLAB_URL="https://collab.lotier-immobilier.com" \
-  -e PROTEXA_SYNC_SECRET="le_meme_secret_que_collab" \
+docker run --rm --env-file /etc/collab/protexa.env -e DIAG=1 \
   -v "$PWD":/app -w /app \
   mcr.microsoft.com/playwright:v1.61.1-jammy \
-  sh -c "npm install --no-save playwright && node sync.mjs"
+  sh -c "npm install --no-save playwright@1.61.1 && node sync.mjs"
 ```
 
 ### Option B — Node installé sur le VPS
