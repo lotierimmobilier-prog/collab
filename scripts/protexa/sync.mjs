@@ -140,19 +140,25 @@ async function dumpLinks(page, tag) {
 // correspondant est souvent invisible et non cliquable). Renvoie true si un
 // clic a abouti.
 async function clickByText(page, text, exact = false) {
-  const esc = text.replace(/(["\\])/g, "\\$1");
-  const kind = exact ? "text-is" : "has-text";
-  const sels = [
-    `button:visible:${kind}("${esc}")`,
-    `a:visible:${kind}("${esc}")`,
-    `[onclick]:visible:${kind}("${esc}")`,
-    `:visible:${kind}("${esc}")`,
+  // On NE peut PAS chaîner :visible:text-is en WinDev ; on parcourt les
+  // candidats par texte et on clique le premier RÉELLEMENT visible (isVisible),
+  // en vérifiant le texte exact si demandé.
+  const groups = [
+    page.locator("button", { hasText: text }),
+    page.locator("a", { hasText: text }),
+    page.locator("[onclick]", { hasText: text }),
+    page.getByText(text),
   ];
-  for (const sel of sels) {
-    const all = page.locator(sel);
-    const n = await all.count().catch(() => 0);
-    for (let i = 0; i < n && i < 5; i++) {
-      try { await all.nth(i).click({ timeout: 5000 }); return true; } catch { /* élément suivant */ }
+  for (const g of groups) {
+    const n = Math.min(await g.count().catch(() => 0), 15);
+    for (let i = 0; i < n; i++) {
+      const el = g.nth(i);
+      if (!(await el.isVisible().catch(() => false))) continue;
+      if (exact) {
+        const t = ((await el.innerText().catch(() => "")) || "").replace(/\s+/g, " ").trim();
+        if (t !== text) continue;
+      }
+      try { await el.click({ timeout: 5000 }); return true; } catch { /* candidat suivant */ }
     }
   }
   return false;
