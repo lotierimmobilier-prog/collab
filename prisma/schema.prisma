@@ -1267,6 +1267,64 @@ model SuggestionVote {
   @@map("suggestion_votes")
 }
 
+// ════════════ Assistants IA spécialisés (en plus d'Auguste) ════════════
+
+// Un agent IA paramétrable : spécialité, modèle, prompt système et base de
+// connaissance (documents vectorisés pour la recherche sémantique).
+model AiAgent {
+  id           String   @id @default(cuid())
+  name         String
+  specialty    String?                       // accroche courte (ex. « Juridique location »)
+  description  String?                        // présentation affichée sur la carte
+  icon         String?                        // emoji
+  color        String?                        // couleur d'accent (hex)
+  model        String   @default("smart")     // fast | smart | max (mappé vers un modèle Anthropic)
+  systemPrompt String                         // personnalité + règles (réservé admin)
+  accessRoles  Json?                          // null = tout le monde ; sinon liste de rôles autorisés
+  active       Boolean  @default(true)
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  docs         AiAgentDoc[]
+  chunks       AiAgentChunk[]
+
+  @@index([active])
+  @@map("ai_agents")
+}
+
+// Un document de la base de connaissance d'un agent (texte brut conservé).
+model AiAgentDoc {
+  id        String   @id @default(cuid())
+  agentId   String
+  name      String
+  chars     Int      @default(0)   // taille du texte source
+  createdAt DateTime @default(now())
+
+  agent     AiAgent       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  chunks    AiAgentChunk[]
+
+  @@index([agentId])
+  @@map("ai_agent_docs")
+}
+
+// Un fragment indexé d'un document, avec son embedding (vecteur stocké en JSON).
+model AiAgentChunk {
+  id        String   @id @default(cuid())
+  agentId   String
+  docId     String
+  idx       Int      @default(0)
+  content   String
+  embedding Json?                   // [float] ; null si embeddings indisponibles (fallback mots-clés)
+
+  agent     AiAgent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  doc       AiAgentDoc @relation(fields: [docId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+  @@index([docId])
+  @@map("ai_agent_chunks")
+}
+
 // ════════════ Boutique : objets logotés de l'agence ════════════
 
 // Article de la boutique (gourde, tote bag, dessous de verre…).

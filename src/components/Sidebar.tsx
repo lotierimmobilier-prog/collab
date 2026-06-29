@@ -37,6 +37,7 @@ const nav: NavItem[] = [
   { id: "formation", label: "Formation",            icon: "◈",  href: "/formation",          group: "Agence" },
   { id: "procedures",label: "Procédures",           icon: "📚", href: "/procedures",         group: "Agence" },
   { id: "suggestions", label: "Idées & améliorations", icon: "💡", href: "/suggestions",      group: "Agence" },
+  { id: "assistants", label: "Assistants IA",        icon: "🤖", href: "/assistants",         group: "Agence" },
   { id: "boutique",  label: "Boutique",             icon: "🛍️", href: "/boutique",           group: "Agence" },
   { id: "reseaux",   label: "Réseaux sociaux",      icon: "⌘",  href: "/reseaux-sociaux",   group: "Réseaux sociaux" },
   { id: "espace",    label: "Mon espace",           icon: "🗂", href: "/mon-espace",         group: "Personnel" },
