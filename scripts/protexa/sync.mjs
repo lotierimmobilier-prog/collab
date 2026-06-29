@@ -135,18 +135,24 @@ async function dumpLinks(page, tag) {
   log(`  [liens ${tag}] ${[...new Set(links)].slice(0, 50).join(" | ")}`);
 }
 
-// Clique un élément par son libellé, en privilégiant les éléments VISIBLES :
-// bouton (rôle), lien (rôle), puis texte. Renvoie true si un clic a abouti.
+// Clique un élément par son libellé, en ne ciblant que les éléments VISIBLES
+// (WinDev rend de nombreux doublons cachés du même menu → le premier élément
+// correspondant est souvent invisible et non cliquable). Renvoie true si un
+// clic a abouti.
 async function clickByText(page, text, exact = false) {
-  const cands = [
-    page.getByRole("button", { name: text, exact }),
-    page.getByRole("link", { name: text, exact }),
-    page.getByText(text, { exact }),
+  const esc = text.replace(/(["\\])/g, "\\$1");
+  const kind = exact ? "text-is" : "has-text";
+  const sels = [
+    `button:visible:${kind}("${esc}")`,
+    `a:visible:${kind}("${esc}")`,
+    `[onclick]:visible:${kind}("${esc}")`,
+    `:visible:${kind}("${esc}")`,
   ];
-  for (const loc of cands) {
-    const el = loc.first();
-    if (await el.count().catch(() => 0)) {
-      try { await el.click({ timeout: 7000 }); return true; } catch { /* candidat suivant */ }
+  for (const sel of sels) {
+    const all = page.locator(sel);
+    const n = await all.count().catch(() => 0);
+    for (let i = 0; i < n && i < 5; i++) {
+      try { await all.nth(i).click({ timeout: 5000 }); return true; } catch { /* élément suivant */ }
     }
   }
   return false;
@@ -165,7 +171,7 @@ async function readRegistre(page, registre) {
   const okStat = await clickByText(page, "Statistiques", true);
   await page.waitForLoadState("networkidle").catch(() => {});
   await page.waitForTimeout(2500);
-  log(`   clic « Statistiques » : ${okStat}`);
+  log(`   clic « Statistiques » : ${okStat} → URL ${page.url()}`);
   await snap(page, `stat-${registre}-1-menu`);
   await dumpLinks(page, `${registre}-page-stat`);
 
