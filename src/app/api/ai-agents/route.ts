@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     .filter((a) => a.active && agentAllowed(a.accessRoles, role))
     .map((a) => ({
       id: a.id, name: a.name, specialty: a.specialty, description: a.description,
-      icon: a.icon, color: a.color,
+      icon: a.icon, color: a.color, photo: a.photo, cv: a.cv,
     }));
   return NextResponse.json({ isDir, agents });
 }
@@ -52,6 +52,8 @@ export async function POST(req: NextRequest) {
       specialty: (b.specialty || "").trim().slice(0, 120) || null,
       description: (b.description || "").trim().slice(0, 600) || null,
       icon: (b.icon || "🤖").trim().slice(0, 8),
+      photo: (b.photo || "").trim().slice(0, 700000) || null,
+      cv: (b.cv || "").trim().slice(0, 4000) || null,
       color: (b.color || "#B8966A").trim().slice(0, 16),
       model: MODEL_TIERS[b.model] ? b.model : "smart",
       systemPrompt: (b.systemPrompt || "").trim().slice(0, 12000),

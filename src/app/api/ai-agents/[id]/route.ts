@@ -21,6 +21,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   if (b.specialty !== undefined) data.specialty = (b.specialty || "").trim().slice(0, 120) || null;
   if (b.description !== undefined) data.description = (b.description || "").trim().slice(0, 600) || null;
   if (b.icon !== undefined) data.icon = (b.icon || "🤖").trim().slice(0, 8);
+  if (b.photo !== undefined) data.photo = (b.photo || "").trim().slice(0, 700000) || null;
+  if (b.cv !== undefined) data.cv = (b.cv || "").trim().slice(0, 4000) || null;
   if (b.color !== undefined) data.color = (b.color || "#B8966A").trim().slice(0, 16);
   if (b.model !== undefined && MODEL_TIERS[b.model]) data.model = b.model;
   if (b.systemPrompt !== undefined) data.systemPrompt = (b.systemPrompt || "").trim().slice(0, 12000);

@@ -18,9 +18,43 @@ const TIERS = [
   { id: "max",   label: "Qualité max" },
 ];
 
-interface AgentPublic { id: string; name: string; specialty: string | null; description: string | null; icon: string | null; color: string | null }
+interface AgentPublic { id: string; name: string; specialty: string | null; description: string | null; icon: string | null; color: string | null; photo: string | null; cv: string | null }
 interface Doc { id: string; name: string; chars: number; createdAt: string }
 interface AgentFull extends AgentPublic { model: string; systemPrompt: string; accessRoles: string[] | null; active: boolean; order: number; docs: Doc[]; _count?: { chunks: number } }
+
+// Avatar : photo si dispo, sinon pastille avec l'emoji.
+function Avatar({ a, size = 48 }: { a: { photo: string | null; icon: string | null; color: string | null }; size?: number }) {
+  const c = a.color || GOLD;
+  if (a.photo) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={a.photo} alt="" style={{ width: size, height: size, borderRadius: size * 0.27, objectFit: "cover", border: `1px solid ${BORDER}` }} />;
+  }
+  return <div style={{ width: size, height: size, borderRadius: size * 0.27, background: `${c}1A`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.5 }}>{a.icon || "🤖"}</div>;
+}
+
+// Redimensionne une image (fichier) en data-URL compacte (max 512 px, JPEG).
+function fileToAvatar(file: File, max = 512): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("lecture"));
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onerror = () => reject(new Error("image"));
+      img.onload = () => {
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("canvas"));
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.src = String(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  });
+}
 interface ChatMsg { role: "user" | "assistant"; content: string }
 
 export default function AssistantsPage() {
@@ -75,28 +109,58 @@ function TabBtn({ active, onClick, label }: { active: boolean; onClick: () => vo
 // ════════════ Galerie ════════════
 
 function Gallery({ agents, onPick }: { agents: AgentPublic[]; onPick: (a: AgentPublic) => void }) {
+  const [cvAgent, setCvAgent] = useState<AgentPublic | null>(null);
   if (!agents.length) return <div style={{ color: "#9ca3af", fontSize: 13, padding: 28, textAlign: "center" }}>Aucun assistant disponible pour le moment.</div>;
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(250px,1fr))", gap: 16 }}>
-      {agents.map(a => {
-        const c = a.color || GOLD;
-        return (
-          <button key={a.id} onClick={() => onPick(a)} style={{
-            textAlign: "left", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 16, padding: 18, cursor: "pointer",
-            boxShadow: "0 1px 4px rgba(0,0,0,0.05)", display: "flex", flexDirection: "column", gap: 10, borderTop: `3px solid ${c}`,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 48, height: 48, borderRadius: 13, background: `${c}1A`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>{a.icon || "🤖"}</div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 16, fontWeight: 800, color: DARK }}>{a.name}</div>
-                {a.specialty && <div style={{ fontSize: 12, fontWeight: 600, color: c }}>{a.specialty}</div>}
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(250px,1fr))", gap: 16 }}>
+        {agents.map(a => {
+          const c = a.color || GOLD;
+          return (
+            <div key={a.id} style={{
+              background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 16, padding: 18,
+              boxShadow: "0 1px 4px rgba(0,0,0,0.05)", display: "flex", flexDirection: "column", gap: 10, borderTop: `3px solid ${c}`,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <Avatar a={a} size={52} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: DARK }}>{a.name}</div>
+                  {a.specialty && <div style={{ fontSize: 12, fontWeight: 600, color: c }}>{a.specialty}</div>}
+                </div>
+              </div>
+              {a.description && <div style={{ fontSize: 12.5, color: "#6b7280", lineHeight: 1.45, flex: 1 }}>{a.description}</div>}
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 2 }}>
+                <button onClick={() => onPick(a)} style={{ flex: 1, background: c, color: "#fff", border: "none", borderRadius: 9, padding: "8px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Discuter</button>
+                {a.cv && <button onClick={() => setCvAgent(a)} style={{ background: "#fff", color: c, border: `1px solid ${BORDER}`, borderRadius: 9, padding: "8px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>📄 CV</button>}
               </div>
             </div>
-            {a.description && <div style={{ fontSize: 12.5, color: "#6b7280", lineHeight: 1.45, flex: 1 }}>{a.description}</div>}
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: c }}>Discuter →</span>
-          </button>
-        );
-      })}
+          );
+        })}
+      </div>
+      {cvAgent && <CvModal agent={cvAgent} onClose={() => setCvAgent(null)} onChat={() => { const a = cvAgent; setCvAgent(null); onPick(a); }} />}
+    </>
+  );
+}
+
+function CvModal({ agent, onClose, onChat }: { agent: AgentPublic; onClose: () => void; onChat: () => void }) {
+  const c = agent.color || GOLD;
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 18, width: "min(560px,100%)", maxHeight: "88vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,0.25)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "20px 22px", borderBottom: `1px solid ${BORDER}`, background: `${c}0D`, borderRadius: "18px 18px 0 0" }}>
+          <Avatar a={agent} size={64} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 19, fontWeight: 800, color: DARK }}>{agent.name}</div>
+            {agent.specialty && <div style={{ fontSize: 13, fontWeight: 600, color: c }}>{agent.specialty}</div>}
+          </div>
+          <button onClick={onClose} style={{ border: "none", background: "none", fontSize: 24, color: "#9ca3af", cursor: "pointer" }}>×</button>
+        </div>
+        <div style={{ padding: "20px 22px", fontSize: 13.5, color: "#374151", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{agent.cv}</div>
+        <div style={{ padding: "0 22px 20px", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button onClick={onClose} style={{ background: "#fff", color: "#6b7280", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "9px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Fermer</button>
+          <button onClick={onChat} style={{ background: c, color: "#fff", border: "none", borderRadius: 10, padding: "9px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Discuter avec {agent.name}</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -132,7 +196,7 @@ function Chat({ agent, onBack }: { agent: AgentPublic; onBack: () => void }) {
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden", minHeight: 480, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderBottom: `1px solid ${BORDER}`, background: `${c}0D` }}>
         <button onClick={onBack} style={{ border: "none", background: "none", fontSize: 20, color: "#6b7280", cursor: "pointer" }}>←</button>
-        <div style={{ width: 40, height: 40, borderRadius: 11, background: `${c}1A`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{agent.icon || "🤖"}</div>
+        <Avatar a={agent} size={42} />
         <div>
           <div style={{ fontSize: 15, fontWeight: 800, color: DARK }}>{agent.name}</div>
           {agent.specialty && <div style={{ fontSize: 12, color: c, fontWeight: 600 }}>{agent.specialty}</div>}
@@ -175,13 +239,19 @@ function Chat({ agent, onBack }: { agent: AgentPublic; onBack: () => void }) {
 
 const champ: React.CSSProperties = { width: "100%", padding: "9px 11px", border: `1px solid ${BORDER}`, borderRadius: 9, fontSize: 14, boxSizing: "border-box" };
 const lab: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: "#6b7280", marginBottom: 4, display: "block" };
-const BLANK = { name: "", specialty: "", description: "", icon: "🤖", color: "#B8966A", model: "smart", systemPrompt: "", accessRoles: [] as string[], active: true, order: "0" };
+const BLANK = { name: "", specialty: "", description: "", icon: "🤖", photo: "", cv: "", color: "#B8966A", model: "smart", systemPrompt: "", accessRoles: [] as string[], active: true, order: "0" };
 
 function Manage({ onChanged }: { onChanged: () => void }) {
   const [agents, setAgents] = useState<AgentFull[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState({ ...BLANK });
   const [saving, setSaving] = useState(false);
+  const photoRef = useRef<HTMLInputElement>(null);
+
+  const onPhoto = async (f: File | undefined) => {
+    if (!f) return;
+    try { const url = await fileToAvatar(f); setForm(fm => ({ ...fm, photo: url })); } catch { /* ignore */ }
+  };
 
   const load = useCallback(() => {
     fetch("/api/ai-agents?admin=1").then(r => r.ok ? r.json() : null)
@@ -192,7 +262,7 @@ function Manage({ onChanged }: { onChanged: () => void }) {
   const startNew = () => { setEditing("new"); setForm({ ...BLANK }); };
   const startEdit = (a: AgentFull) => {
     setEditing(a.id);
-    setForm({ name: a.name, specialty: a.specialty || "", description: a.description || "", icon: a.icon || "🤖", color: a.color || "#B8966A", model: a.model || "smart", systemPrompt: a.systemPrompt || "", accessRoles: a.accessRoles || [], active: a.active, order: String(a.order) });
+    setForm({ name: a.name, specialty: a.specialty || "", description: a.description || "", icon: a.icon || "🤖", photo: a.photo || "", cv: a.cv || "", color: a.color || "#B8966A", model: a.model || "smart", systemPrompt: a.systemPrompt || "", accessRoles: a.accessRoles || [], active: a.active, order: String(a.order) });
   };
 
   const save = async () => {
@@ -227,6 +297,21 @@ function Manage({ onChanged }: { onChanged: () => void }) {
           </div>
           <div style={{ marginTop: 12 }}><label style={lab}>Spécialité (accroche)</label><input value={form.specialty} onChange={e => setForm(f => ({ ...f, specialty: e.target.value }))} placeholder="Juridique location & copropriété" style={champ} /></div>
           <div style={{ marginTop: 12 }}><label style={lab}>Description (carte)</label><textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} style={{ ...champ, resize: "vertical", fontSize: 13 }} /></div>
+          <div style={{ marginTop: 12 }}>
+            <label style={lab}>Photo de l'agent</label>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <Avatar a={{ photo: form.photo || null, icon: form.icon, color: form.color }} size={56} />
+              <input ref={photoRef} type="file" accept="image/*" onChange={e => onPhoto(e.target.files?.[0])} style={{ display: "none" }} />
+              <button onClick={() => photoRef.current?.click()} style={{ fontSize: 12.5, fontWeight: 700, color: GOLD, background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 12px", cursor: "pointer" }}>📷 Choisir une photo</button>
+              <input value={form.photo.startsWith("data:") ? "" : form.photo} onChange={e => setForm(f => ({ ...f, photo: e.target.value }))} placeholder="…ou coller une URL d'image" style={{ ...champ, flex: "1 1 180px" }} />
+              {form.photo && <button onClick={() => setForm(f => ({ ...f, photo: "" }))} style={{ fontSize: 12, fontWeight: 700, color: RED, background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer" }}>Retirer</button>}
+            </div>
+            <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 5 }}>Sans photo, l'emoji sert d'avatar. L'image importée est redimensionnée automatiquement.</div>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <label style={lab}>CV (présentation à l'humour, affichée sur la fiche)</label>
+            <textarea value={form.cv} onChange={e => setForm(f => ({ ...f, cv: e.target.value }))} rows={6} placeholder={"🎓 Formation : …\n💼 Expérience : …\n🏆 Spécialités : …\n😎 Le petit plus : …"} style={{ ...champ, resize: "vertical", fontSize: 13, lineHeight: 1.5 }} />
+          </div>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 12 }}>
             <div style={{ flex: "1 1 160px" }}><label style={lab}>Modèle IA</label>
               <select value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} style={champ}>
@@ -264,7 +349,7 @@ function Manage({ onChanged }: { onChanged: () => void }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {agents.map(a => (
           <div key={a.id} style={{ display: "flex", gap: 14, alignItems: "center", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, padding: 12, opacity: a.active ? 1 : 0.55 }}>
-            <div style={{ width: 42, height: 42, borderRadius: 11, background: `${a.color || GOLD}1A`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{a.icon || "🤖"}</div>
+            <Avatar a={a} size={42} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: DARK }}>{a.name} {!a.active && <span style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>(inactif)</span>}</div>
               <div style={{ fontSize: 12, color: "#6b7280" }}>{a.specialty || "—"} · {TIERS.find(t => t.id === a.model)?.label || a.model} · {a.docs?.length || 0} doc(s), {a._count?.chunks || 0} fragment(s)</div>
