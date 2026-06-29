@@ -61,7 +61,7 @@ async function login(page) {
   await dumpInputs(page, "landing");
 
   // Champ identifiant : priorité au champ « placeholder=SP12345 ».
-  let loginField = page.locator('input[placeholder*="SP"], input[placeholder*="12345"]').first();
+  let loginField = page.locator('input[placeholder*="SP"]:visible, input[placeholder*="12345"]:visible').first();
   if (!(await loginField.count().catch(() => 0))) {
     loginField = page.locator("input[type=email]:visible, input[type=text]:visible").first();
   }
@@ -91,9 +91,17 @@ async function login(page) {
   else log("  ✓ Connecté.");
 }
 
-// Clique le bouton principal (style « font-white » dans Protexa) sinon Entrée.
+// Clique le bouton de validation. Protexa : lien « Se connecter » à l'écran
+// identifiant, puis « Valider/Connexion » à l'écran mot de passe. Repli sur le
+// style « font-white », puis sur la touche Entrée.
 async function clickPrimary(page) {
-  const b = page.locator('a.font-white, [data-webdev-class-usr="font-white"], .font-white').first();
+  const byText = page.locator(
+    'a:visible:has-text("Se connecter"), button:visible:has-text("Se connecter"),'
+    + ' a:visible:has-text("Connexion"), a:visible:has-text("Valider"),'
+    + ' a:visible:has-text("Connecter"), button:visible:has-text("Valider")'
+  ).first();
+  if (await byText.count().catch(() => 0)) { await byText.click().catch(() => {}); return true; }
+  const b = page.locator('a.font-white:visible, [data-webdev-class-usr="font-white"]:visible, .font-white:visible').first();
   if (await b.count().catch(() => 0)) { await b.click().catch(() => {}); return true; }
   await page.keyboard.press("Enter").catch(() => {});
   return false;
