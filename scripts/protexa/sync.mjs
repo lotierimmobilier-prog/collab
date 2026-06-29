@@ -50,44 +50,70 @@ async function snap(page, tag) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Connexion (formulaire WinDev en deux écrans : identifiant puis mot de passe).
+// Connexion (formulaire WinDev : identifiant « SPxxxxx » puis mot de passe).
+// Le champ identifiant a un placeholder « SP12345 » ; les boutons WinDev n'ont
+// pas de texte → le bouton principal porte la classe « font-white ».
 // ─────────────────────────────────────────────────────────────────────────────
 async function login(page) {
   log("▶ Connexion à Protexa…");
   await page.goto(BASE, { waitUntil: "networkidle", timeout: 60000 });
   await snap(page, "login-1-landing");
+  await dumpInputs(page, "landing");
 
-  // Écran 1 : identifiant
-  const loginInput = page.locator("input[type=email], input[type=text]:not([type=hidden])").first();
-  await loginInput.waitFor({ timeout: 20000 });
-  await loginInput.fill(LOGIN);
-  await submitStep(page);
-  await page.waitForTimeout(2500);
-  await snap(page, "login-2-after-id");
+  // Champ identifiant : priorité au champ « placeholder=SP12345 ».
+  let loginField = page.locator('input[placeholder*="SP"], input[placeholder*="12345"]').first();
+  if (!(await loginField.count().catch(() => 0))) {
+    loginField = page.locator("input[type=email]:visible, input[type=text]:visible").first();
+  }
+  await loginField.waitFor({ timeout: 20000 });
+  await loginField.fill(LOGIN);
+  log("  · identifiant saisi");
 
-  // Écran 2 : mot de passe
-  const passInput = page.locator("input[type=password]").first();
-  await passInput.waitFor({ timeout: 20000 });
-  await passInput.fill(PASS);
-  await submitStep(page);
-  await page.waitForTimeout(3500);
+  // Mot de passe : s'il n'est pas déjà visible, on valide pour faire apparaître
+  // l'écran 2, puis on saisit le champ mot de passe VISIBLE.
+  let pass = page.locator("input[type=password]:visible").first();
+  if (!(await pass.count().catch(() => 0))) {
+    await clickPrimary(page);
+    await page.waitForTimeout(3000);
+    await snap(page, "login-2-after-id");
+    await dumpInputs(page, "after-id");
+    pass = page.locator("input[type=password]:visible").first();
+  }
+  await pass.waitFor({ timeout: 20000 });
+  await pass.fill(PASS);
+  log("  · mot de passe saisi");
+  await clickPrimary(page);
+  await page.waitForTimeout(4000);
   await snap(page, "login-3-after-pass");
 
-  // Vérif sommaire : on doit voir le menu (Registre T, Statistiques…).
   const ok = await page.locator("text=/Statistiques|Registre/i").count().catch(() => 0);
-  if (!ok) log("  ⚠ Menu non détecté après connexion — vérifier diag/login-3.");
+  if (!ok) log("  ⚠ Menu non détecté après connexion — voir diag/login-3.");
   else log("  ✓ Connecté.");
 }
 
-// Valide un écran : bouton « Valider/Suivant/Connexion/OK » sinon Entrée.
-async function submitStep(page) {
-  const btn = page.locator(
-    "button:has-text('Valider'), button:has-text('Suivant'), button:has-text('Connexion'),"
-    + " button:has-text('Se connecter'), button:has-text('OK'), input[type=submit],"
-    + " a:has-text('Valider'), a:has-text('Connexion')"
-  ).first();
-  if (await btn.count().catch(() => 0)) { await btn.click().catch(() => {}); return; }
+// Clique le bouton principal (style « font-white » dans Protexa) sinon Entrée.
+async function clickPrimary(page) {
+  const b = page.locator('a.font-white, [data-webdev-class-usr="font-white"], .font-white').first();
+  if (await b.count().catch(() => 0)) { await b.click().catch(() => {}); return true; }
   await page.keyboard.press("Enter").catch(() => {});
+  return false;
+}
+
+// Journalise les champs et boutons VISIBLES (diagnostic, mode DIAG uniquement).
+async function dumpInputs(page, tag) {
+  if (!DIAG) return;
+  const info = await page.evaluate(() => {
+    const vis = (e) => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden"; };
+    const inputs = Array.from(document.querySelectorAll("input")).filter(vis)
+      .map(e => `input type=${e.type} id=${e.id} ph="${e.placeholder || ""}" ti=${e.tabIndex}`);
+    const btns = Array.from(document.querySelectorAll("a,button")).filter(vis)
+      .map(e => `${e.tagName} id=${e.id} class="${e.className}" txt="${(e.innerText || "").trim().slice(0, 25)}"`);
+    return { inputs, btns };
+  }).catch(() => ({ inputs: [], btns: [] }));
+  log(`  [dump ${tag}] ${info.inputs.length} champ(s) visible(s) :`);
+  info.inputs.forEach(i => log(`     ${i}`));
+  log(`  [dump ${tag}] ${info.btns.length} bouton(s) visible(s) :`);
+  info.btns.slice(0, 30).forEach(b => log(`     ${b}`));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
