@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { MODELS, augusteJson, augusteText, extractJson, normalizeError } from "@/lib/auguste";
+import { isAgencyEmail } from "@/lib/superadmin";
 
 const SYSTEM = `Tu es Auguste, l'assistant IA de l'agence Lotier Immobilier.
 Tu analyses des emails professionnels immobiliers et proposes des actions concrètes.
@@ -22,13 +23,13 @@ function buildThreadContext(messages: MailMsg[]): string {
 }
 
 interface ResolvedContact {
-  senderType: "user" | "owner" | "tenant" | "unknown";
+  senderType: "user" | "owner" | "tenant" | "interne" | "unknown";
   senderId?: string;
   name?: string;
   role?: string | null;
 }
 
-/** Résout l'identité d'un expéditeur à partir de son email (collègue / propriétaire / locataire). */
+/** Résout l'identité d'un expéditeur à partir de son email (collègue / interne / propriétaire / locataire). */
 async function resolveContact(email?: string): Promise<ResolvedContact> {
   const e = (email || "").toLowerCase().trim();
   if (!e) return { senderType: "unknown" };
@@ -40,6 +41,9 @@ async function resolveContact(email?: string): Promise<ResolvedContact> {
   if (user)   return { senderType: "user",   senderId: user.id,   name: `${user.prenom} ${user.nom}`,   role: user.roleId };
   if (owner)  return { senderType: "owner",  senderId: owner.id,  name: `${owner.prenom} ${owner.nom}`,  role: "Propriétaire" };
   if (tenant) return { senderType: "tenant", senderId: tenant.id, name: `${tenant.prenom} ${tenant.nom}`, role: "Locataire" };
+  // Toute autre adresse du domaine de l'agence (contact@, gestion@, …) est un
+  // courrier INTERNE de l'agence, pas un expéditeur inconnu.
+  if (isAgencyEmail(e)) return { senderType: "interne", name: e.split("@")[0], role: "Interne" };
   return { senderType: "unknown" };
 }
 

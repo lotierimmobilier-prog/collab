@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { resolveAccountOwner, resolveImapCreds } from "@/lib/mailOwner";
+import { isAgencyEmail } from "@/lib/superadmin";
 import { detectPortal } from "@/lib/portalLeads";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { ImapFlow } = require("imapflow");
@@ -30,6 +31,8 @@ async function identifySender(email: string): Promise<{ senderType: string; send
   if (user)   return { senderType: "user",   senderId: user.id };
   if (owner)  return { senderType: "owner",  senderId: owner.id };
   if (tenant) return { senderType: "tenant", senderId: tenant.id };
+  // Autres adresses du domaine de l'agence (contact@, gestion@, …) = interne.
+  if (isAgencyEmail(email)) return { senderType: "interne" };
   return { senderType: "unknown" };
 }
 
