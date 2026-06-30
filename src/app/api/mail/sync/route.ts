@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import { resolveAccountOwner, accessibleMailAccount } from "@/lib/mailOwner";
+import { resolveAccountOwner, resolveImapCreds } from "@/lib/mailOwner";
 import { detectPortal } from "@/lib/portalLeads";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { ImapFlow } = require("imapflow");
@@ -184,35 +184,15 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ ok: false, error: "Non authentifié" }, { status: 401 });
 
   const body = await req.json();
-  let { host, port, ssl, username, password } = body;
+  const { host, port, ssl, username, password } = body;
   const { accountId, page = 1, syncSent = true } = body;
 
-  // Cloisonnement : pour toute boîte gérée en base, l'utilisateur doit en être
-  // agent. Sans ce contrôle, on pouvait passer l'identifiant de la boîte d'un
-  // collègue et en synchroniser/lire tout le courrier.
-  if (accountId) {
-    const dbAcc = await accessibleMailAccount(session.user.id, accountId);
-    if (dbAcc) {
-      // Boîte gérée et autorisée : on complète les identifiants manquants depuis
-      // la base.
-      if (!host || !password) {
-        host = dbAcc.host; port = String(dbAcc.port); ssl = dbAcc.ssl; username = dbAcc.username; password = dbAcc.password;
-      }
-    } else {
-      // Boîte EXISTANTE en base mais dont l'utilisateur n'est pas agent →
-      // refus (cloisonnement : on ne synchronise pas le courrier d'un collègue).
-      const exists = await prisma.mailAccountConfig.findUnique({ where: { id: accountId }, select: { id: true } });
-      if (exists) {
-        return NextResponse.json({ ok: false, error: "Accès non autorisé à cette boîte" }, { status: 403 });
-      }
-      // Sinon (identifiant non géré en base / compte local) : on poursuit avec
-      // les identifiants fournis par le client — déjà validés par « Tester ».
-    }
-  }
-
-  if (!host || !username || !password) {
-    return NextResponse.json({ ok: false, error: "Paramètres incomplets" }, { status: 400 });
-  }
+  // Cloisonnement + complétion des identifiants depuis la base : sans ce contrôle
+  // on pouvait passer l'identifiant de la boîte d'un collègue et en synchroniser
+  // tout le courrier. Logique partagée avec body et search (resolveImapCreds).
+  const resolved = await resolveImapCreds(session.user.id, accountId, { host, port, ssl, username, password });
+  if (!resolved.ok) return NextResponse.json({ ok: false, error: resolved.error }, { status: resolved.status });
+  const creds = resolved.creds;
 
   // Le contenu synchronisé est rattaché à l'agent de la boîte (cloisonnement) ;
   // pour un compte local non géré en base, à l'utilisateur courant.
@@ -221,7 +201,7 @@ export async function POST(req: NextRequest) {
   const since = new Date();
   since.setMonth(since.getMonth() - MONTHS_BACK);
 
-  const client = makeClient(host, port, ssl, username, password);
+  const client = makeClient(creds.host, creds.port, creds.ssl, creds.username, creds.password);
 
   try {
     await client.connect();
