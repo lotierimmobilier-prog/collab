@@ -61,20 +61,26 @@ export async function POST(req: NextRequest) {
 
   if (!email || !host) return NextResponse.json({ error: "Email et hôte requis" }, { status: 400 });
 
-  // Une boîte PARTAGÉE (lecture/écriture par plusieurs agents) ne peut être
-  // créée que par le super administrateur.
-  const wantsShared = isShared === true || (Array.isArray(sharedUserIds) && sharedUserIds.length > 0);
-  if (wantsShared && !isSuper(session)) {
-    return NextResponse.json({ error: "Seul le super administrateur peut créer/partager une boîte mail commune." }, { status: 403 });
+  // Une boîte n'est « partagée » (réservée au super administrateur) que si elle
+  // est accessible à un agent AUTRE que son créateur. Une boîte PERSONNELLE —
+  // même créée via « Connexion rapide » (isShared=true mais partagée seulement
+  // avec soi-même) — reste enregistrable par l'agent lui-même. Sans cette
+  // nuance, un agent ne pouvait pas enregistrer sa propre boîte (403) : elle ne
+  // « restait pas en mémoire ».
+  const ids: string[] = Array.isArray(sharedUserIds) ? sharedUserIds.filter(Boolean) : [];
+  const sharedWithOthers = ids.some(id => id !== session.user.id);
+  if (sharedWithOthers && !isSuper(session)) {
+    return NextResponse.json({ error: "Seul le super administrateur peut partager une boîte mail avec d'autres agents." }, { status: 403 });
   }
 
-  // Agents ayant accès à la boîte. Pour une boîte personnelle, le créateur en
-  // devient l'agent. Le super admin qui paramètre une boîte partagée renseigne
-  // sharedUserIds (il peut s'y inclure pour l'utiliser, ex. gestion@).
-  const agents: string[] = Array.isArray(sharedUserIds) ? [...sharedUserIds] : [];
-  if (!wantsShared && !agents.includes(session.user.id)) {
+  // Agents ayant accès à la boîte. Le créateur a toujours accès à sa propre
+  // boîte. Une boîte personnelle (partagée avec personne d'autre) est stockée
+  // comme non partagée, pour que l'agent puisse la gérer.
+  const agents: string[] = [...ids];
+  if (!sharedWithOthers && !agents.includes(session.user.id)) {
     agents.push(session.user.id);
   }
+  const effIsShared = sharedWithOthers ? (isShared ?? false) : false;
 
   const account = await prisma.mailAccountConfig.create({
     data: {
@@ -92,7 +98,7 @@ export async function POST(req: NextRequest) {
       smtpSsl:       smtpSsl ?? true,
       color:         color || "#B8966A",
       active:        true,
-      isShared:      isShared ?? false,
+      isShared:      effIsShared,
       sharedUserIds: agents,
       createdBy:     session.user.id,
     },
