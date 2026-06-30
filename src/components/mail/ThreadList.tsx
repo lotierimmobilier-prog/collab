@@ -16,6 +16,7 @@ interface Props {
   accounts: MailAccount[];
   gmailConfigs?: GmailCfg[];
   users?: SimpleUser[];
+  isCommercial?: boolean;   // agent commercial : pas de classement/attribution auto
   selectedId?: string;
   activeLabel: string;
   activeAccount: string;
@@ -38,7 +39,7 @@ interface Props {
 }
 
 export default function ThreadList({
-  threads, messages, labels, accounts, gmailConfigs = [], users = [],
+  threads, messages, labels, accounts, gmailConfigs = [], users = [], isCommercial = false,
   selectedId, activeLabel, activeAccount, customLabels, page, onPageChange,
   onSelect, onStar, onTrash, onApplyLabel, onAccountFilter,
   onClassifyAll, classifying, sortMode = "date", onToggleSort,
@@ -138,7 +139,7 @@ export default function ThreadList({
               {sortMode === "priority" ? "🔥 Priorité" : "↕ Date"}
             </button>
           )}
-          {!selectMode && onClassifyAll && (
+          {!selectMode && onClassifyAll && !isCommercial && (
             <button onClick={onClassifyAll} disabled={classifying}
               style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 6, border: "1px solid #e5e7eb", background: classifying ? "#f9fafb" : "#FFFBEB", cursor: classifying ? "default" : "pointer", fontSize: 10, fontWeight: 600, color: classifying ? "#9ca3af" : GOLD, whiteSpace: "nowrap" }}>
               {classifying ? "⏳ Classification…" : "✨ Classer avec Auguste"}
@@ -185,7 +186,8 @@ export default function ThreadList({
             )}
           </div>
 
-          {/* Attribuer */}
+          {/* Attribuer — masqué pour les agents commerciaux (pas d'attribution) */}
+          {!isCommercial && (
           <div style={{ position: "relative" }}>
             <BulkBtn icon="👤" label="Attribuer" onClick={() => { setShowAssignPicker(s => !s); setShowLabelPicker(false); }} />
             {showAssignPicker && (
@@ -213,6 +215,7 @@ export default function ThreadList({
               </>
             )}
           </div>
+          )}
 
           {/* Supprimer */}
           <BulkBtn icon="🗑" label="Supprimer" danger onClick={() => { onBulkTrash?.(selIds); clearSelection(); }} />
@@ -313,16 +316,16 @@ export default function ThreadList({
                       <button onClick={() => onTrash(t.id)} title="Corbeille" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 10, color: "#e5e7eb", lineHeight: 1, padding: "1px 2px" }}>🗑</button>
                     </div>
                   )}
-                  {assignedName && !repliedName && (
+                  {assignedName && !repliedName && !isCommercial && (
                     <div title={`À répondre : ${assignedName}`} style={{ display: "flex", alignItems: "center", gap: 3, background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 6, padding: "2px 5px" }}>
                       <span style={{ fontSize: 9, color: "#1D4ED8", fontWeight: 700 }}>→</span>
                       <span style={{ fontSize: 9, color: "#1D4ED8", fontWeight: 600, maxWidth: 44, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{assignedName.split(" ")[0]}</span>
                     </div>
                   )}
                   {repliedName && (
-                    <div title={`Répondu par : ${repliedName}`} style={{ display: "flex", alignItems: "center", gap: 3, background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 6, padding: "2px 5px" }}>
+                    <div title={isCommercial ? "Répondu" : `Répondu par : ${repliedName}`} style={{ display: "flex", alignItems: "center", gap: 3, background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 6, padding: "2px 5px" }}>
                       <span style={{ fontSize: 10, color: "#15803D", fontWeight: 700 }}>✓</span>
-                      <span style={{ fontSize: 9, color: "#15803D", fontWeight: 600, maxWidth: 44, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{repliedName.split(" ")[0]}</span>
+                      <span style={{ fontSize: 9, color: "#15803D", fontWeight: 600, maxWidth: 44, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{isCommercial ? "Répondu" : repliedName.split(" ")[0]}</span>
                     </div>
                   )}
                 </div>
