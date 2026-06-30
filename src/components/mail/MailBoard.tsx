@@ -237,7 +237,14 @@ export default function MailBoard() {
         const saved = await r.json();
         return { ...acc, id: saved.id, dbId: saved.id, password: "" };
       }
-    } catch { /* silencieux */ }
+      // L'enregistrement serveur a échoué : on PRÉVIENT l'utilisateur. Sans ce
+      // signal, la boîte ne vivait qu'en local et disparaissait au prochain
+      // nettoyage du cache (« la boîte a disparu »).
+      const err = await r.json().catch(() => ({} as { error?: string }));
+      alert(`La boîte « ${acc.email} » n'a pas pu être enregistrée sur le serveur (${err.error || `erreur ${r.status}`}).\n\nElle ne sera pas conservée. Vérifiez les paramètres et réessayez « Enregistrer ».`);
+    } catch {
+      alert(`La boîte « ${acc.email} » n'a pas pu être enregistrée : connexion au serveur impossible.\n\nElle ne sera pas conservée. Réessayez « Enregistrer ».`);
+    }
     return acc;
   }
 
