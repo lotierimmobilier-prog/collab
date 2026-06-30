@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { isDirectionRole } from "@/lib/dashboard-prefs";
-import { MODEL_TIERS } from "@/lib/ai-agents";
+import { isValidModel } from "@/lib/ai-agents";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -24,7 +24,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   if (b.photo !== undefined) data.photo = (b.photo || "").trim().slice(0, 700000) || null;
   if (b.cv !== undefined) data.cv = (b.cv || "").trim().slice(0, 4000) || null;
   if (b.color !== undefined) data.color = (b.color || "#B8966A").trim().slice(0, 16);
-  if (b.model !== undefined && MODEL_TIERS[b.model]) data.model = b.model;
+  if (b.model !== undefined && isValidModel(b.model)) data.model = b.model;
   if (b.systemPrompt !== undefined) data.systemPrompt = (b.systemPrompt || "").trim().slice(0, 12000);
   if (b.accessRoles !== undefined) data.accessRoles = Array.isArray(b.accessRoles) && b.accessRoles.length ? b.accessRoles.map(String) : null;
   if (typeof b.active === "boolean") data.active = b.active;

@@ -10,21 +10,45 @@ import { prisma } from "@/lib/prisma";
 import { MODELS } from "@/lib/auguste";
 import { embedOne, cosineSim } from "@/lib/embeddings";
 
-// Tiers proposés à la direction → modèle Anthropic effectif.
-// « max » (Opus) est lu depuis l'environnement ; à défaut on retombe sur Sonnet.
-export const MODEL_TIERS: Record<string, string> = {
-  fast: MODELS.fast,
+// Modèles Anthropic proposés par défaut (clés stables, rétrocompatibles avec
+// les anciens « tiers »). La direction peut aussi saisir n'importe quel
+// identifiant de modèle Anthropic (ex. un modèle Opus).
+export const AGENT_MODELS: { id: string; label: string; hint: string }[] = [
+  { id: "fast",  label: "Haiku 4.5",  hint: "Rapide & économique" },
+  { id: "smart", label: "Sonnet 4.6", hint: "Équilibré (recommandé)" },
+  { id: "fable", label: "Fable 5",    hint: "Créatif" },
+];
+
+// Correspondance clé/preset → identifiant de modèle réel.
+const MODEL_MAP: Record<string, string> = {
+  fast:  MODELS.fast,
   smart: MODELS.smart,
-  max: process.env.ANTHROPIC_MODEL_MAX || MODELS.smart,
-};
-export const MODEL_TIER_LABELS: Record<string, string> = {
-  fast: "Rapide & économique",
-  smart: "Équilibré",
-  max: "Qualité maximale",
+  fable: "claude-fable-5",
+  // Ancien tier « qualité max » : identifiant Opus fourni par l'environnement.
+  max:   process.env.ANTHROPIC_MODEL_MAX || MODELS.smart,
 };
 
-export function resolveModel(tier: string | null | undefined): string {
-  return MODEL_TIERS[tier || "smart"] || MODELS.smart;
+const MODEL_ID_RE = /^claude[-.][a-z0-9.\-]+$/i;
+
+// Modèle valide : preset connu OU identifiant Anthropic explicite.
+export function isValidModel(m?: string | null): boolean {
+  return !!m && (!!MODEL_MAP[m] || MODEL_ID_RE.test(m));
+}
+
+// Étiquette lisible (pour l'affichage admin).
+export function modelLabel(m?: string | null): string {
+  if (!m) return "Sonnet 4.6";
+  const preset = AGENT_MODELS.find(x => x.id === m);
+  if (preset) return preset.label;
+  if (m === "max") return "Qualité maximale";
+  return m;
+}
+
+export function resolveModel(model: string | null | undefined): string {
+  if (!model) return MODELS.smart;
+  if (MODEL_MAP[model]) return MODEL_MAP[model];
+  if (MODEL_ID_RE.test(model)) return model; // identifiant Anthropic explicite
+  return MODELS.smart;
 }
 
 /** Un agent est-il accessible à un utilisateur d'un rôle donné ? */
