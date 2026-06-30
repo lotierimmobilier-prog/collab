@@ -1327,6 +1327,69 @@ model AiAgentChunk {
   @@map("ai_agent_chunks")
 }
 
+// ════════════ Forum communautaire ════════════
+
+model ForumCategory {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  icon        String?
+  color       String?
+  order       Int          @default(0)
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+
+  topics      ForumTopic[]
+
+  @@map("forum_categories")
+}
+
+model ForumTopic {
+  id          String        @id @default(cuid())
+  categoryId  String
+  userId      String
+  userName    String
+  title       String
+  body        String
+  pinned      Boolean       @default(false)
+  locked      Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  lastReplyAt DateTime      @default(now())
+
+  category    ForumCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  replies     ForumReply[]
+
+  @@index([categoryId])
+  @@map("forum_topics")
+}
+
+model ForumReply {
+  id        String     @id @default(cuid())
+  topicId   String
+  userId    String
+  userName  String
+  body      String
+  createdAt DateTime   @default(now())
+
+  topic     ForumTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@index([topicId])
+  @@map("forum_replies")
+}
+
+// Réaction « j'aime » sur un sujet (kind="topic") ou une réponse (kind="reply").
+model ForumLike {
+  id        String   @id @default(cuid())
+  kind      String
+  refId     String
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@unique([kind, refId, userId])
+  @@index([refId])
+  @@map("forum_likes")
+}
+
 // Jeton à usage unique pour qu'un nouvel utilisateur définisse son mot de passe
 // (lien envoyé dans l'email de bienvenue).
 model PasswordSetupToken {
