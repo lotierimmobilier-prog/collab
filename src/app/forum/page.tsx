@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import Sidebar from "@/components/Sidebar";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 const GOLD = "#B8966A"; const DARK = "#1C1A17"; const BORDER = "#E6E1D9"; const GOLD_BG = "#F7F0E6";
 const RED = "#DC2626"; const MUTED = "#6b7280";
@@ -26,6 +27,7 @@ function timeAgo(d: string) {
 }
 
 export default function ForumPage() {
+  const isMobile = useIsMobile();
   const [isDir, setIsDir] = useState(false);
   const [uid, setUid] = useState("");
   const [cats, setCats] = useState<Category[]>([]);
@@ -54,13 +56,13 @@ export default function ForumPage() {
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#FAF8F5" }}>
       <Sidebar active="forum" />
-      <main style={{ flex: 1, padding: "28px 32px", maxWidth: 980, margin: "0 auto", width: "100%" }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: DARK, margin: 0 }}>🗣️ Forum de l'agence</h1>
+      <main style={{ flex: 1, padding: isMobile ? "16px 12px" : "28px 32px", maxWidth: 980, margin: "0 auto", width: "100%", minWidth: 0 }}>
+        <h1 style={{ fontSize: isMobile ? 19 : 22, fontWeight: 800, color: DARK, margin: 0 }}>🗣️ Forum de l'agence</h1>
         <p style={{ color: MUTED, fontSize: 13, marginTop: 4, marginBottom: 18 }}>
           Un espace communautaire pour échanger, s'entraider et partager entre collègues.
         </p>
 
-        {view === "cats" && <CategoriesView cats={cats} isDir={isDir} onOpen={openCat} onOpenTopic={openTopic} onChanged={loadCats} />}
+        {view === "cats" && <CategoriesView cats={cats} isDir={isDir} isMobile={isMobile} onOpen={openCat} onOpenTopic={openTopic} onChanged={loadCats} />}
         {view === "topics" && selCat && (
           <TopicsView cat={selCat} topics={topics} onBack={() => { setView("cats"); loadCats(); }} onOpen={openTopic} onReload={reloadTopics} />
         )}
@@ -74,14 +76,13 @@ export default function ForumPage() {
 
 // ════════════ Catégories ════════════
 
-// Grille de colonnes commune (façon phpBB) : icône · forum · sujets · messages · dernier message.
-const FORUM_COLS = "46px minmax(0,1fr) 64px 78px 210px";
-const BAR = "#2f6296";          // bleu « forum » type phpBB
-const BAR_GRAD = "linear-gradient(180deg,#3a72ab,#2f6296)";
+// Index façon phpBB, aux couleurs de l'agence (or/crème), responsive.
+const FORUM_COLS = "46px minmax(0,1fr) 60px 74px 196px";
+const BAR_GRAD = "linear-gradient(180deg,#C4A878,#B8966A)";   // or agence
 
-function CategoriesView({ cats, isDir, onOpen, onOpenTopic, onChanged }: { cats: Category[]; isDir: boolean; onOpen: (c: Category) => void; onOpenTopic: (id: string) => void; onChanged: () => void }) {
+function CategoriesView({ cats, isDir, isMobile, onOpen, onOpenTopic, onChanged }: { cats: Category[]; isDir: boolean; isMobile: boolean; onOpen: (c: Category) => void; onOpenTopic: (id: string) => void; onChanged: () => void }) {
   const [manage, setManage] = useState(false);
-  const colHead: React.CSSProperties = { fontSize: 10, fontWeight: 700, color: "#dCEBFA", textTransform: "uppercase", letterSpacing: 0.4, textAlign: "center", alignSelf: "center" };
+  const colHead: React.CSSProperties = { fontSize: 10, fontWeight: 700, color: "#F3E7D2", textTransform: "uppercase", letterSpacing: 0.4, textAlign: "center", alignSelf: "center" };
   const stat: React.CSSProperties = { fontSize: 14, fontWeight: 700, color: DARK, textAlign: "center", alignSelf: "center" };
 
   return (
@@ -95,44 +96,63 @@ function CategoriesView({ cats, isDir, onOpen, onOpenTopic, onChanged }: { cats:
       )}
       {manage && <CategoryManager cats={cats} onChanged={onChanged} />}
 
-      <div style={{ border: `1px solid #cfe0f0`, borderRadius: 10, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-        {/* Barre de section bleue (avec les en-têtes de colonnes) */}
-        <div style={{ display: "grid", gridTemplateColumns: FORUM_COLS, gap: 8, background: BAR_GRAD, color: "#fff", padding: "9px 14px", alignItems: "center" }}>
-          <span />
-          <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: 0.2 }}>Forum de l'agence</span>
-          <span style={colHead}>Sujets</span>
-          <span style={colHead}>Messages</span>
-          <span style={colHead}>Dernier message</span>
-        </div>
+      <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+        {/* Barre de section (or agence) — en-têtes de colonnes sur grand écran */}
+        {isMobile ? (
+          <div style={{ background: BAR_GRAD, color: "#fff", padding: "9px 14px", fontSize: 13, fontWeight: 800 }}>Forum de l'agence</div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: FORUM_COLS, gap: 8, background: BAR_GRAD, color: "#fff", padding: "9px 14px", alignItems: "center" }}>
+            <span />
+            <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: 0.2 }}>Forum de l'agence</span>
+            <span style={colHead}>Sujets</span>
+            <span style={colHead}>Messages</span>
+            <span style={colHead}>Dernier message</span>
+          </div>
+        )}
 
         {/* Lignes (catégories = forums) */}
         {cats.map((c, i) => {
           const col = c.color || GOLD;
+          const rowBg = i % 2 ? "#FBF8F3" : "#fff";
+          const name = (
+            <button onClick={() => onOpen(c)} style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", fontSize: 15, fontWeight: 800, color: DARK }}>
+              {c.name}{!c.active && <span style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}> (masquée)</span>}
+            </button>
+          );
+          const lastMsg = c.lastMessage ? (
+            <>
+              <button onClick={() => onOpenTopic(c.lastMessage!.topicId)} title={c.lastMessage.title} style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", fontSize: 12, fontWeight: 700, color: GOLD, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
+                {c.lastMessage.title}
+              </button>
+              <div style={{ marginTop: 2, fontSize: 11.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>par <b style={{ color: "#4b5563" }}>{c.lastMessage.userName}</b> · {timeAgo(c.lastMessage.at)}</div>
+            </>
+          ) : <span style={{ color: "#b9b2a6", fontSize: 11.5 }}>Aucun message</span>;
+          const folder = <div style={{ width: 42, height: 42, borderRadius: 10, background: `${col}1A`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{c.icon || "💬"}</div>;
+
+          if (isMobile) {
+            // Mobile / tablette étroite : ligne empilée (pas de colonnes).
+            return (
+              <div key={c.id} style={{ display: "flex", gap: 12, padding: "12px 14px", background: rowBg, borderTop: i ? `1px solid ${BORDER}` : "none" }}>
+                {folder}
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  {name}
+                  {c.description && <div style={{ fontSize: 12, color: MUTED, marginTop: 2, lineHeight: 1.4 }}>{c.description}</div>}
+                  <div style={{ fontSize: 11.5, color: MUTED, marginTop: 6, fontWeight: 600 }}>{c.topicCount} sujet{c.topicCount > 1 ? "s" : ""} · {c.messageCount} message{c.messageCount > 1 ? "s" : ""}</div>
+                  <div style={{ marginTop: 4 }}>{lastMsg}</div>
+                </div>
+              </div>
+            );
+          }
           return (
-            <div key={c.id} style={{ display: "grid", gridTemplateColumns: FORUM_COLS, gap: 8, alignItems: "center", padding: "12px 14px", background: i % 2 ? "#f7fafd" : "#fff", borderTop: i ? "1px solid #eef3f8" : "none" }}>
-              {/* Icône type « dossier » */}
-              <div style={{ width: 42, height: 42, borderRadius: 10, background: `${col}1A`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{c.icon || "💬"}</div>
-              {/* Nom + description */}
+            <div key={c.id} style={{ display: "grid", gridTemplateColumns: FORUM_COLS, gap: 8, alignItems: "center", padding: "12px 14px", background: rowBg, borderTop: i ? `1px solid ${BORDER}` : "none" }}>
+              {folder}
               <div style={{ minWidth: 0 }}>
-                <button onClick={() => onOpen(c)} style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", fontSize: 15, fontWeight: 800, color: BAR }}>
-                  {c.name}{!c.active && <span style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}> (masquée)</span>}
-                </button>
+                {name}
                 {c.description && <div style={{ fontSize: 12, color: MUTED, marginTop: 2, lineHeight: 1.4 }}>{c.description}</div>}
               </div>
-              {/* Compteurs */}
               <div style={stat}>{c.topicCount}</div>
               <div style={stat}>{c.messageCount}</div>
-              {/* Dernier message */}
-              <div style={{ minWidth: 0, fontSize: 11.5, color: MUTED, alignSelf: "center" }}>
-                {c.lastMessage ? (
-                  <>
-                    <button onClick={() => onOpenTopic(c.lastMessage!.topicId)} title={c.lastMessage.title} style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", fontSize: 12, fontWeight: 700, color: DARK, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
-                      {c.lastMessage.title}
-                    </button>
-                    <div style={{ marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>par <b style={{ color: "#4b5563" }}>{c.lastMessage.userName}</b> · {timeAgo(c.lastMessage.at)}</div>
-                  </>
-                ) : <span style={{ color: "#b9b2a6" }}>Aucun message</span>}
-              </div>
+              <div style={{ minWidth: 0, alignSelf: "center" }}>{lastMsg}</div>
             </div>
           );
         })}
