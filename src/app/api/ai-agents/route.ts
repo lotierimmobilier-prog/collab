@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { isDirectionRole } from "@/lib/dashboard-prefs";
 import { agentAllowed, isValidModel } from "@/lib/ai-agents";
+import { getFavorites } from "@/lib/ai-favorites";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyAgent = any;
@@ -32,7 +33,8 @@ export async function GET(req: NextRequest) {
       id: a.id, name: a.name, specialty: a.specialty, description: a.description,
       icon: a.icon, color: a.color, photo: a.photo, cv: a.cv,
     }));
-  return NextResponse.json({ isDir, agents });
+  const favorites = await getFavorites((session.user as { id?: string }).id ?? "");
+  return NextResponse.json({ isDir, agents, favorites });
 }
 
 // POST /api/ai-agents — créer un assistant (direction).
