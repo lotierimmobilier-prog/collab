@@ -395,7 +395,7 @@ export default function MailBoard() {
         const resp = await fetch("/api/mail/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ host: a.host, port: a.port, ssl: a.ssl, username: a.username, password: a.password, accountId: a.id, query }),
+          body: JSON.stringify({ host: a.host, port: a.port, ssl: a.ssl, username: a.username, password: a.password, accountId: a.dbId ?? a.id, query }),
         });
         const data = await resp.json();
         if (data.ok && data.messages) {

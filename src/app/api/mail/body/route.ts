@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import { accessibleMailAccount } from "@/lib/mailOwner";
+import { resolveImapCreds } from "@/lib/mailOwner";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { ImapFlow } = require("imapflow");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -12,38 +11,24 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ ok: false, error: "Non authentifié" }, { status: 401 });
 
   const body = await req.json();
-  let { host, port, ssl, username, password } = body;
-  const { uid, accountId } = body;
+  const { host, port, ssl, username, password, uid, accountId } = body;
 
-  // Cloisonnement : pour une boîte gérée en base, l'utilisateur doit en être
-  // agent. On complète alors les identifiants manquants depuis la base. Si
-  // l'identifiant n'est PAS une boîte gérée (compte local) mais que le client
-  // fournit les identifiants, on poursuit — comme pour la synchronisation.
-  if (accountId) {
-    const dbAcc = await accessibleMailAccount(session.user.id, accountId);
-    if (dbAcc) {
-      if (!host || !password) {
-        host = dbAcc.host; port = String(dbAcc.port); ssl = dbAcc.ssl; username = dbAcc.username; password = dbAcc.password;
-      }
-    } else {
-      // Boîte existante en base mais non autorisée → refus. Sinon (compte local
-      // non géré en base) on poursuit avec les identifiants fournis par le client.
-      const exists = await prisma.mailAccountConfig.findUnique({ where: { id: accountId }, select: { id: true } });
-      if (exists) {
-        return NextResponse.json({ ok: false, error: "Accès non autorisé à cette boîte" }, { status: 403 });
-      }
-    }
-  }
-
-  if (!host || !username || !password || !uid) {
+  if (!uid) {
     return NextResponse.json({ ok: false, error: "Paramètres incomplets" }, { status: 400 });
   }
 
+  // Cloisonnement + complétion des identifiants depuis la base (le navigateur
+  // envoie un mot de passe vide pour les boîtes gérées) — logique partagée avec
+  // sync et search pour qu'elles ne divergent jamais.
+  const resolved = await resolveImapCreds(session.user.id, accountId, { host, port, ssl, username, password });
+  if (!resolved.ok) return NextResponse.json({ ok: false, error: resolved.error }, { status: resolved.status });
+  const c = resolved.creds;
+
   const client = new ImapFlow({
-    host,
-    port: parseInt(port),
-    secure: ssl,
-    auth: { user: username, pass: password },
+    host: c.host,
+    port: parseInt(c.port),
+    secure: c.ssl,
+    auth: { user: c.username, pass: c.password },
     logger: false,
     connectionTimeout: 20000,
     greetingTimeout: 8000,

@@ -50,6 +50,58 @@ export async function accessibleMailAccount(userId: string | undefined | null, a
   return isAgent ? acc : null;
 }
 
+/** Identifiants IMAP effectifs pour se connecter à une boîte. */
+export type ImapCreds = { host: string; port: string; ssl: boolean; username: string; password: string };
+export type ResolveImapResult =
+  | { ok: true; creds: ImapCreds }
+  | { ok: false; status: number; error: string };
+
+/**
+ * Résout les identifiants IMAP effectifs d'une opération sur une boîte, en
+ * appliquant le cloisonnement de façon UNIFORME pour toutes les routes qui
+ * touchent au contenu (sync / body / search) :
+ *
+ *  - boîte gérée en base ET utilisateur agent → on complète les identifiants
+ *    manquants depuis la base. Indispensable car le client envoie un mot de
+ *    passe vide (masqué côté navigateur) pour les boîtes gérées.
+ *  - boîte gérée en base mais utilisateur NON agent → refus 403 (cloisonnement).
+ *  - identifiant non géré en base (compte local / Gmail) → on poursuit avec les
+ *    identifiants fournis par le client.
+ *
+ * Centraliser ici garantit que sync, body et search se comportent à l'identique :
+ * c'est ce qui évite que le bug « Compte introuvable / Corps non disponible » ne
+ * réapparaisse sur une route oubliée.
+ */
+export async function resolveImapCreds(
+  userId: string | undefined | null,
+  accountId: string | undefined | null,
+  client: { host?: string; port?: string | number; ssl?: boolean; username?: string; password?: string },
+): Promise<ResolveImapResult> {
+  let host = client.host;
+  let username = client.username;
+  let password = client.password;
+  let port = client.port !== undefined && client.port !== null ? String(client.port) : undefined;
+  let ssl = client.ssl;
+
+  if (accountId) {
+    const dbAcc = await accessibleMailAccount(userId, accountId);
+    if (dbAcc) {
+      if (!host || !password) {
+        host = dbAcc.host; port = String(dbAcc.port); ssl = dbAcc.ssl; username = dbAcc.username; password = dbAcc.password;
+      }
+    } else {
+      const exists = await prisma.mailAccountConfig.findUnique({ where: { id: accountId }, select: { id: true } });
+      if (exists) return { ok: false, status: 403, error: "Accès non autorisé à cette boîte" };
+      // Sinon : compte local non géré en base → on garde les identifiants client.
+    }
+  }
+
+  if (!host || !username || !password) {
+    return { ok: false, status: 400, error: "Paramètres incomplets" };
+  }
+  return { ok: true, creds: { host, port: port ?? "993", ssl: ssl ?? true, username, password } };
+}
+
 /**
  * « Répare » le cloisonnement d'une boîte : ré-affecte ownerId de TOUS ses
  * messages à l'agent légitime (1er sharedUserId, sinon le créateur). Sert après
