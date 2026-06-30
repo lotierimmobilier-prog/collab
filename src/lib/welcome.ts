@@ -10,7 +10,10 @@ export async function createPasswordSetupToken(userId: string): Promise<string> 
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + TOKEN_TTL_DAYS * 86_400_000);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (prisma as any).passwordSetupToken.create({ data: { userId, token, expiresAt } });
+  const t = (prisma as any).passwordSetupToken;
+  // Un seul lien actif à la fois : on invalide les précédents jetons inutilisés.
+  await t.deleteMany({ where: { userId, usedAt: null } }).catch(() => {});
+  await t.create({ data: { userId, token, expiresAt } });
   return token;
 }
 
