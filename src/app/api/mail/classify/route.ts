@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { MODELS, augusteJson, normalizeError } from "@/lib/auguste";
 import { historicalHandler } from "@/lib/mailRouting";
+import { isCommercialRole } from "@/lib/admin";
 
 const SYSTEM = `Tu es Auguste, assistant de l'agence Lotier Immobilier.
 Tu analyses des emails et retournes UNIQUEMENT un JSON valide, sans markdown ni texte autour.`;
@@ -24,12 +25,23 @@ export async function POST(req: NextRequest) {
     .join(", ");
 
   const userArr = (users as { id: string; prenom: string; nom: string }[]) || [];
-  const userList = userArr
+
+  // Attribution automatique : on exclut les agents commerciaux (négociateurs),
+  // à qui l'on n'assigne pas de mail automatiquement. On récupère leur rôle en
+  // base (la liste reçue du client n'en contient pas).
+  const roleRows = userArr.length
+    ? await prisma.user.findMany({ where: { id: { in: userArr.map(u => u.id) } }, select: { id: true, roleId: true } })
+    : [];
+  const commercialIds = new Set(roleRows.filter(r => isCommercialRole(r.roleId)).map(r => r.id));
+  const assignable = userArr.filter(u => !commercialIds.has(u.id));
+
+  const userList = assignable
     .map(u => `${u.id}: "${u.prenom} ${u.nom}"`)
     .join(", ");
 
-  // Traitant historique réel (assignations passées / réponses envoyées)
-  const validUserIds = new Set(userArr.map(u => u.id));
+  // Traitant historique réel (assignations passées / réponses envoyées), borné
+  // aux seuls agents assignables (exclut les commerciaux).
+  const validUserIds = new Set(assignable.map(u => u.id));
   const handler = fromEmail ? await historicalHandler(fromEmail, validUserIds) : null;
   const historyContext = handler
     ? `\nHistorique : cet expéditeur est habituellement traité par l'agent ${handler.userId} (${handler.reason}). Assigne-le à cet agent sauf si le contenu impose clairement un autre service.`
@@ -70,8 +82,11 @@ Règles :
       system: SYSTEM,
       messages: [{ role: "user", content: prompt }],
     }, { fallback: { labels: [], assignedToId: null, priority: "normale", reason: "" } });
-    // L'historique réel prime sur la proposition du modèle pour le traitant
+    // L'historique réel prime sur la proposition du modèle pour le traitant.
+    // Sinon, on ne garde l'assignation du modèle que si l'agent est assignable
+    // (jamais un agent commercial).
     if (handler) result.assignedToId = handler.userId;
+    else if (typeof result.assignedToId === "string" && !validUserIds.has(result.assignedToId)) result.assignedToId = null;
     return NextResponse.json({ ...result, hasMemory: !!memory, fromHistory: !!handler });
   } catch (err) {
     const e = normalizeError(err);

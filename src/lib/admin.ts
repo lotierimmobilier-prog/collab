@@ -125,6 +125,15 @@ export const DEFAULT_ROLES: Role[] = [
   },
 ];
 
+// Rôles « agent commercial » (négociateurs). « agent » est l'id du rôle système
+// libellé « Agent commercial » ; « commercial » est conservé pour les rôles
+// personnalisés historiques. Ces agents sont EXCLUS de l'attribution automatique
+// des mails : on ne leur assigne pas de courrier tout seul (ils gèrent le leur).
+export const COMMERCIAL_ROLE_IDS = ["agent", "commercial"];
+export function isCommercialRole(roleId: string | null | undefined): boolean {
+  return !!roleId && COMMERCIAL_ROLE_IDS.includes(roleId);
+}
+
 export function getRightStyle(right: Right) {
   return RIGHTS.find(r => r.value === right) ?? RIGHTS[0];
 }

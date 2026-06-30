@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { MODELS, augusteJson, normalizeError } from "@/lib/auguste";
 import { historicalHandlers } from "@/lib/mailRouting";
+import { isCommercialRole } from "@/lib/admin";
 
 /**
  * Classement automatique « à la réception ».
@@ -50,17 +51,21 @@ export async function POST(req: NextRequest) {
 
     if (todo.length === 0) return NextResponse.json({ ok: true, classified: [] });
 
-    // Agents disponibles
+    // Agents disponibles pour l'ATTRIBUTION automatique. Les agents commerciaux
+    // (négociateurs) en sont volontairement exclus : on ne leur assigne pas de
+    // mail automatiquement. Ils peuvent toujours être assignés manuellement.
     const users = await prisma.user.findMany({ where: { active: true }, select: { id: true, prenom: true, nom: true, roleId: true } });
-    const usersStr = users.map(u => `${u.id}: ${u.prenom} ${u.nom} (${u.roleId ?? "agent"})`).join(", ");
-    const userIds = new Set(users.map(u => u.id));
+    const assignableUsers = users.filter(u => !isCommercialRole(u.roleId));
+    const usersStr = assignableUsers.map(u => `${u.id}: ${u.prenom} ${u.nom} (${u.roleId ?? "agent"})`).join(", ");
+    const userIds = new Set(assignableUsers.map(u => u.id));
 
     // Mémoire des expéditeurs connus
     const emails = [...new Set(todo.map(m => m.fromEmail.toLowerCase()).filter(Boolean))];
     const memories = await prisma.mailLabelMemory.findMany({ where: { fromEmail: { in: emails } } });
     const memByEmail = new Map(memories.map(m => [m.fromEmail.toLowerCase(), m]));
 
-    // Traitant historique réel (qui a déjà été assigné / a déjà répondu)
+    // Traitant historique réel (qui a déjà été assigné / a déjà répondu), borné
+    // aux seuls agents assignables (exclut donc les commerciaux).
     const handlerByEmail = await historicalHandlers(emails, userIds);
 
     const list = todo.map((m, i) => {
