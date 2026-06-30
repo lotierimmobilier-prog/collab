@@ -14,7 +14,11 @@ interface Family { id: string; name: string; color: string; icon?: string; group
 
 export default function TaskBoard() {
   const { data: session } = useSession();
-  const isAdmin = session?.user?.roleId === "admin" || session?.user?.roleId === "direction";
+  // Seuls le super admin, l'admin et la direction peuvent voir les tâches de
+  // tout le monde (« Toutes les tâches »). Les autres agents ne voient que les
+  // leurs.
+  const su = session?.user as { roleId?: string; superAdmin?: boolean } | undefined;
+  const isAdmin = su?.superAdmin === true || su?.roleId === "admin" || su?.roleId === "direction" || su?.roleId === "dirigeant";
 
   const [tasks, setTasks]           = useState<Task[]>([]);
   const [families, setFamilies]     = useState<Family[]>([]);
@@ -170,12 +174,15 @@ export default function TaskBoard() {
             style={{ width: "100%", paddingLeft: 28, paddingRight: 8, height: 34, border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#f9fafb" }} />
         </div>
 
-        {/* Portée : mes tâches uniquement (défaut) ou toutes */}
-        <button onClick={() => setSeeAll(v => !v)} title={seeAll ? "Afficher uniquement mes tâches" : "Afficher les tâches de tout le monde"}
-          style={{ height: 34, padding: "0 12px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
-            border: `1px solid ${seeAll ? "#B8966A" : "#e5e7eb"}`, background: seeAll ? "#F7F0E6" : "#fff", color: seeAll ? "#B8966A" : "#374151" }}>
-          {seeAll ? "👥 Toutes les tâches" : "👤 Mes tâches"}
-        </button>
+        {/* Portée : mes tâches uniquement (défaut) ou toutes. Bascule réservée
+            au super admin / admin / direction. */}
+        {isAdmin && (
+          <button onClick={() => setSeeAll(v => !v)} title={seeAll ? "Afficher uniquement mes tâches" : "Afficher les tâches de tout le monde"}
+            style={{ height: 34, padding: "0 12px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+              border: `1px solid ${seeAll ? "#B8966A" : "#e5e7eb"}`, background: seeAll ? "#F7F0E6" : "#fff", color: seeAll ? "#B8966A" : "#374151" }}>
+            {seeAll ? "👥 Toutes les tâches" : "👤 Mes tâches"}
+          </button>
+        )}
 
         {/* Filtre famille */}
         <select value={filterFamily} onChange={e => { setFilterFamily(e.target.value); setFilterGroup("all"); }} style={sel}>
