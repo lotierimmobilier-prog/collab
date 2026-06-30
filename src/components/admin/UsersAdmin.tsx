@@ -66,6 +66,17 @@ export default function UsersAdmin() {
     setEditing(null);
   }
 
+  async function resendWelcome(user: { id: string; prenom: string; nom: string; email: string }) {
+    if (!confirm(`Renvoyer l'email d'activation (avec un nouveau lien de création de mot de passe) à ${user.prenom} ${user.nom} (${user.email}) ?`)) return;
+    try {
+      const r = await fetch(`/api/users/${user.id}/welcome`, { method: "POST" });
+      const d = await r.json().catch(() => ({}));
+      alert(r.ok
+        ? `Email d'activation renvoyé à ${user.email} ✅`
+        : `Échec de l'envoi ⚠️\n${d.error || "Vérifiez la configuration SMTP."}`);
+    } catch { alert("Échec de l'envoi. Réessayez."); }
+  }
+
   async function toggleActive(id: string) {
     const user = users.find(u => u.id === id);
     if (!user) return;
@@ -248,6 +259,7 @@ export default function UsersAdmin() {
                         <button onClick={() => !lockManage && setEditing(user)} disabled={lockManage} title={lockManage ? "Réservé au super administrateur" : "Modifier"} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#374151", ...(lockManage ? dis : {}) }}>✏</button>
                         <button onClick={() => !lockManage && setEditingAccess(user)} disabled={lockManage} title={lockManage ? "Réservé au super administrateur" : "Gérer les accès"} style={{ background: user.accessOverrides?.length ? "#F7F0E6" : "none", border: `1px solid ${user.accessOverrides?.length ? "#B8966A" : "#e5e7eb"}`, borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: user.accessOverrides?.length ? "#B8966A" : "#374151", ...(lockManage ? dis : {}) }}>🔐</button>
                         <button onClick={() => setShowPassword(showPassword === user.id ? null : user.id)} title="Voir le mot de passe" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#374151" }}>🔑</button>
+                        <button onClick={() => resendWelcome(user)} title="Renvoyer l'email d'activation (nouveau lien de mot de passe)" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#374151" }}>📨</button>
                         <button onClick={() => !lockDelete && deleteUser(user.id)} disabled={lockDelete} title={lockDelete ? "Réservé au super administrateur" : "Supprimer"} style={{ background: "none", border: "1px solid #fecaca", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#dc2626", ...(lockDelete ? dis : {}) }}>🗑</button>
                       </div>
                     );
