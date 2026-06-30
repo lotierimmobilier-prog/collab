@@ -171,7 +171,7 @@ export default function UsersAdmin() {
       </div>
 
       {/* List */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+      <div style={{ flex: 1, overflowY: "auto", overflowX: "auto", padding: "20px 24px" }}>
         {loading ? (
           <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", padding: "60px 24px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>
             Chargement des utilisateurs...
@@ -186,7 +186,7 @@ export default function UsersAdmin() {
         ) : (
           <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", overflow: "hidden" }}>
             {/* Header */}
-            <div style={{ display: "grid", gridTemplateColumns: "2.1fr 1.5fr 0.9fr 1.1fr 0.9fr 95px 120px", padding: "10px 16px", borderBottom: "1px solid #f3f4f6", fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "2.1fr 1.5fr 0.9fr 1.1fr 0.9fr 95px 176px", padding: "10px 16px", borderBottom: "1px solid #f3f4f6", fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", gap: 12 }}>
               <span>Utilisateur</span><span>Email</span><span>Rôle</span><span>Parrain</span><span>Accès modules</span><span>Statut</span><span>Actions</span>
             </div>
 
@@ -195,7 +195,7 @@ export default function UsersAdmin() {
               const ac = avatarColor(user.id);
               const accessCount = role?.modules.filter(m => m.right !== "aucun").length ?? 0;
               return (
-                <div key={user.id} style={{ display: "grid", gridTemplateColumns: "2.1fr 1.5fr 0.9fr 1.1fr 0.9fr 95px 120px", padding: "12px 16px", gap: 12, alignItems: "center", borderBottom: i < filtered.length - 1 ? "1px solid #f9fafb" : "none" }}>
+                <div key={user.id} style={{ display: "grid", gridTemplateColumns: "2.1fr 1.5fr 0.9fr 1.1fr 0.9fr 95px 176px", padding: "12px 16px", gap: 12, alignItems: "center", borderBottom: i < filtered.length - 1 ? "1px solid #f9fafb" : "none" }}>
 
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div style={{ width: 36, height: 36, borderRadius: "50%", background: ac.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: ac.text, flexShrink: 0 }}>
@@ -252,7 +252,7 @@ export default function UsersAdmin() {
                     const lockDelete = isBootstrap || (targetGoverned && !isSuper);
                     const dis: React.CSSProperties = { opacity: 0.4, cursor: "not-allowed" };
                     return (
-                      <div style={{ display: "flex", gap: 5 }}>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "flex-end" }}>
                         {session?.user?.id !== user.id && !(isBootstrap && !isSuper) && (
                           <button onClick={() => impersonate(user)} title="Prendre la main (voir le logiciel en tant que cet utilisateur)" style={{ background: "#F7F0E6", border: "1px solid #B8966A", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#B8966A" }}>👤→</button>
                         )}
