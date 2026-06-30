@@ -430,7 +430,9 @@ export default function MailBoard() {
     setLoadingBody(true);
     try {
       for (const msg of msgsToLoad) {
-        const account = accounts.find(a => a.id === msg.accountId);
+        // msg.accountId est l'identifiant envoyé à la synchro (dbId pour une
+        // boîte gérée en base). On le rapproche donc de a.dbId comme de a.id.
+        const account = accounts.find(a => a.id === msg.accountId || a.dbId === msg.accountId);
         if (!account) continue;
         const uid = (msg as MailMessage & { uid?: number | string }).uid;
         if (!uid) continue;
