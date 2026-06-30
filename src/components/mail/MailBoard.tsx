@@ -7,7 +7,7 @@ import {
 } from "@/lib/mail";
 import {
   loadGmailConfigs, loadGmailToken, isGmailTokenValid,
-  fetchGmailMessages, saveGmailToken,
+  fetchGmailMessages, saveGmailToken, setGmailScope,
   requestGmailToken, GmailConfig,
 } from "@/lib/googleGmail";
 import { useIsMobile } from "@/lib/useIsMobile";
@@ -20,14 +20,20 @@ import GoogleMailConnect from "./GoogleMailConnect";
 import SignatureEditor from "./SignatureEditor";
 import RichTextEditor from "./RichTextEditor";
 
-const ACCOUNTS_KEY  = "collab_mail_accounts";
-const LABELS_KEY    = "collab_mail_labels";
-const AI_KEY_STORE  = "collab_ai_key";
 const SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 export default function MailBoard() {
   const { data: mbSession } = useSession();
   const myEmail = (mbSession?.user?.email ?? "").toLowerCase();
+  // Cloisonnement : tout le cache local de la messagerie (comptes, libellés/
+  // dossiers, clé IA, Gmail) est rattaché à l'identifiant de l'utilisateur
+  // connecté. Un nouvel utilisateur sur un navigateur partagé démarre vierge et
+  // ne voit jamais les boîtes/dossiers d'un autre.
+  const uid = (mbSession?.user as { id?: string })?.id || "";
+  const ACCOUNTS_KEY = `collab_mail_accounts_${uid}`;
+  const LABELS_KEY   = `collab_mail_labels_${uid}`;
+  const AI_KEY_STORE = `collab_ai_key_${uid}`;
+  if (uid) setGmailScope(uid);
   const [accounts, setAccounts]           = useState<MailAccount[]>([]);
   const [gmailConfigs, setGmailConfigs]   = useState<GmailConfig[]>([]);
   const [labels, setLabels]               = useState<MailLabel[]>(DEFAULT_LABELS);
@@ -80,6 +86,13 @@ export default function MailBoard() {
   const autoClassifyRef = useRef<(silent?: boolean) => Promise<void>>(async () => {});
 
   useEffect(() => {
+    if (!uid) return;                 // on attend de connaître l'utilisateur
+    setGmailScope(uid);
+    // Purge des anciennes clés globales (non cloisonnées) : elles pouvaient faire
+    // « fuiter » les boîtes/dossiers d'un utilisateur vers un autre sur un même
+    // navigateur. On les supprime définitivement.
+    ["collab_mail_accounts", "collab_mail_labels", "collab_ai_key", "collab_gmail_token", "collab_gmail_config"]
+      .forEach(k => { try { localStorage.removeItem(k); } catch { /* ignore */ } });
     // Charger les comptes depuis la BDD (persistance serveur)
     fetch("/api/mail/accounts")
       .then(r => r.json())
@@ -157,7 +170,7 @@ export default function MailBoard() {
       })
       .catch(() => {/* silencieux */});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [uid]);
 
   /* ── Ouverture directe d'un mail via ?mail=<threadId> ──────
      Depuis le tableau de bord, un clic sur un mail amène ici avec l'id du

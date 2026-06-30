@@ -6,8 +6,13 @@ const SCOPES = [
   "https://www.googleapis.com/auth/gmail.modify",
 ].join(" ");
 
-const TOKEN_KEY = "collab_gmail_token";
-const CONFIG_KEY = "collab_gmail_config";
+// Cloisonnement : les clés sont suffixées par l'identifiant de l'utilisateur
+// connecté, pour qu'un nouvel utilisateur (sur un navigateur partagé) ne voie
+// jamais les boîtes Gmail d'un autre. setGmailScope() est appelé au montage.
+let _scope = "";
+export function setGmailScope(uid: string) { _scope = uid || ""; }
+const TOKEN_KEY = () => `collab_gmail_token${_scope ? "_" + _scope : ""}`;
+const CONFIG_KEY = () => `collab_gmail_config${_scope ? "_" + _scope : ""}`;
 
 export interface GmailConfig {
   clientId: string;
@@ -28,12 +33,12 @@ export function saveGmailToken(accountId: string, token: google.accounts.oauth2.
   if (typeof window === "undefined") return;
   const all = loadAllGmailTokens();
   all[accountId] = { ...token, _saved: Date.now(), accountId };
-  localStorage.setItem(TOKEN_KEY, JSON.stringify(all));
+  localStorage.setItem(TOKEN_KEY(), JSON.stringify(all));
 }
 
 export function loadAllGmailTokens(): Record<string, GmailTokenStore> {
   if (typeof window === "undefined") return {};
-  try { return JSON.parse(localStorage.getItem(TOKEN_KEY) ?? "{}"); } catch { return {}; }
+  try { return JSON.parse(localStorage.getItem(TOKEN_KEY()) ?? "{}"); } catch { return {}; }
 }
 
 export function loadGmailToken(accountId: string): GmailTokenStore | null {
@@ -44,7 +49,7 @@ export function clearGmailToken(accountId: string) {
   if (typeof window === "undefined") return;
   const all = loadAllGmailTokens();
   delete all[accountId];
-  localStorage.setItem(TOKEN_KEY, JSON.stringify(all));
+  localStorage.setItem(TOKEN_KEY(), JSON.stringify(all));
 }
 
 export function isGmailTokenValid(token: GmailTokenStore | null): boolean {
@@ -55,12 +60,12 @@ export function isGmailTokenValid(token: GmailTokenStore | null): boolean {
 
 export function saveGmailConfigs(configs: GmailConfig[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(configs));
+  localStorage.setItem(CONFIG_KEY(), JSON.stringify(configs));
 }
 
 export function loadGmailConfigs(): GmailConfig[] {
   if (typeof window === "undefined") return [];
-  try { return JSON.parse(localStorage.getItem(CONFIG_KEY) ?? "[]"); } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(CONFIG_KEY()) ?? "[]"); } catch { return []; }
 }
 
 /* ── Google Identity Services ──────────────────────────────── */
