@@ -106,13 +106,19 @@ export default function AssistantsPage() {
 
   const [tab, setTab] = useState<"gallery" | "manage">("gallery");
   const [agents, setAgents] = useState<AgentPublic[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
   const [active, setActive] = useState<AgentPublic | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/ai-agents").then(r => r.ok ? r.json() : null)
-      .then(d => setAgents(d?.agents ?? [])).catch(() => {});
+      .then(d => { setAgents(d?.agents ?? []); setFavorites(d?.favorites ?? []); }).catch(() => {});
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  const toggleFav = (id: string) => {
+    setFavorites(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    fetch("/api/ai-agents/favorite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: id }) }).catch(() => {});
+  };
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#FAF8F5" }}>
@@ -131,7 +137,7 @@ export default function AssistantsPage() {
           Des spécialistes dédiés, en plus d'Auguste (le généraliste). Chacun a son domaine, sa personnalité et sa base de connaissance.
         </p>
 
-        {tab === "gallery" && !active && <Gallery agents={agents} onPick={setActive} />}
+        {tab === "gallery" && !active && <Gallery agents={agents} favorites={favorites} onToggleFav={toggleFav} onPick={setActive} />}
         {tab === "gallery" && active && <Chat agent={active} onBack={() => setActive(null)} />}
         {tab === "manage" && isDir && <Manage onChanged={load} />}
       </main>
@@ -150,20 +156,30 @@ function TabBtn({ active, onClick, label }: { active: boolean; onClick: () => vo
 
 // ════════════ Galerie ════════════
 
-function Gallery({ agents, onPick }: { agents: AgentPublic[]; onPick: (a: AgentPublic) => void }) {
+function Gallery({ agents, favorites, onToggleFav, onPick }: { agents: AgentPublic[]; favorites: string[]; onToggleFav: (id: string) => void; onPick: (a: AgentPublic) => void }) {
   const [cvAgent, setCvAgent] = useState<AgentPublic | null>(null);
   if (!agents.length) return <div style={{ color: "#9ca3af", fontSize: 13, padding: 28, textAlign: "center" }}>Aucun assistant disponible pour le moment.</div>;
+  const favSet = new Set(favorites);
+  // Favoris en tête, puis ordre d'origine.
+  const ordered = [...agents].sort((a, b) => (favSet.has(b.id) ? 1 : 0) - (favSet.has(a.id) ? 1 : 0));
+  const hasFav = agents.some(a => favSet.has(a.id));
   return (
     <>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(250px,1fr))", gap: 16 }}>
-        {agents.map(a => {
+        {ordered.map(a => {
           const c = a.color || GOLD;
+          const fav = favSet.has(a.id);
           return (
             <div key={a.id} style={{
-              background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 16, padding: 18,
-              boxShadow: "0 1px 4px rgba(0,0,0,0.05)", display: "flex", flexDirection: "column", gap: 10, borderTop: `3px solid ${c}`,
+              position: "relative", background: "#fff", border: `1px solid ${fav ? GOLD : BORDER}`, borderRadius: 16, padding: 18,
+              boxShadow: fav ? "0 2px 10px rgba(184,150,106,0.18)" : "0 1px 4px rgba(0,0,0,0.05)", display: "flex", flexDirection: "column", gap: 10, borderTop: `3px solid ${c}`,
             }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {/* Étoile favori */}
+              <button onClick={() => onToggleFav(a.id)} title={fav ? "Retirer des favoris" : "Mettre en favori"} style={{
+                position: "absolute", top: 10, right: 10, background: "none", border: "none", cursor: "pointer",
+                fontSize: 18, lineHeight: 1, color: fav ? GOLD : "#d1d5db",
+              }}>{fav ? "★" : "☆"}</button>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, paddingRight: 22 }}>
                 <Avatar a={a} size={52} />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 16, fontWeight: 800, color: DARK }}>{a.name}</div>
@@ -179,6 +195,7 @@ function Gallery({ agents, onPick }: { agents: AgentPublic[]; onPick: (a: AgentP
           );
         })}
       </div>
+      {!hasFav && <div style={{ fontSize: 11.5, color: "#9ca3af", marginTop: 12, textAlign: "center" }}>★ Astuce : mettez vos assistants préférés en favori pour les épingler en tête.</div>}
       {cvAgent && <CvModal agent={cvAgent} onClose={() => setCvAgent(null)} onChat={() => { const a = cvAgent; setCvAgent(null); onPick(a); }} />}
     </>
   );
