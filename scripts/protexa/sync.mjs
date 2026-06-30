@@ -123,15 +123,28 @@ async function readTransaction(page) {
 async function readGestion(page) {
   await openStat(page, "Gestion", "Liste des mandats par tiers négociateurs");
   const seen = new Map();   // N° mandat → { name, q }
-  const re = /(\d{2,6})\s+\d+\s+([A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’-]+(?:\s+[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’-]+)+)\s+Début\s*:\s*\d{2}\/(\d{2})\/(\d{4})/g;
+  const NAME = "[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’-]+(?:\\s+[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’-]+)+";
+  // Format A : « N°  <id>  Nom  Début : JJ/MM/AAAA ».
+  const reA = new RegExp(`(\\d{2,6})\\s+\\d+\\s+(${NAME})\\s+Début\\s*:\\s*\\d{2}\\/(\\d{2})\\/(\\d{4})`, "g");
+  // Format B (mandats SCI / société) : « N°  JJ/MM/AAAA … (Prénom NOM) … ».
+  // Le négociateur apparaît entre parenthèses, sans le libellé « Début : ».
+  const reB = new RegExp(`(\\d{2,6})\\s+(\\d{2})\\/(\\d{2})\\/(\\d{4})[\\s\\S]{0,90}?\\(\\s*(${NAME})\\s*\\)`, "g");
   let lastTop = -1, stable = 0;
   for (let i = 0; i < 40; i++) {
     const txt = await pageText(page);
     let m;
-    while ((m = re.exec(txt))) {
+    reA.lastIndex = 0;
+    while ((m = reA.exec(txt))) {
       const num = m[1], name = lastTwo(m[2]), month = Number(m[3]), year = Number(m[4]);
       if (year !== YEAR) continue;
       seen.set(num, { name, q: quarter(month) });
+    }
+    let mb;
+    reB.lastIndex = 0;
+    while ((mb = reB.exec(txt))) {
+      const num = mb[1], month = Number(mb[3]), year = Number(mb[4]), name = lastTwo(mb[5]);
+      if (year !== YEAR) continue;
+      if (!seen.has(num)) seen.set(num, { name, q: quarter(month) });   // ne pas écraser le format A (plus précis)
     }
     // défilement incrémental de la plus grande zone scrollable + fenêtre
     const top = await page.evaluate(() => {

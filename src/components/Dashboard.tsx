@@ -557,10 +557,10 @@ function PodiumBlock({ refreshKey }: { refreshKey: number }) {
       {/* Les deux podiums côte à côte (Transaction · Gestion) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
         <div style={{ borderRight: "1px solid #f0e8d8" }}>
-          <Podium icon="🤝" title="Transaction" rows={top3("t", "transaction")} />
+          <Podium title="Transaction" rows={top3("t", "transaction")} />
         </div>
         <div>
-          <Podium icon="🏠" title="Gestion" rows={top3("g", "gestion")} />
+          <Podium title="Gestion" rows={top3("g", "gestion")} />
         </div>
       </div>
       {/* Classement général de tous les négociateurs, en dessous */}
@@ -609,7 +609,7 @@ function RankingList({ rows }: { rows: { name: string; tx: number; ge: number; t
   );
 }
 
-function Podium({ title, icon, rows }: { title: string; icon: string; rows: { name: string; value: number }[] }) {
+function Podium({ title, rows }: { title: string; rows: { name: string; value: number }[] }) {
   // Palette feutrée [2e argent · 1er or agence · 3e bronze]
   const palette = [
     { ring: "#CBD0D8", step: "#EEF1F4", txt: "#6B7280" },
@@ -623,7 +623,7 @@ function Podium({ title, icon, rows }: { title: string; icon: string; rows: { na
   const initials = (n: string) => n.split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase();
   return (
     <div style={{ padding: "8px 8px 12px" }}>
-      <div style={{ textAlign: "center", fontSize: 12, fontWeight: 800, color: DARK, marginBottom: 6 }}>{icon} {title}</div>
+      <div style={{ textAlign: "center", fontSize: 12, fontWeight: 800, color: DARK, marginBottom: 6 }}>{title}</div>
       {!rows.length ? (
         <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 11, padding: "26px 0" }}>Aucun mandat sur la période.</div>
       ) : (
