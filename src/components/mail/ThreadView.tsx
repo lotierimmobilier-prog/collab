@@ -1497,7 +1497,13 @@ function MessageBubble({ msg, isLast, loadingBody }: { msg: MailMessage; isLast:
               <Spinner /> Chargement du message...
             </div>
           ) : !hasBody ? (
-            <div style={{ padding: "20px 20px 20px 64px", color: "#9ca3af", fontSize: 13, fontStyle: "italic" }}>Corps non disponible</div>
+            msg.bodyError ? (
+              <div style={{ margin: "16px 20px 16px 64px", padding: "12px 14px", background: "#FEF3F2", border: "1px solid #FECDCA", borderRadius: 10, color: "#B42318", fontSize: 12.5, lineHeight: 1.5 }}>
+                ⚠️ {msg.bodyError}
+              </div>
+            ) : (
+              <div style={{ padding: "20px 20px 20px 64px", color: "#9ca3af", fontSize: 13, fontStyle: "italic" }}>Corps non disponible</div>
+            )
           ) : (
             <div style={{ padding: "16px 20px 16px 64px" }}>
               {msg.body && msg.body.trim() ? (

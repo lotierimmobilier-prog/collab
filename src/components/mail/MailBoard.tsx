@@ -427,33 +427,46 @@ export default function MailBoard() {
     const msgsToLoad = thread.messages.filter(m => !m.body || m.body.trim() === "");
     if (!msgsToLoad.length) return;
 
+    // Applique une mise à jour partielle à un message (liste + thread ouvert).
+    const patchMsg = (id: string, patch: Partial<MailMessage>) => {
+      setMessages(prev => {
+        const updated = prev.map(m => m.id === id ? { ...m, ...patch } : m);
+        rebuildThreads(updated);
+        return updated;
+      });
+      setSelectedThread(prev => prev ? { ...prev, messages: prev.messages.map(m => m.id === id ? { ...m, ...patch } : m) } : null);
+    };
+
     setLoadingBody(true);
     try {
       for (const msg of msgsToLoad) {
         // msg.accountId est l'identifiant envoyé à la synchro (dbId pour une
         // boîte gérée en base). On le rapproche donc de a.dbId comme de a.id.
         const account = accounts.find(a => a.id === msg.accountId || a.dbId === msg.accountId);
-        if (!account) continue;
+        if (!account) {
+          // La boîte d'origine n'est pas rattachée à cet espace : on ne peut pas
+          // récupérer le contenu. On l'explique au lieu de laisser « Corps non
+          // disponible » sans raison.
+          patchMsg(msg.id, { bodyError: "Cette boîte n'est pas enregistrée sur votre espace. Ouvrez la configuration des boîtes mail et enregistrez-la (Tester puis Enregistrer), puis synchronisez." });
+          continue;
+        }
         const uid = (msg as MailMessage & { uid?: number | string }).uid;
-        if (!uid) continue;
+        if (!uid) { patchMsg(msg.id, { bodyError: "Identifiant du message manquant — relancez une synchronisation de la boîte." }); continue; }
 
-        const resp = await fetch("/api/mail/body", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ host: account.host, port: account.port, ssl: account.ssl, username: account.username, password: account.password, uid, accountId: account.dbId ?? account.id }),
-        });
-        const data = await resp.json();
-        if (data.ok) {
-          const patch = { body: data.bodyHtml || data.bodyText || "", bodyText: data.bodyText, attachments: data.attachments ?? [] };
-          setMessages(prev => {
-            const updated = prev.map(m => m.id === msg.id ? { ...m, ...patch } : m);
-            rebuildThreads(updated);
-            return updated;
+        try {
+          const resp = await fetch("/api/mail/body", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ host: account.host, port: account.port, ssl: account.ssl, username: account.username, password: account.password, uid, accountId: account.dbId ?? account.id }),
           });
-          setSelectedThread(prev => prev ? {
-            ...prev,
-            messages: prev.messages.map(m => m.id === msg.id ? { ...m, ...patch } : m),
-          } : null);
+          const data = await resp.json();
+          if (data.ok) {
+            patchMsg(msg.id, { body: data.bodyHtml || data.bodyText || "", bodyText: data.bodyText, attachments: data.attachments ?? [], bodyError: undefined });
+          } else {
+            patchMsg(msg.id, { bodyError: data.error || "Le serveur n'a pas pu récupérer le message." });
+          }
+        } catch {
+          patchMsg(msg.id, { bodyError: "Connexion au serveur de mail impossible (réseau ou délai dépassé)." });
         }
       }
     } catch { /* silencieux */ }
