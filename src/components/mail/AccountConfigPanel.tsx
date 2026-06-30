@@ -27,7 +27,7 @@ export default function AccountConfigPanel({ accounts, onSave, onClose, onSyncAc
     setRepairing(a.id);
     setSyncResult(p => ({ ...p, [a.id]: "Réparation en cours…" }));
     try {
-      const resp = await fetch("/api/mail/accounts", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: a.id, action: "repair" }) });
+      const resp = await fetch("/api/mail/accounts", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: a.dbId ?? a.id, action: "repair" }) });
       const data = await resp.json();
       if (resp.ok && data.ok) setSyncResult(p => ({ ...p, [a.id]: `✓ Cloisonnement réparé (${data.repaired} message(s) ré-affecté(s)).` }));
       else setSyncResult(p => ({ ...p, [a.id]: `Erreur : ${data.error || "échec"}` }));
@@ -59,7 +59,7 @@ export default function AccountConfigPanel({ accounts, onSave, onClose, onSyncAc
       const resp = await fetch("/api/mail/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ host: a.host, port: a.port, ssl: a.ssl, username: a.username, password: a.password, accountId: a.id, limit: 50 }),
+        body: JSON.stringify({ host: a.host, port: a.port, ssl: a.ssl, username: a.username, password: a.password, accountId: a.dbId ?? a.id, limit: 50 }),
       });
       const data = await resp.json();
       if (data.ok) {

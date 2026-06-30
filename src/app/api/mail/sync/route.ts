@@ -192,13 +192,21 @@ export async function POST(req: NextRequest) {
   // collègue et en synchroniser/lire tout le courrier.
   if (accountId) {
     const dbAcc = await accessibleMailAccount(session.user.id, accountId);
-    if (!dbAcc) {
-      // Boîte inconnue → 404 ; boîte existante mais non autorisée → 403.
+    if (dbAcc) {
+      // Boîte gérée et autorisée : on complète les identifiants manquants depuis
+      // la base.
+      if (!host || !password) {
+        host = dbAcc.host; port = String(dbAcc.port); ssl = dbAcc.ssl; username = dbAcc.username; password = dbAcc.password;
+      }
+    } else {
+      // Boîte EXISTANTE en base mais dont l'utilisateur n'est pas agent →
+      // refus (cloisonnement : on ne synchronise pas le courrier d'un collègue).
       const exists = await prisma.mailAccountConfig.findUnique({ where: { id: accountId }, select: { id: true } });
-      return NextResponse.json({ ok: false, error: exists ? "Accès non autorisé à cette boîte" : "Compte introuvable" }, { status: exists ? 403 : 404 });
-    }
-    if (!host || !password) {
-      host = dbAcc.host; port = String(dbAcc.port); ssl = dbAcc.ssl; username = dbAcc.username; password = dbAcc.password;
+      if (exists) {
+        return NextResponse.json({ ok: false, error: "Accès non autorisé à cette boîte" }, { status: 403 });
+      }
+      // Sinon (identifiant non géré en base / compte local) : on poursuit avec
+      // les identifiants fournis par le client — déjà validés par « Tester ».
     }
   }
 
