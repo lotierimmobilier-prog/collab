@@ -79,5 +79,27 @@ export async function POST(req: NextRequest) {
     update: { value: new Date().toISOString() },
   }).catch(() => {});
 
+  // La demande de synchro éventuelle (déclenchée par le bouton du tableau de
+  // bord) est consommée.
+  await prisma.setting.upsert({
+    where: { key: "protexa_sync_request" },
+    create: { key: "protexa_sync_request", value: "" },
+    update: { value: "" },
+  }).catch(() => {});
+
   return NextResponse.json({ ok: true, count: seen.length });
+}
+
+// GET /api/protexa/sync — interrogé par le robot/poller du VPS (authentifié par
+// le secret partagé) pour savoir si une synchronisation a été demandée depuis le
+// tableau de bord. Renvoie { pending, requestedAt, lastSync }.
+export async function GET(req: NextRequest) {
+  const secret = process.env.PROTEXA_SYNC_SECRET;
+  if (!secret) return NextResponse.json({ error: "Non configuré." }, { status: 503 });
+  if (req.headers.get("x-protexa-secret") !== secret) return NextResponse.json({ error: "Secret invalide." }, { status: 401 });
+
+  const reqRow = await prisma.setting.findUnique({ where: { key: "protexa_sync_request" } }).catch(() => null);
+  const lastRow = await prisma.setting.findUnique({ where: { key: "protexa_synced_at" } }).catch(() => null);
+  const requestedAt = reqRow?.value || "";
+  return NextResponse.json({ pending: !!requestedAt, requestedAt: requestedAt || null, lastSync: lastRow?.value || null });
 }
