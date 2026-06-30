@@ -19,13 +19,38 @@ export async function GET(req: NextRequest) {
     include: { _count: { select: { topics: true } } },
   }).catch(() => []);
 
-  return NextResponse.json({
-    isDir,
-    categories: rows.map(c => ({
+  // Enrichissement façon phpBB : nombre de messages (sujets + réponses) et
+  // dernier message (titre + auteur + date) de chaque catégorie.
+  const categories = await Promise.all(rows.map(async (c) => {
+    const topicCount = c._count?.topics ?? 0;
+    const replyCount = await prisma.forumReply.count({ where: { topic: { categoryId: c.id } } }).catch(() => 0);
+    const lastTopic: Any = await prisma.forumTopic.findFirst({
+      where: { categoryId: c.id },
+      orderBy: { lastReplyAt: "desc" },
+      select: { id: true, title: true, userName: true, lastReplyAt: true },
+    }).catch(() => null);
+    let lastMessage = null;
+    if (lastTopic) {
+      const lastReply: Any = await prisma.forumReply.findFirst({
+        where: { topicId: lastTopic.id },
+        orderBy: { createdAt: "desc" },
+        select: { userName: true, createdAt: true },
+      }).catch(() => null);
+      lastMessage = {
+        topicId: lastTopic.id,
+        title: lastTopic.title,
+        userName: lastReply?.userName ?? lastTopic.userName,
+        at: lastReply?.createdAt ?? lastTopic.lastReplyAt,
+      };
+    }
+    return {
       id: c.id, name: c.name, description: c.description, icon: c.icon, color: c.color,
-      order: c.order, active: c.active, topicCount: c._count?.topics ?? 0,
-    })),
-  });
+      order: c.order, active: c.active,
+      topicCount, messageCount: topicCount + replyCount, lastMessage,
+    };
+  }));
+
+  return NextResponse.json({ isDir, categories });
 }
 
 // POST /api/forum/categories — créer une catégorie (direction).
