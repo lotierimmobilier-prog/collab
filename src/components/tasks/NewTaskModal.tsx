@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useSession } from "next-auth/react";
 import { Task, Priority, Status, PRIORITY_STYLES, COLUMNS, RECURRENCES } from "@/lib/tasks";
 
 const AVATAR_COLORS = ["#F7F0E6", "#dcfce7", "#dbeafe", "#fce7f3", "#fef3c7", "#ede9fe"];
@@ -25,8 +26,12 @@ export default function NewTaskModal({ onClose, onAdd, families = [] }: {
   const [title, setTitle]       = useState("");
   const [priority, setPriority] = useState<Priority>("moyenne");
   const [status, setStatus]     = useState<Status>("todo");
+  const { data: session } = useSession();
+  const myId = (session?.user as { id?: string })?.id ?? "";
   const [members, setMembers]   = useState<Member[]>([]);
   const [assignee, setAssignee] = useState<Member | null>(null);
+  const [rank, setRank]         = useState<string[]>([]);   // ids les plus sollicités (historique)
+  const [assigneeSearch, setAssigneeSearch] = useState("");
   const [dueDate, setDueDate]   = useState("");
   const [recurrence, setRecurrence] = useState("");
   const [project, setProject]   = useState("");
@@ -43,12 +48,32 @@ export default function NewTaskModal({ onClose, onAdd, families = [] }: {
     fetch("/api/users")
       .then(r => r.json())
       .then((users: { id: string; prenom: string; nom: string; active: boolean }[]) => {
-        const active = users.filter(u => u.active).map(userToMember);
-        setMembers(active);
-        if (active.length > 0) setAssignee(active[0]);
+        setMembers(users.filter(u => u.active).map(userToMember));
       })
       .catch(() => {});
+    fetch("/api/tasks/assignee-rank").then(r => r.ok ? r.json() : null)
+      .then(d => setRank(d?.ranked ?? [])).catch(() => {});
   }, []);
+
+  // Par défaut, on attribue la tâche à l'utilisateur courant (priorité), sinon
+  // au premier de la liste.
+  useEffect(() => {
+    if (!assignee && members.length) setAssignee(members.find(m => m.id === myId) ?? members[0]);
+  }, [members, myId, assignee]);
+
+  // Ordre : moi d'abord, puis les responsables les plus sollicités, puis alpha.
+  const ordered = useMemo(() => {
+    const ri = (id: string) => { const i = rank.indexOf(id); return i === -1 ? 9999 : i; };
+    return [...members].sort((a, b) => {
+      if (a.id === myId && b.id !== myId) return -1;
+      if (b.id === myId && a.id !== myId) return 1;
+      const d = ri(a.id) - ri(b.id);
+      return d !== 0 ? d : a.name.localeCompare(b.name);
+    });
+  }, [members, rank, myId]);
+  const shownMembers = assigneeSearch
+    ? ordered.filter(m => m.name.toLowerCase().includes(assigneeSearch.toLowerCase()))
+    : ordered;
 
   function addTag(e: React.KeyboardEvent) {
     if (e.key === "Enter" && tagInput.trim()) {
@@ -150,12 +175,29 @@ export default function NewTaskModal({ onClose, onAdd, families = [] }: {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <div>
+            <div style={{ gridColumn: "1 / -1" }}>
               <FL>Assigné à</FL>
-              <select value={assignee?.id ?? ""} onChange={e => setAssignee(members.find(m => m.id === e.target.value) ?? null)} style={inp} disabled={!members.length}>
-                {!members.length && <option value="">Chargement…</option>}
-                {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
+              <input value={assigneeSearch} onChange={e => setAssigneeSearch(e.target.value)} placeholder="🔍 Rechercher une personne…"
+                style={{ ...inp, marginBottom: 7 }} />
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 116, overflowY: "auto" }}>
+                {!members.length && <span style={{ fontSize: 12, color: "#9ca3af" }}>Chargement…</span>}
+                {shownMembers.map(m => {
+                  const sel = assignee?.id === m.id;
+                  const me = m.id === myId;
+                  return (
+                    <button key={m.id} type="button" onClick={() => setAssignee(m)} style={{
+                      display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 999,
+                      border: `1px solid ${sel ? "#B8966A" : "#e5e7eb"}`, background: sel ? "#F7F0E6" : "#fff",
+                      color: sel ? "#8a6d3b" : "#374151", fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+                    }}>
+                      <span style={{ width: 18, height: 18, borderRadius: "50%", background: m.color, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: "#374151" }}>{m.initials.toUpperCase()}</span>
+                      {m.name}
+                      {me && <span style={{ fontSize: 9.5, fontWeight: 700, color: "#B8966A", background: "#F7F0E6", borderRadius: 5, padding: "1px 5px" }}>moi</span>}
+                    </button>
+                  );
+                })}
+                {!shownMembers.length && members.length > 0 && <span style={{ fontSize: 12, color: "#9ca3af" }}>Aucun résultat.</span>}
+              </div>
             </div>
             <div><FL>Échéance</FL><input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={inp} /></div>
             <div><FL>Récurrence</FL><select value={recurrence} onChange={e => setRecurrence(e.target.value)} style={inp}>{RECURRENCES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}</select></div>

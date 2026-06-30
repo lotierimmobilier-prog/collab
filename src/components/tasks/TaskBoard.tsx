@@ -32,18 +32,19 @@ export default function TaskBoard() {
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [search, setSearch]         = useState("");
+  const [seeAll, setSeeAll]         = useState(false);   // false = uniquement mes tâches
   const [dragId, setDragId]         = useState<string | null>(null);
   const [dragOver, setDragOver]     = useState<Status | null>(null);
 
   const fetchTasks = useCallback(async () => {
     try {
-      const [tr, fr, tmr, ur] = await Promise.all([fetch("/api/tasks"), fetch("/api/task-families"), fetch("/api/teams"), fetch("/api/users")]);
+      const [tr, fr, tmr, ur] = await Promise.all([fetch(`/api/tasks${seeAll ? "?scope=all" : ""}`), fetch("/api/task-families"), fetch("/api/teams"), fetch("/api/users")]);
       if (tr.ok)  setTasks(await tr.json());
       if (fr.ok)  setFamilies(await fr.json());
       if (tmr.ok) setTeams(await tmr.json());
       if (ur.ok)  { const us = await ur.json(); setUsers(Array.isArray(us) ? us : []); }
     } finally { setLoading(false); }
-  }, []);
+  }, [seeAll]);
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
@@ -168,6 +169,13 @@ export default function TaskBoard() {
           <input placeholder="Rechercher…" value={search} onChange={e => setSearch(e.target.value)}
             style={{ width: "100%", paddingLeft: 28, paddingRight: 8, height: 34, border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#f9fafb" }} />
         </div>
+
+        {/* Portée : mes tâches uniquement (défaut) ou toutes */}
+        <button onClick={() => setSeeAll(v => !v)} title={seeAll ? "Afficher uniquement mes tâches" : "Afficher les tâches de tout le monde"}
+          style={{ height: 34, padding: "0 12px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+            border: `1px solid ${seeAll ? "#B8966A" : "#e5e7eb"}`, background: seeAll ? "#F7F0E6" : "#fff", color: seeAll ? "#B8966A" : "#374151" }}>
+          {seeAll ? "👥 Toutes les tâches" : "👤 Mes tâches"}
+        </button>
 
         {/* Filtre famille */}
         <select value={filterFamily} onChange={e => { setFilterFamily(e.target.value); setFilterGroup("all"); }} style={sel}>
