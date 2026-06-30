@@ -516,12 +516,7 @@ function PodiumBlock({ refreshKey }: { refreshKey: number }) {
   const year = d.syncedAt ? new Date(d.syncedAt).getFullYear() : new Date().getFullYear();
   const trimMonths = ["janv.–mars", "avr.–juin", "juil.–sept.", "oct.–déc."];
   const periodLabel = period === "year" ? `Année ${year}` : `${period + 1}ᵉ trimestre ${year} · ${trimMonths[period]}`;
-  const top3 = (key: "t" | "g", tot: "transaction" | "gestion") => d.negociateurs
-    .map(r => ({ name: r.negociateur, value: period === "year" ? r[tot] : (r[key][period] ?? 0) }))
-    .filter(x => x.value > 0)
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 3);
-  // Classement général (tous les agents) pour la colonne de droite.
+  // Classement général (tous les agents).
   const ranking = d.negociateurs.map(r => {
     const tx = period === "year" ? r.transaction : (r.t[period] ?? 0);
     const ge = period === "year" ? r.gestion : (r.g[period] ?? 0);
@@ -542,7 +537,7 @@ function PodiumBlock({ refreshKey }: { refreshKey: number }) {
     <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, boxShadow: "0 1px 4px rgba(0,0,0,0.05)", overflow: "hidden" }}>
       <div style={{ padding: "13px 16px 9px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 9, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>🏆 Podium des mandats</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>🏆 Classement des mandats</span>
           <span style={{ fontSize: 10, fontWeight: 700, color: GOLD, background: GOLD_BG, borderRadius: 8, padding: "1px 8px" }}>{periodLabel}</span>
         </div>
         <div style={{ display: "flex", gap: 4 }}>
@@ -554,19 +549,8 @@ function PodiumBlock({ refreshKey }: { refreshKey: number }) {
           ⓘ Le détail par trimestre n'est pas encore disponible — relancez la synchronisation Protexa pour ventiler les mandats par date.
         </div>
       )}
-      {/* Les deux podiums côte à côte (Transaction · Gestion) */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
-        <div style={{ borderRight: "1px solid #f0e8d8" }}>
-          <Podium title="Transaction" rows={top3("t", "transaction")} />
-        </div>
-        <div>
-          <Podium title="Gestion" rows={top3("g", "gestion")} />
-        </div>
-      </div>
-      {/* Classement général de tous les négociateurs, en dessous */}
-      <div style={{ borderTop: "1px solid #f3f4f6" }}>
-        <RankingList rows={ranking} />
-      </div>
+      {/* Classement général de tous les négociateurs (podium retiré). */}
+      <RankingList rows={ranking} />
     </div>
   );
 }
@@ -604,48 +588,6 @@ function RankingList({ rows }: { rows: { name: string; tx: number; ge: number; t
             ))}
           </tbody>
         </table>
-      )}
-    </div>
-  );
-}
-
-function Podium({ title, rows }: { title: string; rows: { name: string; value: number }[] }) {
-  // Palette feutrée [2e argent · 1er or agence · 3e bronze]
-  const palette = [
-    { ring: "#CBD0D8", step: "#EEF1F4", txt: "#6B7280" },
-    { ring: GOLD,      step: GOLD_BG,   txt: GOLD },
-    { ring: "#CDB79E", step: "#F2EBE0", txt: "#9C7A55" },
-  ];
-  const slots = [rows[1], rows[0], rows[2]];
-  const heights = [40, 56, 28];
-  const medals = ["🥈", "🥇", "🥉"];
-  const ranks = ["2", "1", "3"];
-  const initials = (n: string) => n.split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase();
-  return (
-    <div style={{ padding: "8px 8px 12px" }}>
-      <div style={{ textAlign: "center", fontSize: 12, fontWeight: 800, color: DARK, marginBottom: 6 }}>{title}</div>
-      {!rows.length ? (
-        <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 11, padding: "26px 0" }}>Aucun mandat sur la période.</div>
-      ) : (
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 6 }}>
-          {slots.map((r, i) => {
-            if (!r) return <div key={i} style={{ flex: 1, maxWidth: 70 }} />;
-            const p = palette[i], first = i === 1;
-            return (
-              <div key={i} style={{ flex: 1, maxWidth: 70, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <div style={{ position: "relative", width: first ? 40 : 32, height: first ? 40 : 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: p.txt, fontWeight: 700, fontSize: first ? 12.5 : 10.5, background: p.step, border: `2px solid ${p.ring}` }}>
-                  {initials(r.name)}
-                  <span style={{ position: "absolute", bottom: -5, right: -6, fontSize: 13 }}>{medals[i]}</span>
-                </div>
-                <div style={{ fontSize: 10, fontWeight: 600, color: "#111827", textAlign: "center", marginTop: 4, lineHeight: 1.12, minHeight: 23 }}>{r.name}</div>
-                <div style={{ fontSize: first ? 16 : 14, fontWeight: 800, color: p.txt, lineHeight: 1, marginBottom: 3 }}>{r.value}</div>
-                <div style={{ width: "100%", height: heights[i], borderRadius: "6px 6px 0 0", background: p.step, border: `1px solid ${p.ring}`, borderBottom: "none", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 3, color: p.txt, fontWeight: 700, fontSize: 13 }}>
-                  {ranks[i]}
-                </div>
-              </div>
-            );
-          })}
-        </div>
       )}
     </div>
   );
