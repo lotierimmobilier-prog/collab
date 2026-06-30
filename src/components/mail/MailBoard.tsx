@@ -11,6 +11,7 @@ import {
   requestGmailToken, GmailConfig,
 } from "@/lib/googleGmail";
 import { useIsMobile } from "@/lib/useIsMobile";
+import { isCommercialRole } from "@/lib/admin";
 import AccountConfigPanel from "./AccountConfigPanel";
 import LabelManager from "./LabelManager";
 import ThreadList from "./ThreadList";
@@ -30,6 +31,9 @@ export default function MailBoard() {
   // connecté. Un nouvel utilisateur sur un navigateur partagé démarre vierge et
   // ne voit jamais les boîtes/dossiers d'un autre.
   const uid = (mbSession?.user as { id?: string })?.id || "";
+  // Agent commercial (négociateur) : sur sa messagerie, pas d'identification
+  // automatique du traitant ni d'attribution — juste une case « Répondu ».
+  const isCommercial = isCommercialRole((mbSession?.user as { roleId?: string })?.roleId);
   const ACCOUNTS_KEY = `collab_mail_accounts_${uid}`;
   const LABELS_KEY   = `collab_mail_labels_${uid}`;
   const AI_KEY_STORE = `collab_ai_key_${uid}`;
@@ -580,6 +584,9 @@ export default function MailBoard() {
   // Classement automatique par lot (catégorie + agent + priorité) via Auguste.
   // silent = appel de fond après synchro (pas de spinner).
   async function runAutoClassify(silent = false) {
+    // Agent commercial : aucune identification/attribution automatique sur sa
+    // messagerie.
+    if (isCommercial) return;
     if (classifying && !silent) return;
     if (!silent) setClassifying(true);
     try {
@@ -841,6 +848,7 @@ export default function MailBoard() {
               accounts={accounts}
               gmailConfigs={gmailConfigs}
               users={users}
+              isCommercial={isCommercial}
               selectedId={selectedThread?.id}
               activeLabel={activeLabel}
               activeAccount={activeAccount}
@@ -945,6 +953,8 @@ export default function MailBoard() {
               aiKey={aiKey}
               loadingBody={loadingBody}
               users={users}
+              isCommercial={isCommercial}
+              myId={uid}
               onClose={() => setSelectedThread(null)}
               onReply={msg => { addMessage(msg); setSelectedThread(prev => prev ? { ...prev, messages: [...prev.messages, msg] } : null); }}
               onForward={data => setForwardData(data)}

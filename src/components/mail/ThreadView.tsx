@@ -14,6 +14,8 @@ interface Props {
   aiKey: string;
   loadingBody?: boolean;
   users?: { id: string; prenom: string; nom: string; email?: string }[];
+  isCommercial?: boolean;   // agent commercial : pas d'attribution, juste « Répondu »
+  myId?: string;            // id de l'utilisateur connecté (case « Répondu »)
   onClose: () => void;
   onReply: (m: MailMessage) => void;
   onForward?: (data: { to: string; cc?: string; subject: string; body: string; accountId: string; attachments?: { filename: string; mime: string; size: number; content: string }[] }) => void;
@@ -43,7 +45,7 @@ const SENDER_BADGE: Record<string, { label: string; color: string; bg: string }>
   unknown: { label: "Inconnu",       color: "#6B7280", bg: "#F9FAFB" },
 };
 
-export default function ThreadView({ thread, labels, accounts, aiKey, loadingBody, users = [], onClose, onReply, onForward, onApplyLabel, onRemoveLabel, onStar, onTrash, onRestore, onDeletePermanent, onBlockSender, customLabels, onSetLabels }: Props) {
+export default function ThreadView({ thread, labels, accounts, aiKey, loadingBody, users = [], isCommercial = false, myId, onClose, onReply, onForward, onApplyLabel, onRemoveLabel, onStar, onTrash, onRestore, onDeletePermanent, onBlockSender, customLabels, onSetLabels }: Props) {
   const isMobile = useIsMobile();
   const [suggestOpen, setSuggestOpen]     = useState(false); // boîte « 🧠 Mémorisé » repliée en icône sur mobile
   const [showReply, setShowReply]         = useState(false);
@@ -196,8 +198,10 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
     onSetLabels?.(next);
   }
 
-  // Classification automatique à l'ouverture si pas encore de libellés custom
+  // Classification automatique à l'ouverture si pas encore de libellés custom.
+  // Désactivée pour les agents commerciaux : pas d'identification du traitant.
   useEffect(() => {
+    if (isCommercial) return;
     const hasCustomLabels = customLabels.some(l => threadLabelIds.has(l.id));
     if (hasCustomLabels || classifySuggestion || classifying) return;
     const msg = firstMsg || lastMsg;
@@ -844,37 +848,52 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
         )}
         {memoryMsg && <span style={{ fontSize: 10, color: "#059669", fontWeight: 600 }}>{memoryMsg}</span>}
 
-        {/* Doit répondre */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 500 }}>Doit répondre :</span>
-          <select
-            value={assignedId ?? ""}
-            onChange={e => setAssigned(e.target.value || null)}
-            style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "3px 8px", fontSize: 12, background: assignedUser ? "#EFF6FF" : "#f9fafb", color: assignedUser ? "#2563EB" : "#374151", fontWeight: assignedUser ? 600 : 400, outline: "none", cursor: "pointer" }}
-          >
-            <option value="">— Non assigné —</option>
-            {users.map(u => <option key={u.id} value={u.id}>{u.prenom} {u.nom}</option>)}
-          </select>
-        </div>
+        {/* Doit répondre — attribution réservée aux rôles non commerciaux */}
+        {!isCommercial && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 500 }}>Doit répondre :</span>
+            <select
+              value={assignedId ?? ""}
+              onChange={e => setAssigned(e.target.value || null)}
+              style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "3px 8px", fontSize: 12, background: assignedUser ? "#EFF6FF" : "#f9fafb", color: assignedUser ? "#2563EB" : "#374151", fontWeight: assignedUser ? 600 : 400, outline: "none", cursor: "pointer" }}
+            >
+              <option value="">— Non assigné —</option>
+              {users.map(u => <option key={u.id} value={u.id}>{u.prenom} {u.nom}</option>)}
+            </select>
+          </div>
+        )}
 
         {/* Répondu */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <button
-            onClick={() => setReplied(isReplied ? null : (users[0]?.id ?? null))}
-            style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${isReplied ? "#059669" : "#d1d5db"}`, background: isReplied ? "#059669" : "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", flexShrink: 0 }}
-          >
-            {isReplied ? "✓" : ""}
-          </button>
-          <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 500 }}>Répondu par :</span>
-          <select
-            value={repliedById ?? ""}
-            onChange={e => setReplied(e.target.value || null)}
-            style={{ border: `1px solid ${isReplied ? "#bbf7d0" : "#e5e7eb"}`, borderRadius: 6, padding: "3px 8px", fontSize: 12, background: isReplied ? "#f0fdf4" : "#f9fafb", color: isReplied ? "#059669" : "#9ca3af", fontWeight: isReplied ? 600 : 400, outline: "none", cursor: "pointer" }}
-          >
-            <option value="">— Personne —</option>
-            {users.map(u => <option key={u.id} value={u.id}>{u.prenom} {u.nom}</option>)}
-          </select>
-        </div>
+        {isCommercial ? (
+          // Agent commercial : simple case « Répondu ou pas », sans attribution.
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <button
+              onClick={() => setReplied(isReplied ? null : (myId ?? users[0]?.id ?? null))}
+              style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${isReplied ? "#059669" : "#d1d5db"}`, background: isReplied ? "#059669" : "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", flexShrink: 0 }}
+            >
+              {isReplied ? "✓" : ""}
+            </button>
+            <span style={{ fontSize: 12, color: isReplied ? "#059669" : "#6b7280", fontWeight: 600 }}>{isReplied ? "Répondu" : "Répondu ?"}</span>
+          </label>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button
+              onClick={() => setReplied(isReplied ? null : (users[0]?.id ?? null))}
+              style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${isReplied ? "#059669" : "#d1d5db"}`, background: isReplied ? "#059669" : "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", flexShrink: 0 }}
+            >
+              {isReplied ? "✓" : ""}
+            </button>
+            <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 500 }}>Répondu par :</span>
+            <select
+              value={repliedById ?? ""}
+              onChange={e => setReplied(e.target.value || null)}
+              style={{ border: `1px solid ${isReplied ? "#bbf7d0" : "#e5e7eb"}`, borderRadius: 6, padding: "3px 8px", fontSize: 12, background: isReplied ? "#f0fdf4" : "#f9fafb", color: isReplied ? "#059669" : "#9ca3af", fontWeight: isReplied ? 600 : 400, outline: "none", cursor: "pointer" }}
+            >
+              <option value="">— Personne —</option>
+              {users.map(u => <option key={u.id} value={u.id}>{u.prenom} {u.nom}</option>)}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* ── Annuaire : expéditeur inconnu ── */}
