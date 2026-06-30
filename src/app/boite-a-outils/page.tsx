@@ -12,11 +12,22 @@ const num = (s: string) => parseFloat((s || "").replace(",", ".")) || 0;
 const champ: React.CSSProperties = { width: "100%", padding: "9px 11px", border: `1px solid ${BORDER}`, borderRadius: 9, fontSize: 14, boxSizing: "border-box" };
 const labelSt: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: "#6b7280", marginBottom: 4, display: "block" };
 
+// Carte d'outil repliable : par défaut, seul le titre est visible ; on clique
+// dessus pour dérouler le calculateur (le reste reste caché tant qu'on n'ouvre
+// pas). La page présente ainsi une liste compacte de titres.
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 18, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-      <h2 style={{ fontSize: 15, fontWeight: 800, color: DARK, margin: "0 0 14px" }}>{title}</h2>
-      {children}
+    <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: "0 1px 4px rgba(0,0,0,0.05)", overflow: "hidden" }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: 18, background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+      >
+        <h2 style={{ fontSize: 15, fontWeight: 800, color: DARK, margin: 0 }}>{title}</h2>
+        <span style={{ fontSize: 13, color: GOLD, fontWeight: 800, lineHeight: 1, transition: "transform .2s", transform: open ? "rotate(180deg)" : "none" }}>▾</span>
+      </button>
+      {open && <div style={{ padding: "0 18px 18px" }}>{children}</div>}
     </div>
   );
 }
@@ -51,7 +62,7 @@ export default function BoiteAOutilsPage() {
       <Sidebar active="outils" />
       <main style={{ flex: 1, padding: "28px 32px", maxWidth: 1000, margin: "0 auto", width: "100%" }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: DARK, margin: 0 }}>🧰 Ma boîte à outils</h1>
-        <p style={{ color: "#6b7280", fontSize: 13, marginTop: 4, marginBottom: 18 }}>Calculatrices du quotidien. Aucune donnée n'est enregistrée — tout est calculé localement.</p>
+        <p style={{ color: "#6b7280", fontSize: 13, marginTop: 4, marginBottom: 18 }}>Calculatrices du quotidien — cliquez sur un outil pour l'ouvrir. Aucune donnée n'est enregistrée, tout est calculé localement.</p>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 20 }}>
           {tabs.map(([k, lbl]) => (
             <button key={k} onClick={() => setTab(k)} style={{
