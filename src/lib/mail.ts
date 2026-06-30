@@ -67,6 +67,7 @@ export interface MailMessage {
   labels: string[];       // label ids
   attachments?: MailAttachment[];
   inReplyTo?: string;     // message-id parent
+  bodyError?: string;     // raison de l'échec de chargement du corps (à la demande)
 }
 
 export interface MailThread {
