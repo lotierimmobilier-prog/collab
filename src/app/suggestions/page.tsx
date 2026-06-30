@@ -33,6 +33,7 @@ export default function SuggestionsPage() {
   const isDir = ["admin", "dirigeant", "direction"].includes(role);
 
   const [items, setItems] = useState<Suggestion[]>([]);
+  const [privileged, setPrivileged] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
   const [showForm, setShowForm] = useState(false);
@@ -44,7 +45,7 @@ export default function SuggestionsPage() {
   const load = useCallback(() => {
     setLoading(true);
     fetch("/api/suggestions").then(r => r.ok ? r.json() : null)
-      .then(d => setItems(d?.suggestions ?? []))
+      .then(d => { setItems(d?.suggestions ?? []); setPrivileged(!!d?.privileged); })
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
   }, []);
@@ -92,6 +93,12 @@ export default function SuggestionsPage() {
         <p style={{ color: "#6b7280", fontSize: 13, marginTop: 0, marginBottom: 18 }}>
           Proposez vos idées pour faire évoluer Collab, et votez pour celles des collègues. L'équipe les étudie et les fait avancer.
         </p>
+
+        {!privileged && (
+          <div style={{ background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 12.5, color: "#6b5a3f", marginBottom: 16 }}>
+            🔒 Les idées sont <b>confidentielles</b> : seules la direction (admin & super admin) en consulte le contenu et l'auteur. Vos propres propositions restent visibles pour vous.
+          </div>
+        )}
 
         {showForm && (
           <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 18, marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>

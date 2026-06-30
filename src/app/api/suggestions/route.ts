@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { isSuperAdminEmail } from "@/lib/superadmin";
 
-// GET /api/suggestions — liste des suggestions (visible par tous les utilisateurs
-// connectés), avec le nombre de votes et si l'utilisateur courant a voté.
-// Tri : votes décroissants puis plus récentes.
+const MASK = "*******";
+
+// GET /api/suggestions — liste des suggestions.
+// Confidentialité : seuls l'admin et le super admin lisent le contenu des idées
+// et voient le nom de leurs auteurs. Les autres utilisateurs peuvent proposer et
+// voter, mais le texte des idées qui ne sont pas les leurs est masqué (*******)
+// et l'auteur est caché.
 export async function GET() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   const userId = (session.user as { id?: string }).id ?? "";
+  const role = session.user.roleId ?? "";
+  const privileged = role === "admin" || session.user.superAdmin === true || isSuperAdminEmail(session.user.email);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows: any[] = await prisma.suggestion.findMany({
@@ -16,22 +23,26 @@ export async function GET() {
     include: { votes: { select: { userId: true } } },
   }).catch(() => []);
 
-  const suggestions = rows.map((s) => ({
-    id: s.id,
-    userId: s.userId,
-    userName: s.userName,
-    title: s.title,
-    description: s.description,
-    category: s.category,
-    status: s.status,
-    adminNote: s.adminNote,
-    createdAt: s.createdAt,
-    votes: s.votes.length,
-    hasVoted: s.votes.some((v: { userId: string }) => v.userId === userId),
-    mine: s.userId === userId,
-  })).sort((a, b) => b.votes - a.votes || (a.createdAt < b.createdAt ? 1 : -1));
+  const suggestions = rows.map((s) => {
+    const mine = s.userId === userId;
+    const reveal = privileged || mine;       // contenu visible (admin/super admin, ou ma propre idée)
+    return {
+      id: s.id,
+      userId: reveal ? s.userId : "",
+      userName: privileged ? s.userName : (mine ? s.userName : "Masqué"),
+      title: reveal ? s.title : MASK,
+      description: reveal ? s.description : (s.description ? MASK : null),
+      category: s.category,
+      status: s.status,
+      adminNote: reveal ? s.adminNote : null,
+      createdAt: s.createdAt,
+      votes: s.votes.length,
+      hasVoted: s.votes.some((v: { userId: string }) => v.userId === userId),
+      mine,
+    };
+  }).sort((a, b) => b.votes - a.votes || (a.createdAt < b.createdAt ? 1 : -1));
 
-  return NextResponse.json({ suggestions });
+  return NextResponse.json({ privileged, suggestions });
 }
 
 // POST /api/suggestions — créer une suggestion.
