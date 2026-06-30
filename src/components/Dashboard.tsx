@@ -527,6 +527,8 @@ function PodiumBlock({ refreshKey }: { refreshKey: number }) {
     const ge = period === "year" ? r.gestion : (r.g[period] ?? 0);
     return { name: r.negociateur, tx, ge, total: tx + ge };
   }).filter(x => x.total > 0).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+  // Le détail par trimestre n'existe que si le robot a ventilé par date.
+  const hasQuarterData = d.negociateurs.some(r => (r.t?.some(x => x > 0)) || (r.g?.some(x => x > 0)));
 
   const TabBtn = ({ id, label }: { id: "year" | 0 | 1 | 2 | 3; label: string }) => (
     <button onClick={() => setPeriod(id)} style={{
@@ -547,14 +549,22 @@ function PodiumBlock({ refreshKey }: { refreshKey: number }) {
           <TabBtn id="year" label="Année" /><TabBtn id={0} label="1T" /><TabBtn id={1} label="2T" /><TabBtn id={2} label="3T" /><TabBtn id={3} label="4T" />
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", alignItems: "stretch" }}>
-        {/* Colonne gauche : podiums empilés (Transaction puis Gestion) */}
+      {period !== "year" && !hasQuarterData && (
+        <div style={{ fontSize: 11, color: "#9C7A55", background: GOLD_BG, padding: "6px 16px", borderBottom: "1px solid #f0e8d8" }}>
+          ⓘ Le détail par trimestre n'est pas encore disponible — relancez la synchronisation Protexa pour ventiler les mandats par date.
+        </div>
+      )}
+      {/* Les deux podiums côte à côte (Transaction · Gestion) */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
         <div style={{ borderRight: "1px solid #f0e8d8" }}>
           <Podium icon="🤝" title="Transaction" rows={top3("t", "transaction")} />
-          <div style={{ borderTop: "1px dashed #ece1cd", margin: "0 14px" }} />
+        </div>
+        <div>
           <Podium icon="🏠" title="Gestion" rows={top3("g", "gestion")} />
         </div>
-        {/* Colonne droite : classement général */}
+      </div>
+      {/* Classement général de tous les négociateurs, en dessous */}
+      <div style={{ borderTop: "1px solid #f3f4f6" }}>
         <RankingList rows={ranking} />
       </div>
     </div>
@@ -607,29 +617,29 @@ function Podium({ title, icon, rows }: { title: string; icon: string; rows: { na
     { ring: "#CDB79E", step: "#F2EBE0", txt: "#9C7A55" },
   ];
   const slots = [rows[1], rows[0], rows[2]];
-  const heights = [38, 54, 28];
+  const heights = [48, 70, 34];
   const medals = ["🥈", "🥇", "🥉"];
   const ranks = ["2", "1", "3"];
   const initials = (n: string) => n.split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase();
   return (
-    <div style={{ padding: "6px 14px 12px" }}>
-      <div style={{ textAlign: "center", fontSize: 11.5, fontWeight: 700, color: "#6b7280", marginBottom: 4 }}>{icon} {title}</div>
+    <div style={{ padding: "10px 16px 14px" }}>
+      <div style={{ textAlign: "center", fontSize: 12.5, fontWeight: 800, color: DARK, marginBottom: 8 }}>{icon} {title}</div>
       {!rows.length ? (
-        <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 11.5, padding: "18px 0" }}>Aucun mandat sur la période.</div>
+        <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 11.5, padding: "34px 0" }}>Aucun mandat sur la période.</div>
       ) : (
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 12 }}>
           {slots.map((r, i) => {
-            if (!r) return <div key={i} style={{ flex: 1, maxWidth: 84 }} />;
+            if (!r) return <div key={i} style={{ flex: 1, maxWidth: 92 }} />;
             const p = palette[i], first = i === 1;
             return (
-              <div key={i} style={{ flex: 1, maxWidth: 84, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <div style={{ position: "relative", width: first ? 38 : 32, height: first ? 38 : 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: p.txt, fontWeight: 700, fontSize: first ? 12.5 : 10.5, background: p.step, border: `2px solid ${p.ring}` }}>
+              <div key={i} style={{ flex: 1, maxWidth: 92, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <div style={{ position: "relative", width: first ? 46 : 38, height: first ? 46 : 38, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: p.txt, fontWeight: 700, fontSize: first ? 14 : 12, background: p.step, border: `2px solid ${p.ring}` }}>
                   {initials(r.name)}
-                  <span style={{ position: "absolute", bottom: -5, right: -6, fontSize: 13 }}>{medals[i]}</span>
+                  <span style={{ position: "absolute", bottom: -6, right: -7, fontSize: 15 }}>{medals[i]}</span>
                 </div>
-                <div style={{ fontSize: 10.5, fontWeight: 600, color: "#111827", textAlign: "center", marginTop: 4, lineHeight: 1.1, minHeight: 24 }}>{r.name}</div>
-                <div style={{ fontSize: first ? 16 : 14, fontWeight: 800, color: p.txt, lineHeight: 1, marginBottom: 3 }}>{r.value}</div>
-                <div style={{ width: "100%", height: heights[i], borderRadius: "6px 6px 0 0", background: p.step, border: `1px solid ${p.ring}`, borderBottom: "none", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 3, color: p.txt, fontWeight: 700, fontSize: 13 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "#111827", textAlign: "center", marginTop: 5, lineHeight: 1.15, minHeight: 26 }}>{r.name}</div>
+                <div style={{ fontSize: first ? 19 : 16, fontWeight: 800, color: p.txt, lineHeight: 1, marginBottom: 3 }}>{r.value}</div>
+                <div style={{ width: "100%", height: heights[i], borderRadius: "7px 7px 0 0", background: p.step, border: `1px solid ${p.ring}`, borderBottom: "none", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 4, color: p.txt, fontWeight: 700, fontSize: 14 }}>
                   {ranks[i]}
                 </div>
               </div>
