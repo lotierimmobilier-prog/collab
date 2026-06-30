@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { MailThread, MailMessage, MailLabel, MailAccount, MailAttachment, buildContext } from "@/lib/mail";
 import { useIsMobile } from "@/lib/useIsMobile";
+import { isAgencyEmail } from "@/lib/superadmin";
 
 const GOLD    = "#B8966A";
 const GOLD_BG = "#F7F0E6";
@@ -40,6 +41,7 @@ interface Research     { summary: string; webSources: string[]; mailInsights: st
 
 const SENDER_BADGE: Record<string, { label: string; color: string; bg: string }> = {
   user:    { label: "Collègue",      color: "#2563EB", bg: "#EFF6FF" },
+  interne: { label: "Interne",       color: "#2563EB", bg: "#EFF6FF" },
   owner:   { label: "Propriétaire",  color: "#7C3AED", bg: "#F5F3FF" },
   tenant:  { label: "Locataire",     color: "#059669", bg: "#ECFDF5" },
   unknown: { label: "Inconnu",       color: "#6B7280", bg: "#F9FAFB" },
@@ -897,7 +899,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
       </div>
 
       {/* ── Annuaire : expéditeur inconnu ── */}
-      {contactLookup && !contactLookup.found && senderEmail && (
+      {contactLookup && !contactLookup.found && senderEmail && !isAgencyEmail(senderEmail) && (
         <div style={{ padding: "9px 20px", background: "#FFF7ED", borderBottom: "1px solid #FED7AA", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", flexShrink: 0 }}>
           <span style={{ fontSize: 12, color: "#9A3412", fontWeight: 600 }}>👤 Expéditeur inconnu</span>
           <span style={{ fontSize: 12, color: "#9A3412" }}>{firstMsg?.from?.name || senderEmail} n'est pas dans l'annuaire.</span>
