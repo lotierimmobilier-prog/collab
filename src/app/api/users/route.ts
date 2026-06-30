@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { saveUser } from "@/lib/user-write";
 import { getExtras, setExtras } from "@/lib/user-extras";
 import { isSuperAdminEmail, isAdminRole } from "@/lib/superadmin";
+import { sendWelcomeEmail } from "@/lib/welcome";
 
 // GET /api/users — liste tous les utilisateurs.
 // On ne sélectionne que les colonnes RÉELLEMENT présentes dans « users », puis
@@ -97,14 +98,22 @@ export async function POST(req: NextRequest) {
     const data: any = { prenom, nom, email: email.toLowerCase(), passwordHash, roleId, active: active ?? true };
 
     const sel = { id: true, prenom: true, nom: true, email: true, roleId: true, active: true };
-    const user = await saveUser(() => prisma.user.create({ data, select: sel }), data);
+    const user = await saveUser(() => prisma.user.create({ data, select: sel }), data) as { id: string; prenom: string; nom: string; email: string; roleId: string; active: boolean };
     await setExtras(user.id, {
       parrainId: parrainId || null, city: city?.trim() || null,
       isEmployee: !!isEmployee, gedAccess: gedAccess || null,
       accessOverrides: accessOverrides ?? null,
       superAdmin: callerSuper ? !!superAdmin : false,
     });
-    return NextResponse.json({ ...user, password: "••••••••" }, { status: 201 });
+
+    // Email de bienvenue avec lien de création de mot de passe (best-effort :
+    // n'empêche jamais la création de l'utilisateur si l'envoi échoue).
+    let welcomeEmailSent = false;
+    try {
+      welcomeEmailSent = await sendWelcomeEmail({ id: user.id, prenom: user.prenom, email: user.email });
+    } catch { welcomeEmailSent = false; }
+
+    return NextResponse.json({ ...user, password: "••••••••", welcomeEmailSent }, { status: 201 });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.includes("Unique constraint")) {

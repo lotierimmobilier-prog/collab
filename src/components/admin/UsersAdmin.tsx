@@ -57,6 +57,11 @@ export default function UsersAdmin() {
       if (!res.ok) { setApiError(data.error ?? "Erreur"); return; }
       setApiError("");
       await fetchUsers();
+      if (isNew) {
+        alert(data.welcomeEmailSent
+          ? `Utilisateur créé ✅\nUn email de bienvenue a été envoyé à ${user.email} avec le lien pour créer son mot de passe.`
+          : `Utilisateur créé ✅\n⚠️ L'email de bienvenue n'a pas pu être envoyé (vérifiez la configuration SMTP). Vous pouvez communiquer le mot de passe manuellement.`);
+      }
     } catch (e) { setApiError(String(e)); }
     setEditing(null);
   }
