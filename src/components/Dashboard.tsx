@@ -641,9 +641,54 @@ function Podium({ title, icon, rows }: { title: string; icon: string; rows: { na
   );
 }
 
+// Carte super admin : déclenche la synchronisation Protexa (le robot tourne sur
+// le VPS ; ce bouton pose une demande que le poller du VPS exécute).
+function ProtexaSyncBlock() {
+  const [info, setInfo] = useState<{ lastSync: string | null; pending: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const load = () => fetch("/api/protexa/run").then(r => r.ok ? r.json() : null).then(d => { if (d) setInfo({ lastSync: d.lastSync, pending: d.pending }); }).catch(() => {});
+  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!info?.pending) return;
+    const t = setInterval(load, 12000);
+    return () => clearInterval(t);
+  }, [info?.pending]);
+
+  const launch = async () => {
+    setBusy(true); setMsg("");
+    const r = await fetch("/api/protexa/run", { method: "POST" }).then(x => x.json()).catch(() => null);
+    setBusy(false);
+    if (r?.ok) { setMsg("✅ Demande envoyée — le robot lance la synchronisation dans la minute. La page se met à jour automatiquement."); load(); }
+    else setMsg("⚠️ " + (r?.error || "Échec de la demande."));
+  };
+
+  const fmt = (s: string | null) => s ? new Date(s).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" }) : "jamais";
+  const disabled = busy || !!info?.pending;
+
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16, marginBottom: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: DARK }}>📊 Synchronisation Protexa</div>
+          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 3 }}>
+            Dernière synchro : <b>{fmt(info?.lastSync ?? null)}</b>{info?.pending ? " · ⏳ en cours…" : ""}
+          </div>
+        </div>
+        <button onClick={launch} disabled={disabled} style={{ background: disabled ? "#d1d5db" : GOLD, color: "#fff", border: "none", borderRadius: 10, padding: "10px 16px", fontSize: 13, fontWeight: 700, cursor: disabled ? "default" : "pointer" }}>
+          {info?.pending ? "Synchronisation demandée…" : busy ? "Envoi…" : "🔄 Lancer la synchronisation"}
+        </button>
+      </div>
+      {msg && <div style={{ fontSize: 12.5, color: "#374151", marginTop: 10 }}>{msg}</div>}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { data: session } = useSession();
   const firstName = (session?.user as { prenom?: string })?.prenom ?? session?.user?.name?.split(" ")[0] ?? "vous";
+  const superAdmin = (session?.user as { superAdmin?: boolean })?.superAdmin === true;
   const refreshKey = useAutoRefresh();
 
   const [dash, setDash] = useState<{ kpis: { id?: string; label: string; value: string; sub?: string }[]; blocks: string[] } | null>(null);
@@ -693,6 +738,9 @@ export default function Dashboard() {
 
       {/* Podium des mandats + classement général (top 3 + tous les agents) — visible par tous */}
       <PodiumBlock refreshKey={refreshKey} />
+
+      {/* Synchronisation Protexa — réservé au super administrateur */}
+      {superAdmin && <ProtexaSyncBlock />}
 
       {/* Blocs du tableau de bord — dans l'ordre choisi, déplaçables par la poignée ⠿ */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
