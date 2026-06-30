@@ -79,7 +79,7 @@ async function syncFolder(client: any, folder: string, accountId: string, since:
           const hdrs    = (msg.headers ? msg.headers.toString() : "").toLowerCase();
           const subjLc  = (env.subject ?? "").toLowerCase();
           const fromLc  = fromEmail.toLowerCase();
-          const isPortal = !!detectPortal(fromEmail);
+          const isPortal = !!detectPortal(fromEmail, env.from?.[0]?.name);
           const isPub   = !isSent && !isPortal && (
             hdrs.includes("list-unsubscribe") ||
             hdrs.includes("precedence: bulk") ||
