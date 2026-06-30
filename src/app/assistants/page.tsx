@@ -13,11 +13,20 @@ const ROLES = [
   { id: "syndic",       label: "Syndic" },
   { id: "dirigeant",    label: "Direction" },
 ];
-const TIERS = [
-  { id: "fast",  label: "Rapide & éco" },
-  { id: "smart", label: "Équilibré" },
-  { id: "max",   label: "Qualité max" },
+// Modèles Anthropic proposés. La direction peut aussi saisir un identifiant de
+// modèle précis (ex. un modèle Opus) via l'option « Autre ».
+const MODEL_OPTIONS = [
+  { id: "fast",  label: "Haiku 4.5 — rapide & économique" },
+  { id: "smart", label: "Sonnet 4.6 — équilibré (recommandé)" },
+  { id: "fable", label: "Fable 5 — créatif" },
 ];
+const CUSTOM = "__custom__";
+const isPresetModel = (m: string) => MODEL_OPTIONS.some(o => o.id === m);
+function modelLabel(m: string) {
+  const o = MODEL_OPTIONS.find(x => x.id === m);
+  if (o) return o.label.split(" — ")[0];
+  return m === "max" ? "Qualité max" : m;
+}
 
 interface AgentPublic { id: string; name: string; specialty: string | null; description: string | null; icon: string | null; color: string | null; photo: string | null; cv: string | null }
 interface Doc { id: string; name: string; chars: number; createdAt: string }
@@ -417,10 +426,17 @@ function Manage({ onChanged }: { onChanged: () => void }) {
             <textarea value={form.cv} onChange={e => setForm(f => ({ ...f, cv: e.target.value }))} rows={6} placeholder={"🎓 Formation : …\n💼 Expérience : …\n🏆 Spécialités : …\n😎 Le petit plus : …"} style={{ ...champ, resize: "vertical", fontSize: 13, lineHeight: 1.5 }} />
           </div>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 12 }}>
-            <div style={{ flex: "1 1 160px" }}><label style={lab}>Modèle IA</label>
-              <select value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} style={champ}>
-                {TIERS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+            <div style={{ flex: "1 1 240px" }}><label style={lab}>Modèle Anthropic</label>
+              <select
+                value={isPresetModel(form.model) ? form.model : CUSTOM}
+                onChange={e => { const v = e.target.value; setForm(f => ({ ...f, model: v === CUSTOM ? (isPresetModel(f.model) ? "" : f.model) : v })); }}
+                style={champ}>
+                {MODEL_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                <option value={CUSTOM}>Autre modèle Anthropic…</option>
               </select>
+              {!isPresetModel(form.model) && (
+                <input value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} placeholder="Identifiant du modèle (ex. claude-…)" style={{ ...champ, marginTop: 8 }} />
+              )}
             </div>
             <div style={{ flex: "0 1 90px" }}><label style={lab}>Ordre</label><input inputMode="numeric" value={form.order} onChange={e => setForm(f => ({ ...f, order: e.target.value }))} style={champ} /></div>
           </div>
@@ -456,7 +472,7 @@ function Manage({ onChanged }: { onChanged: () => void }) {
             <Avatar a={a} size={42} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: DARK }}>{a.name} {!a.active && <span style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>(inactif)</span>}</div>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>{a.specialty || "—"} · {TIERS.find(t => t.id === a.model)?.label || a.model} · {a.docs?.length || 0} doc(s), {a._count?.chunks || 0} fragment(s)</div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>{a.specialty || "—"} · {modelLabel(a.model)} · {a.docs?.length || 0} doc(s), {a._count?.chunks || 0} fragment(s)</div>
             </div>
             <button onClick={() => startEdit(a)} style={{ fontSize: 12, fontWeight: 700, color: BLUE, background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "5px 10px", cursor: "pointer" }}>Configurer</button>
             <button onClick={() => remove(a)} style={{ fontSize: 16, color: RED, background: "none", border: "none", cursor: "pointer" }}>×</button>

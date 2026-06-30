@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { isDirectionRole } from "@/lib/dashboard-prefs";
-import { agentAllowed, MODEL_TIERS } from "@/lib/ai-agents";
+import { agentAllowed, isValidModel } from "@/lib/ai-agents";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyAgent = any;
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       photo: (b.photo || "").trim().slice(0, 700000) || null,
       cv: (b.cv || "").trim().slice(0, 4000) || null,
       color: (b.color || "#B8966A").trim().slice(0, 16),
-      model: MODEL_TIERS[b.model] ? b.model : "smart",
+      model: isValidModel(b.model) ? b.model : "smart",
       systemPrompt: (b.systemPrompt || "").trim().slice(0, 12000),
       accessRoles: Array.isArray(b.accessRoles) && b.accessRoles.length ? b.accessRoles.map(String) : undefined,
       order: Number.isFinite(b.order) ? Number(b.order) : 0,
