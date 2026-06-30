@@ -1,25 +1,32 @@
 // Détection des leads issus des portails immobiliers et préparation de la
 // réponse automatique (brouillon) selon le type d'annonce (vente / gestion).
 
-export interface Portal { id: string; label: string; domains: string[] }
+export interface Portal { id: string; label: string; domains: string[]; keywords: string[] }
 
 export const PORTALS: Portal[] = [
-  { id: "leboncoin", label: "Leboncoin",      domains: ["leboncoin.fr"] },
-  { id: "bienici",   label: "Bien'ici",       domains: ["bienici.com", "bien-ici.com"] },
-  { id: "lefigaro",  label: "Le Figaro Immo", domains: ["figaroimmo.com", "explorimmo.com", "lefigaro.fr", "properties.lefigaro.fr"] },
+  { id: "leboncoin", label: "Leboncoin",      domains: ["leboncoin.fr"], keywords: ["leboncoin"] },
+  { id: "bienici",   label: "Bien'ici",       domains: ["bienici.com", "bien-ici.com"], keywords: ["bienici", "bien-ici"] },
+  { id: "lefigaro",  label: "Le Figaro Immo", domains: ["figaroimmo.com", "explorimmo.com", "lefigaro.fr", "properties.lefigaro.fr"], keywords: ["figaroimmo", "explorimmo", "lefigaro"] },
 ];
 
 export function portalLabel(id: string): string {
   return PORTALS.find(p => p.id === id)?.label ?? id;
 }
 
-// Identifie le portail à partir de l'adresse expéditrice (domaine).
-export function detectPortal(fromEmail: string | null | undefined): Portal | null {
+// Identifie le portail à partir de l'expéditeur (adresse ET nom affiché).
+// Reconnaissance large : un domaine exact/sous-domaine OU n'importe quel
+// domaine d'envoi / nom contenant le mot-clé du portail (ex. mail-leboncoin.fr,
+// « Le Bon Coin »…). Objectif : ces leads commerciaux restent TOUJOURS en boîte
+// de réception, jamais classés en « Publicité ».
+export function detectPortal(fromEmail: string | null | undefined, fromName?: string | null): Portal | null {
   const email = (fromEmail ?? "").toLowerCase();
+  const hay   = `${email} ${(fromName ?? "").toLowerCase()}`;
   const at = email.lastIndexOf("@");
-  if (at < 0) return null;
-  const domain = email.slice(at + 1);
-  return PORTALS.find(p => p.domains.some(d => domain === d || domain.endsWith("." + d))) ?? null;
+  const domain = at >= 0 ? email.slice(at + 1) : "";
+  return PORTALS.find(p =>
+    (domain && p.domains.some(d => domain === d || domain.endsWith("." + d))) ||
+    p.keywords.some(k => hay.includes(k)),
+  ) ?? null;
 }
 
 // Normalise une référence pour une comparaison tolérante (casse, espaces, tirets).
