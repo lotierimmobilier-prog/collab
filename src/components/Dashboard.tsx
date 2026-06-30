@@ -539,7 +539,7 @@ function PodiumBlock({ refreshKey }: { refreshKey: number }) {
   );
 
   return (
-    <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, boxShadow: "0 1px 4px rgba(0,0,0,0.05)", overflow: "hidden", marginBottom: 16 }}>
+    <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, boxShadow: "0 1px 4px rgba(0,0,0,0.05)", overflow: "hidden" }}>
       <div style={{ padding: "13px 16px 9px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 9, flexWrap: "wrap" }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>🏆 Podium des mandats</span>
@@ -617,29 +617,29 @@ function Podium({ title, icon, rows }: { title: string; icon: string; rows: { na
     { ring: "#CDB79E", step: "#F2EBE0", txt: "#9C7A55" },
   ];
   const slots = [rows[1], rows[0], rows[2]];
-  const heights = [48, 70, 34];
+  const heights = [40, 56, 28];
   const medals = ["🥈", "🥇", "🥉"];
   const ranks = ["2", "1", "3"];
   const initials = (n: string) => n.split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase();
   return (
-    <div style={{ padding: "10px 16px 14px" }}>
-      <div style={{ textAlign: "center", fontSize: 12.5, fontWeight: 800, color: DARK, marginBottom: 8 }}>{icon} {title}</div>
+    <div style={{ padding: "8px 8px 12px" }}>
+      <div style={{ textAlign: "center", fontSize: 12, fontWeight: 800, color: DARK, marginBottom: 6 }}>{icon} {title}</div>
       {!rows.length ? (
-        <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 11.5, padding: "34px 0" }}>Aucun mandat sur la période.</div>
+        <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 11, padding: "26px 0" }}>Aucun mandat sur la période.</div>
       ) : (
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 6 }}>
           {slots.map((r, i) => {
-            if (!r) return <div key={i} style={{ flex: 1, maxWidth: 92 }} />;
+            if (!r) return <div key={i} style={{ flex: 1, maxWidth: 70 }} />;
             const p = palette[i], first = i === 1;
             return (
-              <div key={i} style={{ flex: 1, maxWidth: 92, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <div style={{ position: "relative", width: first ? 46 : 38, height: first ? 46 : 38, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: p.txt, fontWeight: 700, fontSize: first ? 14 : 12, background: p.step, border: `2px solid ${p.ring}` }}>
+              <div key={i} style={{ flex: 1, maxWidth: 70, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <div style={{ position: "relative", width: first ? 40 : 32, height: first ? 40 : 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: p.txt, fontWeight: 700, fontSize: first ? 12.5 : 10.5, background: p.step, border: `2px solid ${p.ring}` }}>
                   {initials(r.name)}
-                  <span style={{ position: "absolute", bottom: -6, right: -7, fontSize: 15 }}>{medals[i]}</span>
+                  <span style={{ position: "absolute", bottom: -5, right: -6, fontSize: 13 }}>{medals[i]}</span>
                 </div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "#111827", textAlign: "center", marginTop: 5, lineHeight: 1.15, minHeight: 26 }}>{r.name}</div>
-                <div style={{ fontSize: first ? 19 : 16, fontWeight: 800, color: p.txt, lineHeight: 1, marginBottom: 3 }}>{r.value}</div>
-                <div style={{ width: "100%", height: heights[i], borderRadius: "7px 7px 0 0", background: p.step, border: `1px solid ${p.ring}`, borderBottom: "none", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 4, color: p.txt, fontWeight: 700, fontSize: 14 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "#111827", textAlign: "center", marginTop: 4, lineHeight: 1.12, minHeight: 23 }}>{r.name}</div>
+                <div style={{ fontSize: first ? 16 : 14, fontWeight: 800, color: p.txt, lineHeight: 1, marginBottom: 3 }}>{r.value}</div>
+                <div style={{ width: "100%", height: heights[i], borderRadius: "6px 6px 0 0", background: p.step, border: `1px solid ${p.ring}`, borderBottom: "none", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 3, color: p.txt, fontWeight: 700, fontSize: 13 }}>
                   {ranks[i]}
                 </div>
               </div>
@@ -746,14 +746,13 @@ export default function Dashboard() {
       {/* Bannière d'accueil — citation + météo + indicateurs (réordonnables) */}
       <Banner firstName={firstName} kpis={dash?.kpis ?? []} onCustomize={() => setShowCustom(true)} onReorderKpis={reorderKpis} />
 
-      {/* Podium des mandats + classement général (top 3 + tous les agents) — visible par tous */}
-      <PodiumBlock refreshKey={refreshKey} />
-
       {/* Synchronisation Protexa — réservé au super administrateur */}
       {superAdmin && <ProtexaSyncBlock />}
 
-      {/* Blocs du tableau de bord — dans l'ordre choisi, déplaçables par la poignée ⠿ */}
+      {/* Blocs du tableau de bord — dans l'ordre choisi, déplaçables par la poignée ⠿.
+          Le podium des mandats occupe un cadre demi-largeur, comme les autres blocs. */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
+        <div style={{ gridColumn: "auto" }}><PodiumBlock refreshKey={refreshKey} /></div>
         {ordered.map(id => (
           <div key={id}
             onDragOver={e => { if (dragBlock) e.preventDefault(); }}
