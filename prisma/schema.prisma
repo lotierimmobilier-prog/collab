@@ -1327,6 +1327,20 @@ model AiAgentChunk {
   @@map("ai_agent_chunks")
 }
 
+// Jeton à usage unique pour qu'un nouvel utilisateur définisse son mot de passe
+// (lien envoyé dans l'email de bienvenue).
+model PasswordSetupToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_setup_tokens")
+}
+
 // ════════════ Boutique : objets logotés de l'agence ════════════
 
 // Article de la boutique (gourde, tote bag, dessous de verre…).

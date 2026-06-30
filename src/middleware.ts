@@ -8,6 +8,8 @@ const PUBLIC_PATHS = [
   "/api/client",       // espace client (locataires) — session propre par cookie
   "/espace-client",    // page publique de l'espace locataire
   "/login",
+  "/definir-mot-de-passe", // création de mot de passe par un nouvel utilisateur (lien email)
+  "/api/set-password",     // API associée (validation + enregistrement du mot de passe)
   "/candidature",
   "/declaration",      // page publique d'assistance locataire (/declaration/<token>)
   "/intervention",     // portail fournisseur ODS (/intervention/<token>)
