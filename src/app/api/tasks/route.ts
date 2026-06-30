@@ -37,11 +37,14 @@ export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  // Cloisonnement : par défaut, chacun (même le super admin) ne voit que les
-  // tâches qui LUI sont attribuées. Le paramètre ?scope=all affiche les tâches
-  // de tout le monde (bouton « voir toutes les tâches »).
+  // Cloisonnement : par défaut, chacun ne voit que les tâches qui LUI sont
+  // attribuées. Le paramètre ?scope=all (bouton « Toutes les tâches ») affiche
+  // les tâches de tout le monde, mais il est RÉSERVÉ au super admin / admin /
+  // direction ; pour les autres agents on force le périmètre à leurs tâches.
   const uid = session.user.id;
-  const seeAll = req.nextUrl.searchParams.get("scope") === "all";
+  const su = session.user as { roleId?: string; superAdmin?: boolean };
+  const canSeeAll = su.superAdmin === true || su.roleId === "admin" || su.roleId === "direction" || su.roleId === "dirigeant";
+  const seeAll = canSeeAll && req.nextUrl.searchParams.get("scope") === "all";
   const scope = seeAll ? {} : { assigneeId: uid };
 
   // Filtre de statut optionnel : ?status=todo,in_progress (ex. tableau de bord).
