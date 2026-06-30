@@ -5,7 +5,8 @@ import Sidebar from "@/components/Sidebar";
 const GOLD = "#B8966A"; const DARK = "#1C1A17"; const BORDER = "#E6E1D9"; const GOLD_BG = "#F7F0E6";
 const RED = "#DC2626"; const MUTED = "#6b7280";
 
-interface Category { id: string; name: string; description: string | null; icon: string | null; color: string | null; order: number; active: boolean; topicCount: number }
+interface LastMsg { topicId: string; title: string; userName: string; at: string }
+interface Category { id: string; name: string; description: string | null; icon: string | null; color: string | null; order: number; active: boolean; topicCount: number; messageCount: number; lastMessage: LastMsg | null }
 interface TopicRow { id: string; categoryId: string; userName: string; title: string; pinned: boolean; locked: boolean; createdAt: string; lastReplyAt: string; replyCount: number; likeCount: number }
 interface Reply { id: string; userId: string; userName: string; body: string; createdAt: string; likeCount: number; hasLiked: boolean }
 interface TopicDetail {
@@ -59,7 +60,7 @@ export default function ForumPage() {
           Un espace communautaire pour échanger, s'entraider et partager entre collègues.
         </p>
 
-        {view === "cats" && <CategoriesView cats={cats} isDir={isDir} onOpen={openCat} onChanged={loadCats} />}
+        {view === "cats" && <CategoriesView cats={cats} isDir={isDir} onOpen={openCat} onOpenTopic={openTopic} onChanged={loadCats} />}
         {view === "topics" && selCat && (
           <TopicsView cat={selCat} topics={topics} onBack={() => { setView("cats"); loadCats(); }} onOpen={openTopic} onReload={reloadTopics} />
         )}
@@ -73,12 +74,20 @@ export default function ForumPage() {
 
 // ════════════ Catégories ════════════
 
-function CategoriesView({ cats, isDir, onOpen, onChanged }: { cats: Category[]; isDir: boolean; onOpen: (c: Category) => void; onChanged: () => void }) {
+// Grille de colonnes commune (façon phpBB) : icône · forum · sujets · messages · dernier message.
+const FORUM_COLS = "46px minmax(0,1fr) 64px 78px 210px";
+const BAR = "#2f6296";          // bleu « forum » type phpBB
+const BAR_GRAD = "linear-gradient(180deg,#3a72ab,#2f6296)";
+
+function CategoriesView({ cats, isDir, onOpen, onOpenTopic, onChanged }: { cats: Category[]; isDir: boolean; onOpen: (c: Category) => void; onOpenTopic: (id: string) => void; onChanged: () => void }) {
   const [manage, setManage] = useState(false);
+  const colHead: React.CSSProperties = { fontSize: 10, fontWeight: 700, color: "#dCEBFA", textTransform: "uppercase", letterSpacing: 0.4, textAlign: "center", alignSelf: "center" };
+  const stat: React.CSSProperties = { fontSize: 14, fontWeight: 700, color: DARK, textAlign: "center", alignSelf: "center" };
+
   return (
     <div>
       {isDir && (
-        <div style={{ marginBottom: 14 }}>
+        <div style={{ marginBottom: 12 }}>
           <button onClick={() => setManage(m => !m)} style={{ background: "#fff", color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 9, padding: "7px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
             {manage ? "Fermer la gestion" : "⚙️ Gérer les catégories"}
           </button>
@@ -86,23 +95,48 @@ function CategoriesView({ cats, isDir, onOpen, onChanged }: { cats: Category[]; 
       )}
       {manage && <CategoryManager cats={cats} onChanged={onChanged} />}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 14 }}>
-        {cats.map(c => {
+      <div style={{ border: `1px solid #cfe0f0`, borderRadius: 10, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+        {/* Barre de section bleue (avec les en-têtes de colonnes) */}
+        <div style={{ display: "grid", gridTemplateColumns: FORUM_COLS, gap: 8, background: BAR_GRAD, color: "#fff", padding: "9px 14px", alignItems: "center" }}>
+          <span />
+          <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: 0.2 }}>Forum de l'agence</span>
+          <span style={colHead}>Sujets</span>
+          <span style={colHead}>Messages</span>
+          <span style={colHead}>Dernier message</span>
+        </div>
+
+        {/* Lignes (catégories = forums) */}
+        {cats.map((c, i) => {
           const col = c.color || GOLD;
           return (
-            <button key={c.id} onClick={() => onOpen(c)} style={{
-              textAlign: "left", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16, cursor: "pointer",
-              display: "flex", gap: 13, alignItems: "flex-start", boxShadow: "0 1px 4px rgba(0,0,0,0.05)", borderLeft: `3px solid ${col}`,
-            }}>
-              <div style={{ width: 44, height: 44, borderRadius: 11, background: `${col}1A`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>{c.icon || "💬"}</div>
+            <div key={c.id} style={{ display: "grid", gridTemplateColumns: FORUM_COLS, gap: 8, alignItems: "center", padding: "12px 14px", background: i % 2 ? "#f7fafd" : "#fff", borderTop: i ? "1px solid #eef3f8" : "none" }}>
+              {/* Icône type « dossier » */}
+              <div style={{ width: 42, height: 42, borderRadius: 10, background: `${col}1A`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{c.icon || "💬"}</div>
+              {/* Nom + description */}
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 15.5, fontWeight: 800, color: DARK }}>{c.name}{!c.active && <span style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}> (masquée)</span>}</div>
-                {c.description && <div style={{ fontSize: 12.5, color: MUTED, marginTop: 3, lineHeight: 1.4 }}>{c.description}</div>}
-                <div style={{ fontSize: 12, color: col, fontWeight: 700, marginTop: 7 }}>{c.topicCount} sujet{c.topicCount > 1 ? "s" : ""}</div>
+                <button onClick={() => onOpen(c)} style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", fontSize: 15, fontWeight: 800, color: BAR }}>
+                  {c.name}{!c.active && <span style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}> (masquée)</span>}
+                </button>
+                {c.description && <div style={{ fontSize: 12, color: MUTED, marginTop: 2, lineHeight: 1.4 }}>{c.description}</div>}
               </div>
-            </button>
+              {/* Compteurs */}
+              <div style={stat}>{c.topicCount}</div>
+              <div style={stat}>{c.messageCount}</div>
+              {/* Dernier message */}
+              <div style={{ minWidth: 0, fontSize: 11.5, color: MUTED, alignSelf: "center" }}>
+                {c.lastMessage ? (
+                  <>
+                    <button onClick={() => onOpenTopic(c.lastMessage!.topicId)} title={c.lastMessage.title} style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", fontSize: 12, fontWeight: 700, color: DARK, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
+                      {c.lastMessage.title}
+                    </button>
+                    <div style={{ marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>par <b style={{ color: "#4b5563" }}>{c.lastMessage.userName}</b> · {timeAgo(c.lastMessage.at)}</div>
+                  </>
+                ) : <span style={{ color: "#b9b2a6" }}>Aucun message</span>}
+              </div>
+            </div>
           );
         })}
+        {!cats.length && <div style={{ padding: 24, textAlign: "center", color: "#9ca3af", fontSize: 13, background: "#fff" }}>Aucune catégorie.</div>}
       </div>
     </div>
   );
