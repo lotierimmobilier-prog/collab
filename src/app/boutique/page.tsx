@@ -32,27 +32,38 @@ const STATUS_ORDER = ["nouveau", "preparation", "pret", "remis", "annule"];
 // de la photo uploadée), par opposition à un emoji de secours.
 function isUrl(s: string | null): boolean { return !!s && (/^https?:\/\//.test(s) || s.startsWith("/")); }
 
-// Redimensionne une image dans le navigateur et renvoie un data-URI JPEG
-// compressé (bord max = maxPx). Réduit fortement le poids envoyé au serveur.
-function resizeImage(file: File, maxPx: number, quality: number): Promise<string> {
+// Lit un fichier en data-URI base64.
+function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
+    const r = new FileReader();
+    r.onerror = () => reject(new Error("read"));
+    r.onload = () => resolve(String(r.result || ""));
+    r.readAsDataURL(file);
+  });
+}
+
+// Redimensionne/compresse une image (déjà en data-URI) et renvoie un data-URI
+// JPEG (bord max = maxPx). On décode depuis le data-URI et non un objectURL :
+// plus fiable dans les webviews iOS. Réduit fortement le poids envoyé.
+function resizeDataUrl(dataUrl: string, maxPx: number, quality: number): Promise<string> {
+  return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      URL.revokeObjectURL(url);
-      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
-      const w = Math.max(1, Math.round(img.width * scale));
-      const h = Math.max(1, Math.round(img.height * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { reject(new Error("canvas")); return; }
-      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h); // fond blanc (PNG transparents)
-      ctx.drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL("image/jpeg", quality));
+      try {
+        const scale = Math.min(1, maxPx / Math.max(img.width || 1, img.height || 1));
+        const w = Math.max(1, Math.round((img.width || 1) * scale));
+        const h = Math.max(1, Math.round((img.height || 1) * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("canvas")); return; }
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h); // fond blanc (PNG transparents)
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      } catch (e) { reject(e instanceof Error ? e : new Error("canvas")); }
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("image")); };
-    img.src = url;
+    img.onerror = () => reject(new Error("decode"));
+    img.src = dataUrl;
   });
 }
 
@@ -344,17 +355,31 @@ function ManageProducts({ products, onChange }: { products: Product[]; onChange:
   const onPickPhoto = async (file: File | undefined) => {
     setPhotoErr("");
     if (!file) return;
-    if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) { setPhotoErr("Format accepté : JPG, PNG, WEBP ou GIF."); return; }
+    if (file.type && !/^image\//.test(file.type)) { setPhotoErr("Choisissez un fichier image."); return; }
     if (file.size > 15 * 1024 * 1024) { setPhotoErr("Photo trop lourde (max 15 Mo)."); return; }
+    let dataUrl = "";
     try {
-      // On redimensionne/compresse la photo dans le navigateur (max 1200 px,
-      // JPEG) : le fichier envoyé fait ~200 Ko au lieu de plusieurs Mo, ce qui
-      // évite les rejets de taille et allège la boutique.
-      const resized = await resizeImage(file, 1200, 0.82);
+      dataUrl = await readAsDataUrl(file);
+    } catch {
+      setPhotoErr("Impossible de lire ce fichier, réessayez.");
+      return;
+    }
+    try {
+      // On redimensionne/compresse la photo (max 1200 px, JPEG) : le fichier
+      // envoyé fait ~200 Ko au lieu de plusieurs Mo, ce qui évite les rejets
+      // de taille et allège la boutique.
+      const resized = await resizeDataUrl(dataUrl, 1200, 0.82);
       setPhoto({ data: resized, mime: "image/jpeg" });
       setRemovePhoto(false);
     } catch {
-      setPhotoErr("Impossible de lire cette image, réessayez avec une autre.");
+      // Compression impossible (format exotique / webview) : on envoie
+      // l'original s'il reste raisonnable (~2 Mo de data-URI), sinon on informe.
+      if (dataUrl.length <= 2_000_000) {
+        setPhoto({ data: dataUrl, mime: file.type || "image/jpeg" });
+        setRemovePhoto(false);
+      } else {
+        setPhotoErr("Cette photo n'a pas pu être compressée. Réessayez avec une photo plus légère ou une capture d'écran.");
+      }
     }
   };
 
