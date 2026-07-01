@@ -238,35 +238,52 @@ function Preavis() {
 // ════════════ TRANSACTION ════════════
 
 function HonorairesVente() {
-  const [prix, setPrix] = useState(""); const [taux, setTaux] = useState("5"); const [charge, setCharge] = useState<"vendeur" | "acq">("vendeur");
+  const [prix, setPrix] = useState("");
+  const [taux, setTaux] = useState("5");
+  const [base, setBase] = useState<"net" | "fai">("net"); // le montant saisi = net vendeur OU prix FAI
+  const [charge, setCharge] = useState<"vendeur" | "acq">("acq");
   const r = useMemo(() => {
-    const P = num(prix), tx = num(taux); if (!P) return null;
-    const hono = Math.round(P * tx / 100 * 100) / 100;
-    return charge === "vendeur"
-      ? { hono, net: P - hono, fai: P, lblNet: "Net vendeur", lblFai: "Prix FAI (affiché)" }
-      : { hono, net: P, fai: P + hono, lblNet: "Net vendeur", lblFai: "Prix FAI (affiché)" };
-  }, [prix, taux, charge]);
+    const M = num(prix), tx = num(taux); if (!M) return null;
+    let net: number, fai: number, hono: number;
+    if (base === "net") { net = M; hono = Math.round(net * tx / 100 * 100) / 100; fai = net + hono; }
+    else { fai = M; hono = Math.round(fai * tx / 100 * 100) / 100; net = fai - hono; }
+    // Frais de notaire : base = net vendeur si charge acquéreur (avantage acheteur),
+    // sinon prix FAI (honoraires inclus).
+    const notaireBase = charge === "acq" ? net : fai;
+    return { net, fai, hono, notaireBase };
+  }, [prix, taux, base, charge]);
+  const Toggle = <T extends string>(val: T, setter: (v: T) => void, opts: [T, string][]) => (
+    <div style={{ display: "flex", gap: 6 }}>
+      {opts.map(([k, l]) => (
+        <button key={k} onClick={() => setter(k)} style={{ flex: 1, padding: "9px 4px", fontSize: 12, fontWeight: 700, cursor: "pointer", borderRadius: 9, background: val === k ? GOLD : "#fff", color: val === k ? "#fff" : "#6b7280", border: `1px solid ${val === k ? GOLD : BORDER}` }}>{l}</button>
+      ))}
+    </div>
+  );
   return (
     <Card title="💼 Honoraires de vente">
-      <Field label={charge === "vendeur" ? "Prix de vente FAI (€)" : "Prix net vendeur (€)"}>
+      <Field label="Le montant saisi correspond au">
+        {Toggle(base, setBase, [["net", "Prix net vendeur"], ["fai", "Prix de vente FAI"]])}
+      </Field>
+      <Field label={base === "net" ? "Prix net vendeur (€)" : "Prix de vente FAI (€)"}>
         <input inputMode="decimal" value={prix} onChange={e => setPrix(e.target.value)} placeholder="200000" style={champ} />
       </Field>
       <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
         <Field label="Taux d'honoraires (%)"><input inputMode="decimal" value={taux} onChange={e => setTaux(e.target.value)} placeholder="5" style={champ} /></Field>
-        <Field label="À la charge de">
-          <div style={{ display: "flex", gap: 6 }}>
-            {([["vendeur", "Vendeur"], ["acq", "Acquéreur"]] as const).map(([k, l]) => (
-              <button key={k} onClick={() => setCharge(k)} style={{ flex: 1, padding: "9px 4px", fontSize: 12, fontWeight: 700, cursor: "pointer", borderRadius: 9, background: charge === k ? GOLD : "#fff", color: charge === k ? "#fff" : "#6b7280", border: `1px solid ${charge === k ? GOLD : BORDER}` }}>{l}</button>
-            ))}
-          </div>
+        <Field label="Honoraires à la charge de">
+          {Toggle(charge, setCharge, [["vendeur", "Vendeur"], ["acq", "Acquéreur"]])}
         </Field>
       </div>
       {r && <div style={{ marginTop: 14 }}>
-        <Row label="Honoraires" value={euro(r.hono)} color={GOLD} />
-        <Row label={r.lblNet} value={euro(r.net)} />
-        <Highlight label={r.lblFai} value={euro(r.fai)} color={DARK} />
+        <Row label={`Honoraires (${taux || "0"}% du ${base === "net" ? "net vendeur" : "prix FAI"})`} value={euro(r.hono)} color={GOLD} />
+        <Row label="Prix net vendeur" value={euro(r.net)} />
+        <Highlight label="Prix de vente FAI (affiché)" value={euro(r.fai)} color={DARK} />
+        <Row label={`Base frais de notaire (${charge === "acq" ? "net vendeur" : "prix FAI"})`} value={euro(r.notaireBase)} />
       </div>}
-      <Note>Le champ « prix » correspond au prix de vente. Selon qui paie les honoraires, le net vendeur / prix affiché s'ajustent.</Note>
+      <Note>
+        {charge === "acq"
+          ? "Charge acquéreur : l'acheteur paie le prix FAI ; les frais de notaire sont calculés sur le prix net vendeur (hors honoraires) — c'est l'avantage du charge acquéreur."
+          : "Charge vendeur : le vendeur perçoit le net ; les frais de notaire de l'acquéreur sont calculés sur le prix FAI (honoraires inclus)."}
+      </Note>
     </Card>
   );
 }
