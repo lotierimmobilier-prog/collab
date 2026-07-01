@@ -494,10 +494,13 @@ export default function MailBoard() {
   /* ── Label / thread ops ─────────────────────────────────── */
   function applyLabel(threadId: string, labelId: string) {
     setMessages(prev => { const u = prev.map(m => m.threadId === threadId && !m.labels.includes(labelId) ? { ...m, labels: [...m.labels, labelId] } : m); rebuildThreads(u); return u; });
+    // Refléter aussi sur la conversation ouverte (sinon le bandeau ne bouge pas).
+    setSelectedThread(prev => prev?.id === threadId ? { ...prev, messages: prev.messages.map(m => m.labels.includes(labelId) ? m : { ...m, labels: [...m.labels, labelId] }) } : prev);
     fetch("/api/mail/messages", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threadId, addLabels: [labelId] }) }).catch(() => {});
   }
   function removeLabel(threadId: string, labelId: string) {
     setMessages(prev => { const u = prev.map(m => m.threadId === threadId ? { ...m, labels: m.labels.filter(l => l !== labelId) } : m); rebuildThreads(u); return u; });
+    setSelectedThread(prev => prev?.id === threadId ? { ...prev, messages: prev.messages.map(m => ({ ...m, labels: m.labels.filter(l => l !== labelId) })) } : prev);
     fetch("/api/mail/messages", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threadId, removeLabels: [labelId] }) }).catch(() => {});
   }
   function setThreadLabels(threadId: string, newLabels: string[]) {
