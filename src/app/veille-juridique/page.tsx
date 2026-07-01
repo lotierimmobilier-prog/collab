@@ -154,9 +154,14 @@ export default function VeilleJuridiquePage() {
                 </div>
 
                 {isOpen && (
-                  <div style={{ padding: "0 16px 16px" }}>
-                    <a href={f.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 11, color: BLUE, textDecoration: "none", wordBreak: "break-all" }}>{f.url}</a>
+                  <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${BORDER}` }}>
+                    <a href={f.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ display: "inline-block", marginTop: 12, fontSize: 11, color: BLUE, textDecoration: "none", wordBreak: "break-all" }}>{f.url}</a>
                     {f.lastError && <div style={{ marginTop: 10, fontSize: 12, color: "#B42318", background: "#FEF3F2", border: "1px solid #FECDCA", borderRadius: 8, padding: "8px 10px" }}>⚠️ {f.lastError}</div>}
+                    {!f.analysis && !f.lastError && (!f.items || f.items.length === 0) && (
+                      <div style={{ marginTop: 12, fontSize: 12.5, color: "#9ca3af" }}>
+                        {refreshing === f.id ? "Analyse en cours…" : "Aucune analyse pour le moment. Cliquez sur « 🔄 Analyser » pour lancer la veille."}
+                      </div>
+                    )}
                     {f.analysis && (
                       <div style={{ marginTop: 12, background: "#F0F7FF", border: "1px solid #BFDBFE", borderRadius: 10, padding: "12px 14px" }}>
                         <div style={{ fontSize: 11, fontWeight: 800, color: "#1D4ED8", marginBottom: 6 }}>✦ Analyse d&apos;Auguste</div>
