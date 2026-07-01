@@ -15,6 +15,14 @@ const RED         = "#DC2626";
 const COLLAPSED_W = 52;
 const EXPANDED_W  = 230;
 
+// Raccourcis rapides affichés en haut du menu, sur tout le site.
+const SHORTCUTS = [
+  { icon: "✓",  label: "Tâches",             href: "/taches" },
+  { icon: "▦",  label: "Agenda / Planning",  href: "/planning" },
+  { icon: "@",  label: "Messagerie email",   href: "/messagerie" },
+  { icon: "💬", label: "Messagerie interne", href: "/messagerie-interne" },
+];
+
 interface NavItem {
   id: string; label: string; icon: string; href: string;
   group: string; subGroup?: string; indent?: boolean; badge?: number;
@@ -225,6 +233,16 @@ export default function Sidebar({ active }: { active: string }) {
                   style={{ background: "none", border: "none", fontSize: 22, color: LABEL_COLOR, cursor: "pointer", lineHeight: 1 }}>×</button>
               </div>
 
+              {/* Raccourcis rapides */}
+              <div style={{ display: "flex", gap: 6, padding: "10px 16px", borderBottom: `1px solid ${BORDER}` }}>
+                {SHORTCUTS.map(s => (
+                  <Link key={s.href} href={s.href} title={s.label} onClick={() => setMobileOpen(false)}
+                    style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, border: `1px solid ${BORDER}`, borderRadius: 9, padding: "8px 0", fontSize: 15, textDecoration: "none", color: "#78726B", background: "#fff" }}>
+                    <span>{s.icon}</span>
+                  </Link>
+                ))}
+              </div>
+
               {/* Nav items */}
               {groups.map(group => {
                 const gItems = visibleNav.filter(n => n.group === group);
@@ -364,6 +382,23 @@ export default function Sidebar({ active }: { active: string }) {
             onMouseLeave={e => (e.currentTarget.style.background = "none")}
           >{isCollapsed ? "›" : "‹"}</button>
         )}
+      </div>
+
+      {/* Raccourcis rapides : présents sur tout le site (Tâches, Agenda,
+          Mail, Messagerie interne). */}
+      <div style={{
+        display: "flex", flexDirection: isCollapsed ? "column" : "row",
+        alignItems: "center", justifyContent: "center", gap: 6,
+        padding: isCollapsed ? "10px 0" : "10px 14px", borderBottom: `1px solid ${BORDER}`,
+      }}>
+        {SHORTCUTS.map(s => (
+          <Link key={s.href} href={s.href} title={s.label}
+            style={{
+              flex: isCollapsed ? "none" : 1, display: "flex", alignItems: "center", justifyContent: "center",
+              border: `1px solid ${BORDER}`, borderRadius: 9, padding: "7px 0", fontSize: 16,
+              textDecoration: "none", color: "#78726B", background: "#fff",
+            }}>{s.icon}</Link>
+        ))}
       </div>
 
       {/* Navigation */}

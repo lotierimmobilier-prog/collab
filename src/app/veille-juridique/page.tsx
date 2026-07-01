@@ -26,6 +26,14 @@ function ago(iso: string | null): string {
   return `il y a ${Math.floor(h / 24)} j`;
 }
 
+// Date d'un article (si le flux la fournit) au format court fr.
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const t = Date.parse(iso);
+  if (!t) return "";
+  return new Date(t).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 export default function VeilleJuridiquePage() {
   const [families, setFamilies] = useState<Family[]>([]);
   const [feeds, setFeeds] = useState<Feed[]>([]);
@@ -171,12 +179,19 @@ export default function VeilleJuridiquePage() {
                     {f.items && f.items.length > 0 && (
                       <div style={{ marginTop: 12 }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", marginBottom: 5 }}>📰 Dernières publications</div>
-                        <ul style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 3 }}>
-                          {f.items.filter(itemHit).slice(0, ql ? 20 : 8).map((it, i) => (
+                        <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+                          {f.items.filter(itemHit).slice(0, ql ? 20 : 8).map((it, i) => {
+                            const d = fmtDate(it.date);
+                            return (
                             <li key={i} style={{ fontSize: 12, lineHeight: 1.5 }}>
-                              <a href={it.link || f.url} target="_blank" rel="noreferrer" style={{ color: "#374151", textDecoration: "none" }}>{it.title}</a>
+                              <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+                                <a href={it.link || f.url} target="_blank" rel="noreferrer" style={{ color: "#374151", textDecoration: "none", fontWeight: 600 }}>{it.title}</a>
+                                {d && <span style={{ fontSize: 10.5, color: "#9ca3af", flexShrink: 0 }}>🗓 {d}</span>}
+                              </div>
+                              {it.link && <a href={it.link} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: BLUE, textDecoration: "none" }}>Lire l&apos;article →</a>}
                             </li>
-                          ))}
+                            );
+                          })}
                         </ul>
                       </div>
                     )}
