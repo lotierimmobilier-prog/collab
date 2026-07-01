@@ -13,7 +13,7 @@ const inp: React.CSSProperties = { width: "100%", fontSize: 13, padding: "7px 9p
 const grid = (n: number): React.CSSProperties => ({ display: "grid", gridTemplateColumns: `repeat(${n}, 1fr)`, gap: 10 });
 
 interface Data {
-  civilite: "M" | "Mme" | "MM"; prenom1: string; nom1: string; email1: string;
+  civilite: "M" | "Mme" | "MM" | "asso" | "societe"; prenom1: string; nom1: string; email1: string;
   prenom2: string; nom2: string; email2: string;
   agentPrenom: string; agentNom: string; agentTel: string; agentEmail: string;
   adresse: string; etage: string; numPorte: string;
@@ -110,6 +110,7 @@ export default function MailBienvenuePage() {
               <div><label style={lbl}>Civilité</label>
                 <select value={d.civilite} onChange={e => set("civilite", e.target.value)} style={inp}>
                   <option value="M">Monsieur</option><option value="Mme">Madame</option><option value="MM">Monsieur et Madame</option>
+                  <option value="asso">Association</option><option value="societe">Société</option>
                 </select></div>
               <div><label style={lbl}>Prénom</label><input value={d.prenom1} onChange={e => set("prenom1", e.target.value)} style={inp} /></div>
               <div><label style={lbl}>Nom</label><input value={d.nom1} onChange={e => set("nom1", e.target.value)} style={inp} /></div>

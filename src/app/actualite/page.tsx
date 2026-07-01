@@ -70,7 +70,7 @@ export default function ActualitePage() {
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#FAF8F5" }}>
       <Sidebar active="actualite" />
-      <main style={{ flex: 1, padding: "28px 32px", maxWidth: 900, margin: "0 auto", width: "100%" }}>
+      <main style={{ flex: 1, padding: "28px 32px", maxWidth: 1120, margin: "0 auto", width: "100%" }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: DARK, margin: 0 }}>📰 Actualité immobilière</h1>
         <p style={{ color: "#6b7280", fontSize: 13, marginTop: 4, marginBottom: 18 }}>
           Les articles des sites et flux RSS référencés, résumés et classés par Auguste (gestion, syndic, transaction, divers).
@@ -128,20 +128,26 @@ export default function ActualitePage() {
             {sources.length === 0 ? (canManage ? "Aucun site référencé. Ajoutez-en un ci-dessus." : "Aucune actualité pour le moment.") : "Aucun article pour ce filtre."}
           </p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(270px, 1fr))", gap: 14 }}>
             {rows.slice(0, 120).map((r, i) => (
               <a key={i} href={r.link || "#"} target="_blank" rel="noreferrer"
-                style={{ display: "block", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "12px 14px", textDecoration: "none", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 10.5, fontWeight: 800, color: "#fff", background: catColor(r.category), borderRadius: 6, padding: "2px 8px" }}>{catLabel(r.category)}</span>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: GOLD }}>{r.sourceLabel}</span>
-                    {r.ts > 0 && <span style={{ fontSize: 11, color: "#9ca3af" }}>🗓 {new Date(r.ts).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}</span>}
+                style={{ display: "flex", flexDirection: "column", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden", textDecoration: "none", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", transition: "transform .15s, box-shadow .15s" }}
+                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 8px 22px rgba(0,0,0,0.10)"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.05)"; }}>
+                {/* Bandeau couleur de sujet */}
+                <div style={{ height: 5, background: catColor(r.category) }} />
+                <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", flex: 1 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: catColor(r.category), borderRadius: 6, padding: "3px 9px", textTransform: "uppercase", letterSpacing: ".03em" }}>{catLabel(r.category)}</span>
+                    {r.ts > 0 && <span style={{ fontSize: 11, color: "#9ca3af", flexShrink: 0 }}>{new Date(r.ts).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}</span>}
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: DARK, lineHeight: 1.35, marginBottom: 8, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{r.title}</div>
+                  {r.summary && <div style={{ fontSize: 12.5, color: "#6b7280", lineHeight: 1.55, display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{r.summary}</div>}
+                  <div style={{ marginTop: "auto", paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.sourceLabel}</span>
+                    <span style={{ fontSize: 11.5, color: BLUE, fontWeight: 600, flexShrink: 0 }}>Lire →</span>
                   </div>
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: DARK, marginBottom: 3 }}>{r.title}</div>
-                {r.summary && <div style={{ fontSize: 12.5, color: "#6b7280", lineHeight: 1.5 }}>{r.summary}</div>}
-                {r.link && <div style={{ fontSize: 11, color: BLUE, marginTop: 4 }}>Lire l&apos;article →</div>}
               </a>
             ))}
           </div>
