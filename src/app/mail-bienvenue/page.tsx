@@ -58,6 +58,7 @@ export default function MailBienvenuePage() {
     return { loyer, charges, hono, depot, base, jm, jo, pro, total: pro + depot + hono };
   };
   const a = nums();
+  const isEntity = d.civilite === "asso" || d.civilite === "societe";
 
   async function onFiles(list: FileList | null) {
     if (!list) return;
@@ -68,10 +69,18 @@ export default function MailBienvenuePage() {
     }
   }
 
-  const payload = useCallback(() => ({
-    data: { ...d, loyer: parseFloat(d.loyer) || 0, charges: parseFloat(d.charges) || 0, hono: parseFloat(d.hono) || 0, depot: parseFloat(d.depot) || 0, prenom2: second ? d.prenom2 : "", nom2: second ? d.nom2 : "", email2: second ? d.email2 : "" },
-    attachments: files,
-  }), [d, second, files]);
+  const payload = useCallback(() => {
+    const entity = d.civilite === "asso" || d.civilite === "societe";
+    return {
+      data: {
+        ...d, loyer: parseFloat(d.loyer) || 0, charges: parseFloat(d.charges) || 0, hono: parseFloat(d.hono) || 0, depot: parseFloat(d.depot) || 0,
+        // Personne morale : un seul champ « nom », pas de prénom ni 2ème locataire.
+        prenom1: entity ? "" : d.prenom1,
+        prenom2: entity || !second ? "" : d.prenom2, nom2: entity || !second ? "" : d.nom2, email2: entity || !second ? "" : d.email2,
+      },
+      attachments: files,
+    };
+  }, [d, second, files]);
 
   async function doPreview() {
     setBusy(true);
@@ -105,18 +114,18 @@ export default function MailBienvenuePage() {
           <p style={{ color: "#6b7280", fontSize: 13, marginTop: 0, marginBottom: 18 }}>Remplissez le dossier : le locataire reçoit un mail de bienvenue (envoyé depuis collab@, copie à gestion@ et à vous, RIB en PDF joint).</p>
 
           <div style={card}>
-            <div style={h2}>Locataire(s)</div>
-            <div style={grid(4)}>
+            <div style={h2}>{isEntity ? "Locataire (personne morale)" : "Locataire(s)"}</div>
+            <div style={grid(isEntity ? 3 : 4)}>
               <div><label style={lbl}>Civilité</label>
                 <select value={d.civilite} onChange={e => set("civilite", e.target.value)} style={inp}>
                   <option value="M">Monsieur</option><option value="Mme">Madame</option><option value="MM">Monsieur et Madame</option>
                   <option value="asso">Association</option><option value="societe">Société</option>
                 </select></div>
-              <div><label style={lbl}>Prénom</label><input value={d.prenom1} onChange={e => set("prenom1", e.target.value)} style={inp} /></div>
-              <div><label style={lbl}>Nom</label><input value={d.nom1} onChange={e => set("nom1", e.target.value)} style={inp} /></div>
+              {!isEntity && <div><label style={lbl}>Prénom</label><input value={d.prenom1} onChange={e => set("prenom1", e.target.value)} style={inp} /></div>}
+              <div><label style={lbl}>{isEntity ? (d.civilite === "asso" ? "Nom de l'association" : "Dénomination sociale") : "Nom"}</label><input value={d.nom1} onChange={e => set("nom1", e.target.value)} style={inp} /></div>
               <div><label style={lbl}>Email</label><input type="email" value={d.email1} onChange={e => set("email1", e.target.value)} style={inp} /></div>
             </div>
-            {second && (
+            {!isEntity && second && (
               <div style={{ ...grid(4), marginTop: 10 }}>
                 <div style={{ alignSelf: "end", color: GOLD, fontWeight: 600, fontSize: 12 }}>2ème locataire</div>
                 <div><label style={lbl}>Prénom</label><input value={d.prenom2} onChange={e => set("prenom2", e.target.value)} style={inp} /></div>
@@ -124,7 +133,7 @@ export default function MailBienvenuePage() {
                 <div><label style={lbl}>Email</label><input type="email" value={d.email2} onChange={e => set("email2", e.target.value)} style={inp} /></div>
               </div>
             )}
-            <button onClick={() => setSecond(s => !s)} style={{ marginTop: 10, background: "none", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "5px 10px", fontSize: 12, color: NAVY, cursor: "pointer" }}>{second ? "− Retirer le 2ème locataire" : "+ 2ème locataire"}</button>
+            {!isEntity && <button onClick={() => setSecond(s => !s)} style={{ marginTop: 10, background: "none", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "5px 10px", fontSize: 12, color: NAVY, cursor: "pointer" }}>{second ? "− Retirer le 2ème locataire" : "+ 2ème locataire"}</button>}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
