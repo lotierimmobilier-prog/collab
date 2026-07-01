@@ -348,6 +348,29 @@ function PointeTab() {
   const [busy, setBusy] = useState<string | null>(null);
   const [savedCfg, setSavedCfg] = useState(false);
   const gestRef = useRef<HTMLInputElement>(null); const syndRef = useRef<HTMLInputElement>(null);
+  // Envoi par mail (collab@) d'une ou plusieurs pointes.
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [rMode, setRMode] = useState<"user" | "email">("user");
+  const [rUser, setRUser] = useState(""); const [rEmail, setREmail] = useState("");
+  const [subject, setSubject] = useState("Pointe de trésorerie — Lotier Immobilier");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendMsg, setSendMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const toggleSel = (id: string) => setSel(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  async function sendPointes() {
+    if (!sel.size) { setSendMsg({ ok: false, text: "Sélectionnez au moins une pointe (case à cocher)." }); return; }
+    if (rMode === "user" && !rUser) { setSendMsg({ ok: false, text: "Choisissez l'utilisateur destinataire." }); return; }
+    if (rMode === "email" && !rEmail.trim()) { setSendMsg({ ok: false, text: "Saisissez une adresse email." }); return; }
+    setSending(true); setSendMsg(null);
+    try {
+      const r = await fetch("/api/comptabilite/pointe/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pointeIds: [...sel], recipientUserId: rMode === "user" ? rUser : undefined, recipientEmail: rMode === "email" ? rEmail.trim() : undefined, subject, message }) });
+      const d = await r.json();
+      if (r.ok && d.ok) { setSendMsg({ ok: true, text: `Envoyé à ${d.to} (${d.count} pièce·s jointe·s).` }); setSel(new Set()); setMessage(""); }
+      else setSendMsg({ ok: false, text: d.error || "Envoi échoué." });
+    } catch { setSendMsg({ ok: false, text: "Erreur réseau." }); }
+    setSending(false);
+  }
 
   const load = useCallback(async () => {
     const d = await fetch("/api/comptabilite/pointe").then(r => r.json()).catch(() => ({}));
@@ -430,6 +453,7 @@ function PointeTab() {
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {pointes.map(p => (
               <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", border: `1px solid ${p.exceeds ? "#FECDCA" : BORDER}`, background: p.exceeds ? "#FEF3F2" : "#fff", borderRadius: 10 }}>
+                <input type="checkbox" checked={sel.has(p.id)} onChange={() => toggleSel(p.id)} title="Sélectionner pour l'envoi" style={{ width: 16, height: 16, cursor: "pointer", flexShrink: 0 }} />
                 <span style={{ fontSize: 11, fontWeight: 700, color: p.service === "syndic" ? "#8A6D44" : GOLD, textTransform: "uppercase", width: 60 }}>{p.service}</span>
                 <a href={`/api/comptabilite/pointe/${p.id}`} target="_blank" rel="noreferrer" style={{ flex: 1, minWidth: 0, fontSize: 13, color: DARK, fontWeight: 600, textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📕 {p.fileName}</a>
                 <span style={{ fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap" }}>{new Date(p.createdAt).toLocaleDateString("fr-FR")}</span>
@@ -442,6 +466,32 @@ function PointeTab() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Envoi par mail (collab@) */}
+      <div style={card}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: DARK, marginBottom: 4 }}>✉️ Envoyer les pointes par mail</div>
+        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 12 }}>Cochez les pointes à joindre ci-dessus. L&apos;envoi part de <strong>collab@lotier-immobilier.com</strong>, PDF joints, avec votre courrier d&apos;accompagnement. {sel.size > 0 && <strong>{sel.size} pointe·s sélectionnée·s.</strong>}</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 12, alignItems: "end", marginBottom: 12 }}>
+          <L label="Destinataire">
+            <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+              {(["user", "email"] as const).map(m => (
+                <button key={m} onClick={() => setRMode(m)} style={{ flex: 1, padding: "7px 4px", fontSize: 12, fontWeight: 700, cursor: "pointer", borderRadius: 8, background: rMode === m ? GOLD : "#fff", color: rMode === m ? "#fff" : "#6b7280", border: `1px solid ${rMode === m ? GOLD : BORDER}` }}>{m === "user" ? "Utilisateur" : "Adresse email"}</button>
+              ))}
+            </div>
+            {rMode === "user"
+              ? <select value={rUser} onChange={e => setRUser(e.target.value)} style={{ ...inp, cursor: "pointer" }}><option value="">— Choisir —</option>{users.map(u => <option key={u.id} value={u.id}>{u.prenom} {u.nom}</option>)}</select>
+              : <input value={rEmail} onChange={e => setREmail(e.target.value)} placeholder="destinataire@email.com" style={inp} />}
+          </L>
+          <L label="Objet"><input value={subject} onChange={e => setSubject(e.target.value)} style={inp} /></L>
+        </div>
+        <L label="Courrier d'accompagnement">
+          <textarea value={message} onChange={e => setMessage(e.target.value)} rows={4} placeholder="Bonjour,&#10;Veuillez trouver ci-joint la pointe de trésorerie du moment…" style={{ ...inp, resize: "vertical" }} />
+        </L>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12 }}>
+          <button onClick={sendPointes} disabled={sending} style={{ background: "#2F855A", color: "#fff", border: "none", borderRadius: 9, padding: "10px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{sending ? "Envoi…" : "✉️ Envoyer"}</button>
+          {sendMsg && <span style={{ fontSize: 13, fontWeight: 600, color: sendMsg.ok ? "#2F855A" : "#B42318" }}>{sendMsg.ok ? "✓ " : "⚠️ "}{sendMsg.text}</span>}
+        </div>
       </div>
     </div>
   );
