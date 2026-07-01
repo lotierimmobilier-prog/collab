@@ -303,6 +303,7 @@ function ManageProducts({ products, onChange }: { products: Product[]; onChange:
   const [existingPhoto, setExistingPhoto] = useState<string | null>(null);
   const [removePhoto, setRemovePhoto] = useState(false);
   const [photoErr, setPhotoErr] = useState("");
+  const [saveErr, setSaveErr] = useState("");
 
   const resetPhoto = () => { setPhoto(null); setExistingPhoto(null); setRemovePhoto(false); setPhotoErr(""); };
   const startNew = () => { setEditing("new"); setForm({ ...BLANK }); resetPhoto(); };
@@ -326,9 +327,15 @@ function ManageProducts({ products, onChange }: { products: Product[]; onChange:
     reader.readAsDataURL(file);
   };
 
+  const errText = async (r: Response | null, fallback: string) => {
+    if (!r) return "Réseau indisponible.";
+    const j = await r.json().catch(() => null);
+    return (j && j.error) || fallback;
+  };
+
   const save = async () => {
     if (form.name.trim().length < 2 || saving) return;
-    setSaving(true);
+    setSaving(true); setSaveErr("");
     // Le champ « image » texte (emoji/URL) n'est envoyé que si aucune photo
     // n'est en jeu : la photo uploadée pilote elle-même la référence image.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -341,14 +348,16 @@ function ManageProducts({ products, onChange }: { products: Product[]; onChange:
     if (editing === "new") {
       const res = await fetch("/api/shop/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).catch(() => null);
       const j = res?.ok ? await res.json().catch(() => null) : null;
-      if (!j?.id) { setSaving(false); return; }
+      if (!j?.id) { setSaving(false); setSaveErr(await errText(res, "Création de l'article impossible.")); return; }
       id = j.id;
     } else {
-      await fetch(`/api/shop/products/${editing}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).catch(() => null);
+      const res = await fetch(`/api/shop/products/${editing}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).catch(() => null);
+      if (!res?.ok) { setSaving(false); setSaveErr(await errText(res, "Enregistrement impossible.")); return; }
     }
     // Photo : téléversement du nouveau fichier, ou suppression demandée.
     if (photo && id) {
-      await fetch(`/api/shop/products/${id}/image`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: photo.data, mime: photo.mime }) }).catch(() => {});
+      const res = await fetch(`/api/shop/products/${id}/image`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: photo.data, mime: photo.mime }) }).catch(() => null);
+      if (!res?.ok) { setSaving(false); setSaveErr("Article enregistré mais la photo n'a pas pu être téléversée : " + await errText(res, "erreur serveur.")); onChange(); return; }
     } else if (removePhoto && existingPhoto && id) {
       await fetch(`/api/shop/products/${id}/image`, { method: "DELETE" }).catch(() => {});
     }
@@ -414,6 +423,7 @@ function ManageProducts({ products, onChange }: { products: Product[]; onChange:
           <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13, color: DARK, cursor: "pointer" }}>
             <input type="checkbox" checked={form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} /> Visible dans la boutique
           </label>
+          {saveErr && <div style={{ background: "#FEE2E2", border: "1px solid #FCA5A5", color: RED, borderRadius: 9, padding: "9px 12px", fontSize: 12.5, fontWeight: 600, marginTop: 12 }}>{saveErr}</div>}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
             <button onClick={cancel} style={{ background: "#fff", color: "#6b7280", border: `1px solid ${BORDER}`, borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Annuler</button>
             <button onClick={save} disabled={form.name.trim().length < 2 || saving} style={{ background: form.name.trim().length < 2 ? "#d1d5db" : GOLD, color: "#fff", border: "none", borderRadius: 9, padding: "9px 18px", fontSize: 13, fontWeight: 700, cursor: form.name.trim().length < 2 ? "default" : "pointer" }}>{saving ? "Enregistrement…" : "Enregistrer"}</button>

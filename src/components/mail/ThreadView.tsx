@@ -561,16 +561,20 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
 
   function reSubject() { return /^re\s*:/i.test(thread.subject) ? thread.subject : `Re: ${thread.subject}`; }
 
-  // ── Répondre : à l'expéditeur, corps vide (l'historique reste visible au-dessus) ──
+  // Adresse de réponse : Reply-To si présent (ex. pointe → jerome.bouba@),
+  // sinon l'expéditeur. Sert à tous les boutons « Répondre ».
+  function replyToAddress() { return lastMsg.replyTo || lastMsg.from.email; }
+
+  // ── Répondre : à l'adresse de réponse, corps vide (l'historique reste visible au-dessus) ──
   function reply() {
     if (!onForward) { setShowReply(true); return; }
-    onForward({ to: lastMsg.from.email, subject: reSubject(), body: "", accountId: thread.accountId });
+    onForward({ to: replyToAddress(), subject: reSubject(), body: "", accountId: thread.accountId });
   }
 
   // ── Répondre à tous : expéditeur en destinataire + autres (To/Cc d'origine) en copie ──
   function replyAll() {
     const myEmail = (account?.email || "").toLowerCase();
-    const fromEmail = lastMsg.from.email;
+    const fromEmail = replyToAddress();
     const others = [...(lastMsg.to || []), ...(lastMsg.cc || [])]
       .map(r => r.email)
       .filter(Boolean)
