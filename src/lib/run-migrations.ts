@@ -71,6 +71,7 @@ const FILES = [
   "migrations_forum.sql",
   "migrations_actualite.sql",
   "migrations_annuaire_share.sql",
+  "migrations_welcome_mail.sql",
 ];
 
 export interface MigrationReport {
