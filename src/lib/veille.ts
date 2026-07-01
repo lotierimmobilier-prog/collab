@@ -1,5 +1,6 @@
-// Veille juridique : récupération et analyse de flux RSS/Atom.
-import { augusteText, normalizeError, MODELS } from "@/lib/auguste";
+// Veille juridique : récupération et analyse de flux RSS/Atom, OU extraction
+// des articles d'un site web classique via Auguste.
+import { augusteText, augusteJson, normalizeError, MODELS } from "@/lib/auguste";
 
 export interface FeedItem { title: string; link: string; date: string; summary: string }
 
@@ -17,28 +18,68 @@ function tag(block: string, name: string): string {
   return m ? decode(m[1]) : "";
 }
 
-// Récupère et parse un flux RSS 2.0 ou Atom. Renvoie les entrées les plus
-// récentes (max 15).
+// Récupère et parse un flux RSS 2.0 ou Atom (max 15). Si l'URL n'est PAS un
+// flux mais une page web classique, on bascule sur l'extraction des articles
+// par Auguste.
 export async function fetchFeed(url: string): Promise<FeedItem[]> {
   const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), 15000);
+  const to = setTimeout(() => ctrl.abort(), 20000);
   try {
-    const resp = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "Collab-Veille/1.0", Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*" } });
+    const resp = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "Collab-Veille/1.0", Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html, */*" } });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const xml = await resp.text();
-    const blocks = xml.match(/<item[\s\S]*?<\/item>/gi) || xml.match(/<entry[\s\S]*?<\/entry>/gi) || [];
-    const items: FeedItem[] = blocks.slice(0, 15).map(b => {
-      // Atom : le lien est dans un attribut href
-      let link = tag(b, "link");
-      if (!link) { const lm = b.match(/<link[^>]*href=["']([^"']+)["']/i); if (lm) link = lm[1]; }
-      const date = tag(b, "pubDate") || tag(b, "published") || tag(b, "updated") || tag(b, "dc:date");
-      const summary = (tag(b, "description") || tag(b, "summary") || tag(b, "content")).slice(0, 500);
-      return { title: tag(b, "title"), link, date, summary };
-    }).filter(i => i.title);
-    return items;
+    const body = await resp.text();
+    const blocks = body.match(/<item[\s\S]*?<\/item>/gi) || body.match(/<entry[\s\S]*?<\/entry>/gi) || [];
+    if (blocks.length) {
+      return blocks.slice(0, 15).map(b => {
+        let link = tag(b, "link");
+        if (!link) { const lm = b.match(/<link[^>]*href=["']([^"']+)["']/i); if (lm) link = lm[1]; }
+        const date = tag(b, "pubDate") || tag(b, "published") || tag(b, "updated") || tag(b, "dc:date");
+        const summary = (tag(b, "description") || tag(b, "summary") || tag(b, "content")).slice(0, 500);
+        return { title: tag(b, "title"), link, date, summary };
+      }).filter(i => i.title);
+    }
+    // Pas un flux RSS/Atom → page web : extraction des articles par Auguste.
+    return await extractSiteArticles(url, body);
   } finally {
     clearTimeout(to);
   }
+}
+
+// Extrait les liens (texte + URL absolue) d'une page HTML.
+function extractLinks(baseUrl: string, html: string): { text: string; href: string }[] {
+  const out: { text: string; href: string }[] = [];
+  const seen = new Set<string>();
+  const re = /<a\b[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) && out.length < 120) {
+    const text = decode(m[2]);
+    if (text.length < 18 || text.length > 200) continue;      // titres plausibles
+    let href = m[1];
+    try { href = new URL(href, baseUrl).href; } catch { continue; }
+    if (!/^https?:/i.test(href) || seen.has(href)) continue;
+    seen.add(href);
+    out.push({ text, href });
+  }
+  return out;
+}
+
+// Demande à Auguste de sélectionner les vrais articles/actualités parmi les
+// liens d'une page et d'en rédiger un résumé court.
+export async function extractSiteArticles(url: string, html: string): Promise<FeedItem[]> {
+  const links = extractLinks(url, html);
+  if (!links.length) return [];
+  const list = links.slice(0, 80).map((l, i) => `${i}. ${l.text} → ${l.href}`).join("\n");
+  const arr = await augusteJson<{ title: string; summary: string; link: string }[]>({
+    model: MODELS.smart,
+    max_tokens: 1500,
+    system: "Tu extrais les actualités d'une page web pour une agence immobilière. Réponds UNIQUEMENT en JSON.",
+    messages: [{ role: "user", content: `Voici les liens de la page ${url} (format « index. texte → url ») :\n\n${list}\n\nSélectionne UNIQUEMENT les liens qui sont de vrais articles / actualités (pas la navigation, les mentions légales, les catégories, les réseaux sociaux). Pour chacun, donne un titre propre et un résumé court (1 phrase) déduit du titre. Réponds par un tableau JSON (max 12), du plus pertinent au moins pertinent :\n[{"title":"...","summary":"...","link":"url exacte de la liste"}]` }],
+  }, { fallback: [] });
+  const byHref = new Map(links.map(l => [l.href, l.text]));
+  return (Array.isArray(arr) ? arr : [])
+    .filter(a => a && a.link && byHref.has(a.link))
+    .slice(0, 12)
+    .map(a => ({ title: a.title || byHref.get(a.link) || "", link: a.link, date: "", summary: (a.summary || "").slice(0, 300) }));
 }
 
 // Analyse d'un flux par Auguste : synthèse orientée agence immobilière.
