@@ -74,6 +74,7 @@ const FILES = [
   "migrations_email_replyto.sql",
   "migrations_annuaire_share.sql",
   "migrations_welcome_mail.sql",
+  "migrations_planning_parrainage.sql",
 ];
 
 export interface MigrationReport {

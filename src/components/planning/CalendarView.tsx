@@ -89,15 +89,18 @@ function EventBlock({ event, onSelectEvent, style }: {
   const endStr   = hasTime ? fmt24(e) : "";
   const h = hasTime ? heightPx(s, e) : HOUR_H;
   const duration = (e.getTime() - s.getTime()) / 60000; // minutes
+  // Créneau parrainage non encore validé par les deux → contour pointillé.
+  const pending = !!event.parrainage && (event.approvedBy?.length ?? 0) < 2;
 
   return (
     <div
       onClick={ev => { ev.stopPropagation(); onSelectEvent(event); }}
       style={{
-        background: event.color,
+        background: pending ? event.color + "55" : event.color,
         borderLeft: `3px solid ${event.color}`,
-        backgroundColor: event.color + "CC",
-        color: "#fff",
+        backgroundColor: pending ? event.color + "40" : event.color + "CC",
+        border: pending ? `1.5px dashed ${event.color}` : undefined,
+        color: pending ? "#1f2937" : "#fff",
         borderRadius: 5,
         padding: h > 30 ? "3px 6px" : "1px 5px",
         boxSizing: "border-box",
@@ -108,7 +111,7 @@ function EventBlock({ event, onSelectEvent, style }: {
       }}
     >
       <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.3, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
-        {event.title}
+        {event.parrainage ? (pending ? "⏳ " : "🤝 ") : ""}{event.title}
       </div>
       {startStr && duration > 30 && (
         <div style={{ fontSize: 10, opacity: 0.92, marginTop: 1 }}>
