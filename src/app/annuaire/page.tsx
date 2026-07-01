@@ -23,6 +23,8 @@ const contactName = (c: Contact) => c.raisonSociale || [c.prenom, c.nom].filter(
 export default function AnnuairePage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.roleId === "admin";
+  const isSuper = (session?.user as { superAdmin?: boolean } | undefined)?.superAdmin === true;
+  const [showShare, setShowShare] = useState(false);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [categories, setCategories] = useState<ContactCategory[]>(DEFAULT_CONTACT_CATEGORIES);
@@ -162,6 +164,12 @@ export default function AnnuairePage() {
                 🏷 Catégories
               </button>
             )}
+            {isSuper && (
+              <button onClick={() => setShowShare(true)} title="Partager mon annuaire avec certains utilisateurs"
+                style={{ background: "#fff", color: "#374151", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                🔑 Partager
+              </button>
+            )}
             <button onClick={() => setShowAdd(true)} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>+ Ajouter</button>
           </div>
           {!isAdmin && session?.user && (
@@ -222,6 +230,7 @@ export default function AnnuairePage() {
 
       {showAdd && <AddContactModal categories={categories} onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />}
       {showCats && <CategoryManagerModal categories={categories} onClose={() => setShowCats(false)} onChange={setCategories} />}
+      {showShare && <ShareAnnuaireModal onClose={() => setShowShare(false)} />}
       {taskFor && <TaskFromContactModal contact={taskFor} onClose={() => setTaskFor(null)} />}
       {rdvFor  && <RdvFromContactModal  contact={rdvFor}  onClose={() => setRdvFor(null)} />}
     </div>
@@ -330,6 +339,43 @@ function ModalShell({ title, onClose, children }: { title: string; onClose: () =
         <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 12 }}>{children}</div>
       </div>
     </div>
+  );
+}
+
+interface ShareUser { id: string; prenom: string; nom: string; email: string; roleId: string | null; shared: boolean }
+function ShareAnnuaireModal({ onClose }: { onClose: () => void }) {
+  const [users, setUsers] = useState<ShareUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    fetch("/api/annuaire/share").then(r => r.json()).then(d => { setUsers(d.users ?? []); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+  async function toggle(u: ShareUser) {
+    setUsers(prev => prev.map(x => x.id === u.id ? { ...x, shared: !x.shared } : x));
+    await fetch("/api/annuaire/share", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: u.id, share: !u.shared }) }).catch(() => {});
+  }
+  const ql = q.trim().toLowerCase();
+  const list = users.filter(u => !ql || `${u.prenom} ${u.nom} ${u.email}`.toLowerCase().includes(ql));
+  return (
+    <ModalShell title="🔑 Partager mon annuaire" onClose={onClose}>
+      <div style={{ fontSize: 12.5, color: "#6b7280" }}>Les utilisateurs cochés voient <strong>votre annuaire</strong> (celui du super admin) en plus du leur.</div>
+      <input value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher un utilisateur…" style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 11px", fontSize: 13, outline: "none" }} />
+      {loading ? <div style={{ color: "#9ca3af", fontSize: 13 }}>Chargement…</div> : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: "50vh", overflowY: "auto" }}>
+          {list.map(u => (
+            <label key={u.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: `1px solid ${BORDER}`, borderRadius: 9, cursor: "pointer", background: u.shared ? "#F7F0E6" : "#fff" }}>
+              <input type="checkbox" checked={u.shared} onChange={() => toggle(u)} style={{ width: 16, height: 16, cursor: "pointer" }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: DARK }}>{[u.prenom, u.nom].filter(Boolean).join(" ") || u.email}</div>
+                <div style={{ fontSize: 11, color: "#9ca3af" }}>{u.email}{u.roleId ? ` · ${u.roleId}` : ""}</div>
+              </div>
+              {u.shared && <span style={{ fontSize: 11, color: GOLD, fontWeight: 700 }}>partagé</span>}
+            </label>
+          ))}
+          {list.length === 0 && <div style={{ color: "#9ca3af", fontSize: 13, padding: 8 }}>Aucun utilisateur.</div>}
+        </div>
+      )}
+    </ModalShell>
   );
 }
 
