@@ -73,7 +73,7 @@ export default function BoiteAOutilsPage() {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 20, alignItems: "start" }}>
           {tab === "loc" && <><ProrataLoyer /><RevisionIRL /><HonorairesLocation /><DepotGarantie /><RegulCharges /><Preavis /></>}
-          {tab === "tx" && <><HonorairesVente /><Rendement /><Credit /><PrixM2 /></>}
+          {tab === "tx" && <><HonorairesVente /><CommissionAgent /><Rendement /><Credit /><PrixM2 /></>}
           {tab === "admin" && <><TVA /><Carrez /><CalculDates /></>}
           {tab === "calc" && <Calculatrice />}
         </div>
@@ -237,21 +237,21 @@ function Preavis() {
 
 // ════════════ TRANSACTION ════════════
 
-function HonorairesVente() {
-  const [prix, setPrix] = useState("");
-  const [taux, setTaux] = useState("5");
-  const [base, setBase] = useState<"net" | "fai">("net"); // le montant saisi = net vendeur OU prix FAI
-  const [charge, setCharge] = useState<"vendeur" | "acq">("acq");
+function CommissionAgent() {
+  const [hono, setHono] = useState("");
+  const [saisie, setSaisie] = useState<"ttc" | "ht">("ttc"); // le montant saisi est TTC ou HT
+  const [tva, setTva] = useState("20");
+  const [taux, setTaux] = useState("75");
+  const [base, setBase] = useState<"ht" | "ttc">("ht"); // base de commission selon le statut de l'agent
   const r = useMemo(() => {
-    const M = num(prix), tx = num(taux); if (!M) return null;
-    let net: number, fai: number, hono: number;
-    if (base === "net") { net = M; hono = Math.round(net * tx / 100 * 100) / 100; fai = net + hono; }
-    else { fai = M; hono = Math.round(fai * tx / 100 * 100) / 100; net = fai - hono; }
-    // Frais de notaire : base = net vendeur si charge acquéreur (avantage acheteur),
-    // sinon prix FAI (honoraires inclus).
-    const notaireBase = charge === "acq" ? net : fai;
-    return { net, fai, hono, notaireBase };
-  }, [prix, taux, base, charge]);
+    const M = num(hono), t = num(tva) / 100, tx = num(taux) / 100; if (!M) return null;
+    const ttc = saisie === "ttc" ? M : Math.round(M * (1 + t) * 100) / 100;
+    const ht = saisie === "ht" ? M : Math.round(M / (1 + t) * 100) / 100;
+    const baseVal = base === "ht" ? ht : ttc;
+    const commission = Math.round(baseVal * tx * 100) / 100;
+    const agence = Math.round((baseVal - commission) * 100) / 100;
+    return { ht, ttc, baseVal, commission, agence };
+  }, [hono, saisie, tva, taux, base]);
   const Toggle = <T extends string>(val: T, setter: (v: T) => void, opts: [T, string][]) => (
     <div style={{ display: "flex", gap: 6 }}>
       {opts.map(([k, l]) => (
@@ -260,29 +260,66 @@ function HonorairesVente() {
     </div>
   );
   return (
-    <Card title="💼 Honoraires de vente">
-      <Field label="Le montant saisi correspond au">
-        {Toggle(base, setBase, [["net", "Prix net vendeur"], ["fai", "Prix de vente FAI"]])}
+    <Card title="🧑‍💼 Commission agent">
+      <Field label="Honoraires d'agence (€)">
+        <input inputMode="decimal" value={hono} onChange={e => setHono(e.target.value)} placeholder="10000" style={champ} />
       </Field>
-      <Field label={base === "net" ? "Prix net vendeur (€)" : "Prix de vente FAI (€)"}>
-        <input inputMode="decimal" value={prix} onChange={e => setPrix(e.target.value)} placeholder="200000" style={champ} />
+      <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+        <Field label="Le montant saisi est">{Toggle(saisie, setSaisie, [["ttc", "TTC"], ["ht", "HT"]])}</Field>
+        <Field label="TVA (%)"><input inputMode="decimal" value={tva} onChange={e => setTva(e.target.value)} placeholder="20" style={champ} /></Field>
+      </div>
+      <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+        <Field label="Commission agent (%)"><input inputMode="decimal" value={taux} onChange={e => setTaux(e.target.value)} placeholder="75" style={champ} /></Field>
+        <Field label="Base selon statut"><span title="Selon le statut de l'agent (indépendant/salarié)">{Toggle(base, setBase, [["ht", "sur HT"], ["ttc", "sur TTC"]])}</span></Field>
+      </div>
+      {r && <div style={{ marginTop: 14 }}>
+        <Row label="Honoraires HT" value={euro(r.ht)} />
+        <Row label="Honoraires TTC" value={euro(r.ttc)} />
+        <Highlight label={`Commission agent (${taux || "0"}% ${base === "ht" ? "sur HT" : "sur TTC"})`} value={euro(r.commission)} color={GOLD} />
+        <Row label="Part agence" value={euro(r.agence)} />
+      </div>}
+      <Note>La commission de l&apos;agent s&apos;applique sur le HT ou le TTC selon son statut (agent commercial indépendant : généralement sur le HT ; à adapter à votre convention).</Note>
+    </Card>
+  );
+}
+
+function HonorairesVente() {
+  const [net, setNet] = useState("");
+  const [taux, setTaux] = useState("5");
+  const [charge, setCharge] = useState<"vendeur" | "acq">("acq");
+  const r = useMemo(() => {
+    const N = num(net), tx = num(taux); if (!N) return null;
+    const hono = Math.round(N * tx / 100 * 100) / 100;
+    const fai = N + hono;
+    // Frais de notaire : base = net vendeur si charge acquéreur (avantage
+    // acheteur), sinon prix FAI (honoraires inclus).
+    const notaireBase = charge === "acq" ? N : fai;
+    return { hono, fai, notaireBase };
+  }, [net, taux, charge]);
+  return (
+    <Card title="💼 Honoraires de vente">
+      <Field label="Prix net vendeur (€)">
+        <input inputMode="decimal" value={net} onChange={e => setNet(e.target.value)} placeholder="200000" style={champ} />
       </Field>
       <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
         <Field label="Taux d'honoraires (%)"><input inputMode="decimal" value={taux} onChange={e => setTaux(e.target.value)} placeholder="5" style={champ} /></Field>
         <Field label="Honoraires à la charge de">
-          {Toggle(charge, setCharge, [["vendeur", "Vendeur"], ["acq", "Acquéreur"]])}
+          <div style={{ display: "flex", gap: 6 }}>
+            {([["vendeur", "Vendeur"], ["acq", "Acquéreur"]] as const).map(([k, l]) => (
+              <button key={k} onClick={() => setCharge(k)} style={{ flex: 1, padding: "9px 4px", fontSize: 12, fontWeight: 700, cursor: "pointer", borderRadius: 9, background: charge === k ? GOLD : "#fff", color: charge === k ? "#fff" : "#6b7280", border: `1px solid ${charge === k ? GOLD : BORDER}` }}>{l}</button>
+            ))}
+          </div>
         </Field>
       </div>
       {r && <div style={{ marginTop: 14 }}>
-        <Row label={`Honoraires (${taux || "0"}% du ${base === "net" ? "net vendeur" : "prix FAI"})`} value={euro(r.hono)} color={GOLD} />
-        <Row label="Prix net vendeur" value={euro(r.net)} />
+        <Row label={`Honoraires (${taux || "0"}% du net vendeur)`} value={euro(r.hono)} color={GOLD} />
         <Highlight label="Prix de vente FAI (affiché)" value={euro(r.fai)} color={DARK} />
         <Row label={`Base frais de notaire (${charge === "acq" ? "net vendeur" : "prix FAI"})`} value={euro(r.notaireBase)} />
       </div>}
       <Note>
         {charge === "acq"
-          ? "Charge acquéreur : l'acheteur paie le prix FAI ; les frais de notaire sont calculés sur le prix net vendeur (hors honoraires) — c'est l'avantage du charge acquéreur."
-          : "Charge vendeur : le vendeur perçoit le net ; les frais de notaire de l'acquéreur sont calculés sur le prix FAI (honoraires inclus)."}
+          ? "Charge acquéreur : honoraires = taux × prix net vendeur ; l'acheteur paie le prix FAI et les frais de notaire sont calculés sur le net vendeur (hors honoraires) — l'avantage du charge acquéreur."
+          : "Charge vendeur : honoraires = taux × prix net vendeur ; les frais de notaire de l'acquéreur sont calculés sur le prix FAI (honoraires inclus)."}
       </Note>
     </Card>
   );

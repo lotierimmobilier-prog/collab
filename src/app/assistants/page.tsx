@@ -104,7 +104,7 @@ export default function AssistantsPage() {
   const role = (session?.user as { roleId?: string })?.roleId ?? "";
   const isDir = ["admin", "dirigeant", "direction"].includes(role);
 
-  const [tab, setTab] = useState<"gallery" | "manage">("gallery");
+  const [tab, setTab] = useState<"gallery" | "team" | "manage">("gallery");
   const [agents, setAgents] = useState<AgentPublic[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [active, setActive] = useState<AgentPublic | null>(null);
@@ -126,12 +126,11 @@ export default function AssistantsPage() {
       <main style={{ flex: 1, padding: "28px 32px", maxWidth: 1080, margin: "0 auto", width: "100%", display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: DARK, margin: 0 }}>🤖 Assistants IA</h1>
-          {isDir && (
-            <div style={{ display: "flex", gap: 6 }}>
-              <TabBtn active={tab === "gallery"} onClick={() => { setTab("gallery"); setActive(null); }} label="Galerie" />
-              <TabBtn active={tab === "manage"} onClick={() => { setTab("manage"); setActive(null); }} label="⚙️ Gérer" />
-            </div>
-          )}
+          <div style={{ display: "flex", gap: 6 }}>
+            <TabBtn active={tab === "gallery"} onClick={() => { setTab("gallery"); setActive(null); }} label="Galerie" />
+            <TabBtn active={tab === "team"} onClick={() => { setTab("team"); setActive(null); }} label="🎼 Équipe" />
+            {isDir && <TabBtn active={tab === "manage"} onClick={() => { setTab("manage"); setActive(null); }} label="⚙️ Gérer" />}
+          </div>
         </div>
         <p style={{ color: "#6b7280", fontSize: 13, marginTop: 4, marginBottom: 18 }}>
           Des spécialistes dédiés, en plus d'Auguste (le généraliste). Chacun a son domaine, sa personnalité et sa base de connaissance.
@@ -139,6 +138,7 @@ export default function AssistantsPage() {
 
         {tab === "gallery" && !active && <Gallery agents={agents} favorites={favorites} onToggleFav={toggleFav} onPick={setActive} />}
         {tab === "gallery" && active && <Chat agent={active} onBack={() => setActive(null)} />}
+        {tab === "team" && <Team agents={agents} />}
         {tab === "manage" && isDir && <Manage onChanged={load} />}
       </main>
     </div>
@@ -151,6 +151,71 @@ function TabBtn({ active, onClick, label }: { active: boolean; onClick: () => vo
       padding: "7px 13px", fontSize: 13, fontWeight: 700, cursor: "pointer", borderRadius: 9,
       background: active ? GOLD : "#fff", color: active ? "#fff" : "#6b7280", border: `1px solid ${active ? GOLD : BORDER}`,
     }}>{label}</button>
+  );
+}
+
+// ════════════ Équipe (multi-agents, Auguste chef d'orchestre) ════════════
+
+interface Contribution { agentId: string; agentName: string; icon?: string | null; color?: string | null; question: string; answer: string }
+function Team({ agents }: { agents: AgentPublic[] }) {
+  const [objective, setObjective] = useState("");
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [res, setRes] = useState<{ contributions: Contribution[]; synthesis: string } | null>(null);
+  const toggle = (id: string) => setSel(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  async function run() {
+    if (!objective.trim()) { setErr("Décrivez l'objectif."); return; }
+    setBusy(true); setErr(""); setRes(null);
+    try {
+      const r = await fetch("/api/ai-agents/orchestrate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ objective: objective.trim(), agentIds: sel.size ? [...sel] : undefined }) });
+      const j = await r.json();
+      if (r.ok && j.ok) setRes({ contributions: j.contributions ?? [], synthesis: j.synthesis ?? "" });
+      else setErr(j.error || "Échec de l'orchestration.");
+    } catch { setErr("Erreur réseau."); }
+    setBusy(false);
+  }
+
+  return (
+    <div>
+      <div style={{ background: GOLD_BG, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16, marginBottom: 16 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: DARK, marginBottom: 4 }}>🎼 Auguste, chef d&apos;orchestre</div>
+        <p style={{ fontSize: 12.5, color: "#6b7280", margin: "0 0 12px" }}>Donnez un objectif : Auguste choisit les assistants pertinents, leur délègue une partie du travail, puis synthétise leurs réponses.</p>
+        <textarea value={objective} onChange={e => setObjective(e.target.value)} rows={3} placeholder="Ex. Rédige une annonce pour un T3 à Béziers et vérifie sa conformité juridique."
+          style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 12px", fontSize: 13, resize: "vertical", outline: "none" }} />
+        {agents.length > 0 && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 11.5, color: "#6b7280", marginBottom: 6 }}>Assistants à mobiliser (facultatif — sinon Auguste choisit) :</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {agents.map(a => (
+                <button key={a.id} onClick={() => toggle(a.id)} style={{ padding: "5px 11px", fontSize: 12, borderRadius: 999, cursor: "pointer", fontWeight: 600, background: sel.has(a.id) ? (a.color || GOLD) : "#fff", color: sel.has(a.id) ? "#fff" : "#6b7280", border: `1px solid ${sel.has(a.id) ? (a.color || GOLD) : BORDER}` }}>{a.icon || "🤖"} {a.name}</button>
+              ))}
+            </div>
+          </div>
+        )}
+        <button onClick={run} disabled={busy} style={{ marginTop: 12, background: GOLD, color: "#fff", border: "none", borderRadius: 9, padding: "10px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{busy ? "Auguste orchestre…" : "▶ Lancer l'équipe"}</button>
+        {err && <div style={{ marginTop: 10, fontSize: 12.5, color: "#B42318" }}>⚠️ {err}</div>}
+      </div>
+
+      {res && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {res.contributions.map((c, i) => (
+            <div key={i} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden" }}>
+              <div style={{ padding: "10px 14px", background: (c.color || GOLD) + "18", borderBottom: `1px solid ${BORDER}`, fontSize: 13, fontWeight: 700, color: DARK }}>{c.icon || "🤖"} {c.agentName}</div>
+              <div style={{ padding: "10px 14px" }}>
+                <div style={{ fontSize: 11.5, color: "#9ca3af", marginBottom: 6, fontStyle: "italic" }}>« {c.question} »</div>
+                <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.55 }}><Markdown text={c.answer} /></div>
+              </div>
+            </div>
+          ))}
+          <div style={{ background: "#F0F7FF", border: "1px solid #BFDBFE", borderRadius: 12, padding: "14px 16px" }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1D4ED8", marginBottom: 8 }}>✦ Synthèse d&apos;Auguste</div>
+            <div style={{ fontSize: 13.5, color: "#1E3A5F", lineHeight: 1.6 }}><Markdown text={res.synthesis} /></div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
