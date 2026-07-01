@@ -23,7 +23,7 @@ interface Person { id: string; prenom: string; nom: string; email?: string; acti
 interface MeInfo extends Person { roleId: string; parrainId: string | null; parrain: Person | null; }
 interface AdminUser extends Person { roleId: string; parrainId: string | null; parrain: Person | null; }
 
-type Tab = "controle" | "parcours" | "qcm" | "diplome" | "assistant" | "filleuls" | "suivi" | "modules" | "affectation";
+type Tab = "controle" | "parcours" | "qcm" | "diplome" | "assistant" | "filleuls" | "mon-qcm" | "suivi" | "modules" | "affectation";
 
 export default function FormationPage() {
   const { data: session } = useSession();
@@ -73,6 +73,7 @@ export default function FormationPage() {
     { id: "diplome", label: "Mon diplôme", show: !!me?.parrainId },
     { id: "assistant", label: "Auguste", show: !!me?.parrainId },
     { id: "filleuls", label: `Mes filleuls${filleuls.length ? ` (${filleuls.length})` : ""}`, show: filleuls.length > 0 },
+    { id: "mon-qcm", label: "Mon QCM", show: filleuls.length > 0 },
     { id: "suivi", label: `Suivi des filleuls${allFilleuls.length ? ` (${allFilleuls.length})` : ""}`, show: !!isAdmin },
     { id: "modules", label: "Modules & compétences", show: !!isAdmin },
     { id: "affectation", label: "Parrains", show: !!isAdmin },
@@ -143,6 +144,10 @@ export default function FormationPage() {
 
             {tab === "filleuls" && (
               <FilleulsView filleuls={filleuls} modules={modules} isAdmin={!!isAdmin} />
+            )}
+
+            {tab === "mon-qcm" && filleuls.length > 0 && (
+              <ParrainQcm modules={modules} />
             )}
 
             {tab === "suivi" && isAdmin && (
@@ -829,6 +834,57 @@ function MyQcm({ filleulId, modules }: { filleulId: string; modules: Module[] })
     return <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, padding: 26, textAlign: "center", color: "#6b7280", fontSize: 13.5 }}>Aucun QCM n’est disponible pour le moment.</div>;
   }
   return <QcmSection modules={modules} vals={vals} canAnswer={true} busyId={busy} onAnswer={setQuiz} onReset={resetAll} />;
+}
+
+// ─── Onglet « Mon QCM » (parrain) : auto-évaluation privée ───────────
+// Le parrain répond au même QCM que ses filleuls pour tester ses compétences.
+// Ses réponses sont PRIVÉES : aucun filleul n'y a accès (stockage séparé).
+function useParrainValidations() {
+  const [vals, setVals] = useState<Record<string, Validation>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch("/api/formation/parrain-qcm");
+      if (!r.ok) return;
+      const d = await r.json();
+      const map: Record<string, Validation> = {};
+      for (const v of (d.results ?? []) as { competenceId: string; quiz: unknown }[]) {
+        map[v.competenceId] = { competenceId: v.competenceId, quiz: (typeof v.quiz === "string" ? JSON.parse(v.quiz) : v.quiz) ?? {} } as Validation;
+      }
+      setVals(map);
+    } catch { /* silencieux */ }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+  const setQuiz = useCallback(async (competenceId: string, quiz: Record<string, number>) => {
+    setBusy(competenceId);
+    try {
+      const r = await fetch("/api/formation/parrain-qcm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ competenceId, quiz }) });
+      if (r.ok) setVals(prev => ({ ...prev, [competenceId]: { competenceId, quiz } as Validation }));
+    } catch { /* silencieux */ } finally { setBusy(null); }
+  }, []);
+  return { vals, busy, setQuiz };
+}
+
+function ParrainQcm({ modules }: { modules: Module[] }) {
+  const { vals, busy, setQuiz } = useParrainValidations();
+  const hasQ = modules.some(m => (m.competences ?? []).some(c => (c.questions?.length ?? 0) > 0));
+  async function resetAll() {
+    if (!confirm("Recommencer votre QCM ? Vos réponses actuelles seront effacées.")) return;
+    const comps = modules.flatMap(m => m.competences ?? [])
+      .filter(c => { const qz = vals[c.id]?.quiz as Record<string, number> | undefined; return qz && Object.keys(qz).length > 0; });
+    for (const c of comps) await setQuiz(c.id, {});
+  }
+  if (!hasQ) {
+    return <div style={{ background: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, padding: 26, textAlign: "center", color: "#6b7280", fontSize: 13.5 }}>Aucun QCM n’est disponible pour le moment.</div>;
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 12, padding: "10px 14px", fontSize: 12.5, color: "#1E3A5F" }}>
+        🔒 Votre auto-évaluation est <strong>privée</strong> : vos filleuls ne voient pas vos réponses. De votre côté, vous consultez les résultats de vos filleuls dans l’onglet <strong>Mes filleuls</strong>.
+      </div>
+      <QcmSection modules={modules} vals={vals} canAnswer={true} busyId={busy} onAnswer={setQuiz} onReset={resetAll} />
+    </div>
+  );
 }
 
 // ─── Onglet « Mon diplôme » (filleul) ────────────────────────────────
