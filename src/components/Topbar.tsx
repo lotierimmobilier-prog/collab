@@ -193,6 +193,19 @@ export default function Topbar({ title }: { title: string }) {
 
 const NEWS = [
   {
+    version: "v1.7",
+    title: "Veille juridique, parrainage & messagerie",
+    items: [
+      "Veille juridique : flux RSS classés en familles, analysés par Auguste toutes les 24 h",
+      "Drive Parrain/Filleul : documents partagés sur toute la lignée de parrainage",
+      "Formation : le parrain passe le même QCM que ses filleuls (résultats privés)",
+      "Messagerie : Green Acre, Athome et les portails toujours en boîte de réception",
+      "Messagerie : « Remettre en boîte de réception » mémorise l'expéditeur",
+      "Messagerie : mails du domaine de l'agence marqués « Interne » ; analyse d'un contact ciblée par sujet",
+      "Boîte à outils repliable + raccourci 💡 Idées & améliorations",
+    ],
+  },
+  {
     version: "v1.6",
     title: "Direction & comptabilité",
     items: [
