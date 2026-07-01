@@ -73,8 +73,8 @@ export default function ActualitePage() {
       <main style={{ flex: 1, padding: "28px 32px", maxWidth: 900, margin: "0 auto", width: "100%" }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: DARK, margin: 0 }}>📰 Actualité immobilière</h1>
         <p style={{ color: "#6b7280", fontSize: 13, marginTop: 4, marginBottom: 18 }}>
-          Les articles des sites référencés, résumés et classés par Auguste (gestion, syndic, transaction, divers).
-          {canManage ? " Vous pouvez ajouter des sites ci-dessous." : " Consultation et analyse."}
+          Les articles des sites et flux RSS référencés, résumés et classés par Auguste (gestion, syndic, transaction, divers).
+          {canManage ? " Vous pouvez ajouter un site web ou un flux RSS ci-dessous (un flux RSS donne les meilleurs résultats)." : " Consultation et analyse."}
         </p>
 
         {/* Gestion des sources (admin uniquement) */}
@@ -83,7 +83,7 @@ export default function ActualitePage() {
             <div style={{ fontSize: 12, fontWeight: 800, color: DARK, marginBottom: 10 }}>🛠 Sites référencés (administration)</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: sources.length ? 12 : 0 }}>
               <input value={label} onChange={e => setLabel(e.target.value)} placeholder="Nom du site (ex. Le Figaro Immobilier)" style={{ ...inp, flex: "1 1 220px" }} />
-              <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" style={{ ...inp, flex: "2 1 300px" }} />
+              <input value={url} onChange={e => setUrl(e.target.value)} placeholder="URL du site OU du flux RSS (https://…)" style={{ ...inp, flex: "2 1 300px" }} />
               <button onClick={addSource} disabled={busy} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 9, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{busy ? "Ajout…" : "+ Ajouter"}</button>
             </div>
             {sources.map(s => (

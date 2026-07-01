@@ -70,6 +70,7 @@ const FILES = [
   "migrations_password_setup.sql",
   "migrations_forum.sql",
   "migrations_actualite.sql",
+  "migrations_annuaire_share.sql",
 ];
 
 export interface MigrationReport {

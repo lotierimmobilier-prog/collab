@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { seesAllContacts } from "@/lib/contactCategories";
+import { isSharedWith, superAdminUserIds } from "@/lib/annuaireShare";
 
 /** GET /api/contacts?type=&q=  → liste de l'annuaire unifié.
  *  Cloisonnement : admin / gestionnaire / direction voient tout ;
@@ -14,17 +15,30 @@ export async function GET(req: NextRequest) {
   const q = (req.nextUrl.searchParams.get("q") || "").trim();
   const seeAll = seesAllContacts(session.user.roleId);
 
+  // Visibilité : admin/gestionnaire/direction voient tout. Les autres voient
+  // leur propre annuaire ; s'ils sont autorisés, ils voient EN PLUS l'annuaire
+  // du super admin (partage sur demande).
+  let visibility: object | undefined;
+  if (!seeAll) {
+    const ors: object[] = [{ createdById: session.user.id }];
+    if (await isSharedWith(session.user.id)) {
+      const supers = await superAdminUserIds();
+      if (supers.length) ors.push({ createdById: { in: supers } });
+    }
+    visibility = { OR: ors };
+  }
+  const search = q ? { OR: [
+    { nom:           { contains: q, mode: "insensitive" as const } },
+    { prenom:        { contains: q, mode: "insensitive" as const } },
+    { raisonSociale: { contains: q, mode: "insensitive" as const } },
+    { email:         { contains: q, mode: "insensitive" as const } },
+    { phone:         { contains: q, mode: "insensitive" as const } },
+  ] } : undefined;
+
   const contacts = await prisma.contact.findMany({
     where: {
-      ...(seeAll ? {} : { createdById: session.user.id }),
       ...(type ? { type } : {}),
-      ...(q ? { OR: [
-        { nom:           { contains: q, mode: "insensitive" } },
-        { prenom:        { contains: q, mode: "insensitive" } },
-        { raisonSociale: { contains: q, mode: "insensitive" } },
-        { email:         { contains: q, mode: "insensitive" } },
-        { phone:         { contains: q, mode: "insensitive" } },
-      ] } : {}),
+      AND: [visibility, search].filter(Boolean) as object[],
     },
     orderBy: [{ type: "asc" }, { nom: "asc" }],
     take: 500,
