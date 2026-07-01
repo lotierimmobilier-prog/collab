@@ -86,6 +86,17 @@ export default function Topbar({ title }: { title: string }) {
 
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
 
+        {/* Raccourcis rapides (icônes en couleur), à côté de la fusée. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {SHORTCUTS.map(s => (
+            <button key={s.href} onClick={() => router.push(s.href)} title={s.label}
+              style={{ background: s.bg, border: `1px solid ${s.color}33`, borderRadius: 8, padding: "5px 10px", cursor: "pointer", fontSize: 15, color: s.color, display: "flex", alignItems: "center", fontWeight: 700 }}>
+              {s.icon}
+            </button>
+          ))}
+        </div>
+        <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
+
         {/* 💡 Raccourci Idées & améliorations */}
         <button
           onClick={() => router.push("/suggestions")}
@@ -190,6 +201,14 @@ export default function Topbar({ title }: { title: string }) {
     </div>
   );
 }
+
+// Raccourcis rapides (icônes en couleur) affichés à côté de la fusée.
+const SHORTCUTS = [
+  { icon: "✓",  label: "Tâches",             href: "/taches",             color: "#059669", bg: "#ECFDF5" },
+  { icon: "▦",  label: "Agenda / Planning",  href: "/planning",           color: "#2563EB", bg: "#EFF6FF" },
+  { icon: "@",  label: "Messagerie email",   href: "/messagerie",         color: "#B8966A", bg: "#F7F0E6" },
+  { icon: "💬", label: "Messagerie interne", href: "/messagerie-interne", color: "#7C3AED", bg: "#F5F3FF" },
+];
 
 const NEWS = [
   {
