@@ -14,9 +14,12 @@ export async function GET(req: NextRequest) {
   const isDir = isDirectionRole(session.user.roleId ?? "");
   const all = req.nextUrl.searchParams.get("all") === "1" && isDir;
 
+  // On exclut imageData/imageMime (base64 volumineux) : la photo est servie
+  // à la demande via /api/shop/products/[id]/image.
   const products = await prisma.shopProduct.findMany({
     where: all ? {} : { active: true },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+    select: { id: true, name: true, description: true, price: true, category: true, image: true, active: true, order: true, createdAt: true, updatedAt: true },
   }).catch(() => []);
 
   return NextResponse.json({ products, isDir });

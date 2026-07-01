@@ -1414,7 +1414,9 @@ model ShopProduct {
   description String?
   price       Float    @default(0)   // prix unitaire en euros
   category    String?                 // textile | accessoire | bureau | autre
-  image       String?                 // URL d'image OU emoji (fallback visuel)
+  image       String?                 // URL d'image, chemin endpoint photo OU emoji (fallback visuel)
+  imageData   String?                 // photo uploadée (base64) stockée en base
+  imageMime   String?                 // type MIME de la photo uploadée
   active      Boolean  @default(true)
   order       Int      @default(0)    // tri d'affichage
   createdAt   DateTime @default(now())

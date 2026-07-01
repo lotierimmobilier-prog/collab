@@ -63,6 +63,7 @@ const FILES = [
   "migrations_protexa_mandates.sql",
   "migrations_suggestions.sql",
   "migrations_shop.sql",
+  "migrations_shop_image.sql",
   "migrations_ai_agents.sql",
   "migrations_ai_agents_cv.sql",
   "migrations_ai_agents_more.sql",

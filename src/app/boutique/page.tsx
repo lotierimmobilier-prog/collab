@@ -28,7 +28,9 @@ const ORDER_STATUS: Record<string, { label: string; color: string; bg: string }>
 };
 const STATUS_ORDER = ["nouveau", "preparation", "pret", "remis", "annule"];
 
-function isUrl(s: string | null): boolean { return !!s && /^https?:\/\//.test(s); }
+// Vrai si la valeur est une référence d'image (URL externe OU chemin endpoint
+// de la photo uploadée), par opposition à un emoji de secours.
+function isUrl(s: string | null): boolean { return !!s && (/^https?:\/\//.test(s) || s.startsWith("/")); }
 
 export default function BoutiquePage() {
   const { data: session } = useSession();
@@ -279,28 +281,79 @@ function OrdersList({ orders, isDir, onReload }: { orders: Order[]; isDir: boole
 // ════════════ Gestion des articles (direction) ════════════
 
 const BLANK = { name: "", description: "", price: "", category: "textile", image: "", order: "0", active: true };
+const isPhotoPath = (s: string | null | undefined) => !!s && s.startsWith("/api/shop/products/");
+
+// Aperçu de la photo dans le formulaire : nouveau fichier > photo en base > emoji/URL.
+function PhotoPreview({ photo, existing, fallback }: { photo: { data: string } | null; existing: string | null; fallback: string }) {
+  const box: React.CSSProperties = { width: 88, height: 88, borderRadius: 12, background: GOLD_BG, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0, border: `1px solid ${BORDER}` };
+  const src = photo?.data || existing || (isUrl(fallback) ? fallback : "");
+  if (src) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <div style={box}><img src={src} alt="aperçu" style={{ width: "100%", height: "100%", objectFit: "cover" }} /></div>;
+  }
+  return <div style={{ ...box, fontSize: 40 }}>{fallback || "🛍️"}</div>;
+}
 
 function ManageProducts({ products, onChange }: { products: Product[]; onChange: () => void }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState({ ...BLANK });
   const [saving, setSaving] = useState(false);
+  // Photo : nouveau fichier choisi (data-URI), photo déjà en base, suppression.
+  const [photo, setPhoto] = useState<{ data: string; mime: string } | null>(null);
+  const [existingPhoto, setExistingPhoto] = useState<string | null>(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
+  const [photoErr, setPhotoErr] = useState("");
 
-  const startNew = () => { setEditing("new"); setForm({ ...BLANK }); };
+  const resetPhoto = () => { setPhoto(null); setExistingPhoto(null); setRemovePhoto(false); setPhotoErr(""); };
+  const startNew = () => { setEditing("new"); setForm({ ...BLANK }); resetPhoto(); };
   const startEdit = (p: Product) => {
     setEditing(p.id);
-    setForm({ name: p.name, description: p.description || "", price: String(p.price), category: p.category || "autre", image: p.image || "", order: String(p.order), active: p.active });
+    // Si l'article a une photo uploadée, le champ emoji/URL reste vide et la
+    // photo est affichée séparément en aperçu.
+    const uploaded = isPhotoPath(p.image);
+    setForm({ name: p.name, description: p.description || "", price: String(p.price), category: p.category || "autre", image: uploaded ? "" : (p.image || ""), order: String(p.order), active: p.active });
+    setPhoto(null); setExistingPhoto(uploaded ? p.image : null); setRemovePhoto(false); setPhotoErr("");
   };
-  const cancel = () => setEditing(null);
+  const cancel = () => { setEditing(null); resetPhoto(); };
+
+  const onPickPhoto = (file: File | undefined) => {
+    setPhotoErr("");
+    if (!file) return;
+    if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) { setPhotoErr("Format accepté : JPG, PNG, WEBP ou GIF."); return; }
+    if (file.size > 4 * 1024 * 1024) { setPhotoErr("Photo trop lourde (max 4 Mo)."); return; }
+    const reader = new FileReader();
+    reader.onload = () => { setPhoto({ data: String(reader.result || ""), mime: file.type }); setRemovePhoto(false); };
+    reader.readAsDataURL(file);
+  };
 
   const save = async () => {
     if (form.name.trim().length < 2 || saving) return;
     setSaving(true);
-    const payload = { name: form.name, description: form.description, price: num(form.price), category: form.category, image: form.image, order: parseInt(form.order) || 0, active: form.active };
-    const res = editing === "new"
-      ? await fetch("/api/shop/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).catch(() => null)
-      : await fetch(`/api/shop/products/${editing}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).catch(() => null);
+    // Le champ « image » texte (emoji/URL) n'est envoyé que si aucune photo
+    // n'est en jeu : la photo uploadée pilote elle-même la référence image.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const payload: any = { name: form.name, description: form.description, price: num(form.price), category: form.category, order: parseInt(form.order) || 0, active: form.active };
+    if (!photo) {
+      if (removePhoto || (!existingPhoto)) payload.image = form.image;  // emoji/URL ou vide
+      // sinon : photo existante conservée → on ne touche pas au champ image
+    }
+    let id = editing;
+    if (editing === "new") {
+      const res = await fetch("/api/shop/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).catch(() => null);
+      const j = res?.ok ? await res.json().catch(() => null) : null;
+      if (!j?.id) { setSaving(false); return; }
+      id = j.id;
+    } else {
+      await fetch(`/api/shop/products/${editing}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).catch(() => null);
+    }
+    // Photo : téléversement du nouveau fichier, ou suppression demandée.
+    if (photo && id) {
+      await fetch(`/api/shop/products/${id}/image`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: photo.data, mime: photo.mime }) }).catch(() => {});
+    } else if (removePhoto && existingPhoto && id) {
+      await fetch(`/api/shop/products/${id}/image`, { method: "DELETE" }).catch(() => {});
+    }
     setSaving(false);
-    if (res?.ok) { setEditing(null); onChange(); }
+    setEditing(null); resetPhoto(); onChange();
   };
   const toggle = async (p: Product) => {
     await fetch(`/api/shop/products/${p.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: !p.active }) }).catch(() => {});
@@ -334,8 +387,29 @@ function ManageProducts({ products, onChange }: { products: Product[]; onChange:
                 {Object.entries(CATS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
             </div>
-            <div style={{ flex: "2 1 200px" }}><label style={lab}>Visuel (emoji ou URL d'image)</label><input value={form.image} onChange={e => setForm(f => ({ ...f, image: e.target.value }))} placeholder="🍶  ou  https://…/photo.jpg" style={champ} /></div>
             <div style={{ flex: "0 1 90px" }}><label style={lab}>Ordre</label><input inputMode="numeric" value={form.order} onChange={e => setForm(f => ({ ...f, order: e.target.value }))} style={champ} /></div>
+          </div>
+
+          {/* Photo de l'article */}
+          <div style={{ marginTop: 14 }}>
+            <label style={lab}>Photo de l'article</label>
+            <div style={{ display: "flex", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
+              <PhotoPreview photo={photo} existing={removePhoto ? null : existingPhoto} fallback={form.image} />
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <label style={{ display: "inline-block", background: GOLD_BG, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 9, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                  📷 {photo || (existingPhoto && !removePhoto) ? "Changer la photo" : "Téléverser une photo"}
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={e => onPickPhoto(e.target.files?.[0])} style={{ display: "none" }} />
+                </label>
+                {(photo || (existingPhoto && !removePhoto)) && (
+                  <button type="button" onClick={() => { setPhoto(null); setRemovePhoto(true); }} style={{ marginLeft: 8, background: "none", color: RED, border: `1px solid ${BORDER}`, borderRadius: 9, padding: "8px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Retirer</button>
+                )}
+                {photoErr && <div style={{ color: RED, fontSize: 12, marginTop: 6 }}>{photoErr}</div>}
+                <div style={{ marginTop: 8 }}>
+                  <label style={{ ...lab, marginBottom: 3 }}>Ou emoji / URL d'image (secours si pas de photo)</label>
+                  <input value={form.image} onChange={e => setForm(f => ({ ...f, image: e.target.value }))} placeholder="🍶  ou  https://…/photo.jpg" style={champ} />
+                </div>
+              </div>
+            </div>
           </div>
           <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13, color: DARK, cursor: "pointer" }}>
             <input type="checkbox" checked={form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} /> Visible dans la boutique
