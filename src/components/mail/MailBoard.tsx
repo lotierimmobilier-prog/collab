@@ -80,6 +80,8 @@ export default function MailBoard() {
   // Responsive : sur mobile la sidebar devient un tiroir coulissant
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 3500); return () => clearTimeout(t); }, [toast]);
 
   // Ref pour accéder aux comptes dans le timer sans stale closure
   const accountsRef    = useRef<MailAccount[]>([]);
@@ -988,9 +990,20 @@ export default function MailBoard() {
                 removeLabel(selectedThread.id, "pub");
                 applyLabel(selectedThread.id, "inbox");
                 if (email) fetch("/api/mail/allowlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) }).catch(() => {});
+                // Confirmation + fermeture : on revient à la liste (le mail est
+                // désormais en boîte de réception).
+                setToast(email ? `↩ Remis en boîte de réception — ${email} ne sera plus classé en Publicité.` : "↩ Remis en boîte de réception.");
+                setSelectedThread(null);
               }}
             />
           </div>
+        </div>
+      )}
+
+      {/* Confirmation flottante (toast) */}
+      {toast && (
+        <div style={{ position: "fixed", bottom: 22, left: "50%", transform: "translateX(-50%)", background: "#065F46", color: "#fff", padding: "11px 18px", borderRadius: 10, fontSize: 13, fontWeight: 600, boxShadow: "0 8px 28px rgba(0,0,0,0.22)", zIndex: 9999, maxWidth: "90vw", textAlign: "center" }}>
+          {toast}
         </div>
       )}
     </div>
