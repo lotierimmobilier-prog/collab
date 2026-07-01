@@ -59,12 +59,16 @@ async function syncFolder(client: any, folder: string, accountId: string, since:
         // Dossier stocké normalisé (l'IMAP peut nommer les Envoyés différemment)
         const sFolder = isSent ? "SENT" : "INBOX";
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        for await (const msg of (client as any).fetch(pageUids.join(","), { uid: true, flags: true, envelope: true, headers: ["list-unsubscribe", "precedence"] }, { uid: true }) as AsyncIterable<any>) {
+        for await (const msg of (client as any).fetch(pageUids.join(","), { uid: true, flags: true, envelope: true, headers: ["list-unsubscribe", "precedence", "reply-to"] }, { uid: true }) as AsyncIterable<any>) {
           const env       = msg.envelope ?? {};
           const flags     = msg.flags ?? new Set();
           const isUnread  = !flags.has("\\Seen");
           const isStarred = flags.has("\\Flagged");
           const fromEmail = env.from?.[0]?.address ?? "";
+          // Reply-To : adresse de réponse si elle diffère de l'expéditeur.
+          const replyToRaw = env.replyTo?.[0]?.address || (/^reply-to:\s*(.+)$/im.exec(msg.headers?.toString() || "")?.[1] ?? "");
+          const replyToMatch = /[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+/.exec(replyToRaw || "");
+          const replyTo = replyToMatch && replyToMatch[0].toLowerCase() !== fromEmail.toLowerCase() ? replyToMatch[0] : null;
           const msgDate   = env.date ? new Date(env.date) : new Date();
           if (msgDate < since) continue;
 
@@ -142,6 +146,7 @@ async function syncFolder(client: any, folder: string, accountId: string, since:
                 messageId: env.messageId?.replace(/[<>]/g, ""),
                 folder: sFolder, accountId, fromEmail,
                 fromName: env.from?.[0]?.name,
+                replyTo,
                 toEmail: (env.to ?? []).map((a: { address?: string }) => a.address).filter(Boolean).join(", "),
                 subject: env.subject ?? "(Sans objet)",
                 date: msgDate, read: !isUnread, starred: isStarred,
@@ -150,7 +155,7 @@ async function syncFolder(client: any, folder: string, accountId: string, since:
                 senderId: identity.senderId,
                 ownerId,
               },
-              update: { read: !isUnread, starred: isStarred, senderType: identity.senderType, senderId: identity.senderId, ownerId },
+              update: { read: !isUnread, starred: isStarred, senderType: identity.senderType, senderId: identity.senderId, ownerId, replyTo },
             });
           } catch { /* ignore contrainte unique */ }
         }
