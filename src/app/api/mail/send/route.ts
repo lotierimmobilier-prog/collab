@@ -3,13 +3,9 @@ import { randomUUID } from "node:crypto";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import nodemailer from "nodemailer";
-import MailComposer from "nodemailer/lib/mail-composer";
 import { resolveAccountOwner } from "@/lib/mailOwner";
 import { renderBrandedEmail, textToHtml, emailBaseUrl } from "@/lib/email-template";
 import { isSuperAdminEmail } from "@/lib/superadmin";
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { ImapFlow } = require("imapflow");
 
 // Noms courants du dossier « Envoyés » selon les serveurs (Outlook, Gmail, OVH…)
 const SENT_FOLDERS = ["Sent", "Sent Messages", "Sent Items", "SENT", "Éléments envoyés", "Envoyés", "[Gmail]/Messages envoyés", "[Gmail]/Sent Mail"];
@@ -18,9 +14,12 @@ interface ImapCfg { host: string; port: number; ssl: boolean; username: string; 
 
 // Dépose une copie du mail envoyé dans le dossier « Envoyés » IMAP, pour qu'elle
 // apparaisse aussi dans les autres clients de l'utilisateur (Outlook, Gmail…).
-// Best-effort : toute erreur est ignorée (l'envoi SMTP a déjà réussi).
+// Best-effort : chargée dynamiquement + bornée dans le temps pour ne JAMAIS
+// pouvoir affecter l'envoi SMTP (déjà réussi).
 async function appendToSent(cfg: ImapCfg, raw: Buffer) {
-  const client = new ImapFlow({ host: cfg.host, port: cfg.port, secure: cfg.ssl, auth: { user: cfg.username, pass: cfg.password }, logger: false, tls: { rejectUnauthorized: false } });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ImapFlow: any = (await import("imapflow")).ImapFlow;
+  const client = new ImapFlow({ host: cfg.host, port: cfg.port, secure: cfg.ssl, auth: { user: cfg.username, pass: cfg.password }, logger: false, tls: { rejectUnauthorized: false }, connectionTimeout: 12000, greetingTimeout: 12000, socketTimeout: 20000 });
   await client.connect();
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -75,6 +74,9 @@ export async function POST(req: NextRequest) {
     requireTLS: !isDirectSsl && port !== 25,
     auth: { user: username, pass: password },
     tls: { rejectUnauthorized: false },
+    // Timeouts : un serveur SMTP lent échoue vite avec une erreur claire
+    // (au lieu de bloquer la requête jusqu'à son abandon → « Erreur réseau »).
+    connectionTimeout: 15000, greetingTimeout: 15000, socketTimeout: 30000,
   });
 
   try {
@@ -129,11 +131,12 @@ export async function POST(req: NextRequest) {
       const cfg = imapCfg;
       after(async () => {
         try {
+          const MailComposer = (await import("nodemailer/lib/mail-composer")).default;
           const raw: Buffer = await new Promise((resolve, reject) => {
             new MailComposer(mailOptions).compile().build((err: Error | null, msg: Buffer) => err ? reject(err) : resolve(msg));
           });
           await appendToSent(cfg, raw);
-        } catch { /* silencieux */ }
+        } catch { /* silencieux : la copie « Envoyés » est optionnelle */ }
       });
     }
 
