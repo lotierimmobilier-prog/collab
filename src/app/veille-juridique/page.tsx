@@ -35,6 +35,9 @@ export default function VeilleJuridiquePage() {
   const [fTitle, setFTitle] = useState(""); const [fUrl, setFUrl] = useState(""); const [fFamily, setFFamily] = useState("");
   const [famName, setFamName] = useState(""); const [famColor, setFamColor] = useState(COLORS[0]);
   const [showFam, setShowFam] = useState(false);
+  const [query, setQuery] = useState("");            // moteur de recherche
+  const [open, setOpen] = useState<Set<string>>(new Set()); // flux dépliés
+  const toggle = (id: string) => setOpen(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const load = useCallback(async () => {
     try {
@@ -107,56 +110,79 @@ export default function VeilleJuridiquePage() {
           </div>
         </div>
 
-        {loading ? (
-          <p style={{ color: "#9ca3af", fontSize: 13 }}>Chargement…</p>
-        ) : groups.length === 0 ? (
-          <p style={{ color: "#9ca3af", fontSize: 13 }}>Aucun flux pour le moment. Ajoutez votre premier flux RSS ci-dessus.</p>
-        ) : groups.map((g, gi) => (
+        {/* Moteur de recherche */}
+        <div style={{ marginBottom: 16, position: "relative" }}>
+          <span style={{ position: "absolute", left: 12, top: 10, color: "#9ca3af", fontSize: 14 }}>🔎</span>
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher un article, un flux…" style={{ ...inp, width: "100%", paddingLeft: 34 }} />
+        </div>
+
+        {(() => {
+          const ql = query.trim().toLowerCase();
+          const hay = (f: Feed) => `${f.title} ${f.url} ${f.analysis ?? ""} ${(f.items ?? []).map(it => `${it.title} ${it.summary}`).join(" ")}`.toLowerCase();
+          const itemHit = (it: Item) => !ql || `${it.title} ${it.summary}`.toLowerCase().includes(ql);
+          const visGroups = groups
+            .map(g => ({ ...g, feeds: g.feeds.filter(f => !ql || hay(f).includes(ql)) }))
+            .filter(g => g.feeds.length > 0);
+
+          if (loading) return <p style={{ color: "#9ca3af", fontSize: 13 }}>Chargement…</p>;
+          if (visGroups.length === 0) return <p style={{ color: "#9ca3af", fontSize: 13 }}>{ql ? "Aucun résultat pour cette recherche." : "Aucun flux pour le moment. Ajoutez votre premier flux ci-dessus."}</p>;
+
+          return visGroups.map((g, gi) => (
           <div key={g.fam?.id ?? `none-${gi}`} style={{ marginBottom: 22 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
               <span style={{ width: 10, height: 10, borderRadius: "50%", background: g.fam?.color ?? "#9ca3af" }} />
               <h2 style={{ fontSize: 15, fontWeight: 800, color: DARK, margin: 0 }}>{g.fam?.name ?? "Sans famille"}</h2>
               {g.fam && <button onClick={() => delFamily(g.fam!.id)} title="Supprimer la famille" style={{ background: "none", border: "none", color: "#d1d5db", cursor: "pointer", fontSize: 13 }}>🗑</button>}
             </div>
-            {g.feeds.length === 0 ? <p style={{ color: "#9ca3af", fontSize: 12, marginLeft: 18 }}>Aucun flux dans cette famille.</p> : g.feeds.map(f => (
-              <div key={f.id} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, marginBottom: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: DARK }}>{f.title}</div>
-                    <a href={f.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: BLUE, textDecoration: "none", wordBreak: "break-all" }}>{f.url}</a>
-                    <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>Analysé {ago(f.lastAnalyzedAt)}</div>
+            {g.feeds.map(f => {
+              const isOpen = open.has(f.id) || !!ql;   // recherche active → tout déplié
+              return (
+              <div key={f.id} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, marginBottom: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.04)", overflow: "hidden" }}>
+                {/* En-tête cliquable : ouvre / réduit le flux */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: 14, cursor: "pointer" }} onClick={() => toggle(f.id)}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                    <span style={{ fontSize: 12, color: GOLD, transition: "transform .2s", transform: isOpen ? "rotate(90deg)" : "none" }}>▶</span>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: DARK }}>{f.title}</div>
+                      <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1 }}>Analysé {ago(f.lastAnalyzedAt)}{f.items?.length ? ` · ${f.items.length} article(s)` : ""}</div>
+                    </div>
                   </div>
                   <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                    <button onClick={() => refreshFeed(f.id)} disabled={refreshing === f.id} style={{ background: GOLD_BG, color: GOLD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{refreshing === f.id ? "⏳ Analyse…" : "🔄 Analyser"}</button>
-                    <button onClick={() => delFeed(f.id)} title="Supprimer" style={{ background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "5px 8px", fontSize: 12, color: RED, cursor: "pointer" }}>🗑</button>
+                    <button onClick={e => { e.stopPropagation(); refreshFeed(f.id); }} disabled={refreshing === f.id} style={{ background: GOLD_BG, color: GOLD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{refreshing === f.id ? "⏳ Analyse…" : "🔄 Analyser"}</button>
+                    <button onClick={e => { e.stopPropagation(); delFeed(f.id); }} title="Supprimer" style={{ background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "5px 8px", fontSize: 12, color: RED, cursor: "pointer" }}>🗑</button>
                   </div>
                 </div>
 
-                {f.lastError && <div style={{ marginTop: 10, fontSize: 12, color: "#B42318", background: "#FEF3F2", border: "1px solid #FECDCA", borderRadius: 8, padding: "8px 10px" }}>⚠️ {f.lastError}</div>}
-
-                {f.analysis && (
-                  <div style={{ marginTop: 12, background: "#F0F7FF", border: "1px solid #BFDBFE", borderRadius: 10, padding: "12px 14px" }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: "#1D4ED8", marginBottom: 6 }}>✦ Analyse d&apos;Auguste</div>
-                    <div style={{ fontSize: 13, color: "#1E3A5F", lineHeight: 1.6 }}><Markdown text={f.analysis} /></div>
-                  </div>
-                )}
-
-                {f.items && f.items.length > 0 && (
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", marginBottom: 5 }}>📰 Dernières publications</div>
-                    <ul style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 3 }}>
-                      {f.items.slice(0, 8).map((it, i) => (
-                        <li key={i} style={{ fontSize: 12, lineHeight: 1.5 }}>
-                          <a href={it.link || f.url} target="_blank" rel="noreferrer" style={{ color: "#374151", textDecoration: "none" }}>{it.title}</a>
-                        </li>
-                      ))}
-                    </ul>
+                {isOpen && (
+                  <div style={{ padding: "0 16px 16px" }}>
+                    <a href={f.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 11, color: BLUE, textDecoration: "none", wordBreak: "break-all" }}>{f.url}</a>
+                    {f.lastError && <div style={{ marginTop: 10, fontSize: 12, color: "#B42318", background: "#FEF3F2", border: "1px solid #FECDCA", borderRadius: 8, padding: "8px 10px" }}>⚠️ {f.lastError}</div>}
+                    {f.analysis && (
+                      <div style={{ marginTop: 12, background: "#F0F7FF", border: "1px solid #BFDBFE", borderRadius: 10, padding: "12px 14px" }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: "#1D4ED8", marginBottom: 6 }}>✦ Analyse d&apos;Auguste</div>
+                        <div style={{ fontSize: 13, color: "#1E3A5F", lineHeight: 1.6 }}><Markdown text={f.analysis} /></div>
+                      </div>
+                    )}
+                    {f.items && f.items.length > 0 && (
+                      <div style={{ marginTop: 12 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", marginBottom: 5 }}>📰 Dernières publications</div>
+                        <ul style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 3 }}>
+                          {f.items.filter(itemHit).slice(0, ql ? 20 : 8).map((it, i) => (
+                            <li key={i} style={{ fontSize: 12, lineHeight: 1.5 }}>
+                              <a href={it.link || f.url} target="_blank" rel="noreferrer" style={{ color: "#374151", textDecoration: "none" }}>{it.title}</a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
-        ))}
+          ));
+        })()}
       </main>
     </div>
   );

@@ -18,6 +18,29 @@ export async function register() {
   scheduleInsuranceReminders();
   // Relances de formation : digest aux parrains (1/parrain/7j), idempotent.
   scheduleFormationReminders();
+  // Veille juridique : ré-analyse de tous les flux chaque nuit à minuit.
+  scheduleVeilleRefresh();
+}
+
+let veilleScheduled = false;
+function scheduleVeilleRefresh() {
+  if (veilleScheduled) return;
+  veilleScheduled = true;
+  const run = async () => {
+    try {
+      const { refreshAllFeeds } = await import("@/lib/veille-refresh");
+      const r = await refreshAllFeeds();
+      console.log(`[veille] rafraîchissement nocturne : ${r.refreshed} flux, ${r.errors} échec(s)`);
+    } catch (e) {
+      console.error("[veille] échec du rafraîchissement nocturne :", e);
+    }
+  };
+  // Premier déclenchement au prochain minuit (heure locale du serveur), puis
+  // toutes les 24 h.
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+  const delay = Math.max(60_000, next.getTime() - now.getTime());
+  setTimeout(() => { run(); setInterval(run, 24 * 60 * 60 * 1000).unref?.(); }, delay).unref?.();
 }
 
 let formationScheduled = false;
