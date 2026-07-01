@@ -101,6 +101,7 @@ run_sql prisma/migrations_user_superadmin.sql
 run_sql prisma/migrations_mail_public_views.sql
 run_sql prisma/migrations_mail_blocklist.sql
 run_sql prisma/migrations_mail_allowlist.sql
+run_sql prisma/migrations_veille.sql
 run_sql prisma/migrations_mail_signatures.sql
 run_sql prisma/migrations_client_portal.sql
 run_sql prisma/migrations_tenant_documents.sql

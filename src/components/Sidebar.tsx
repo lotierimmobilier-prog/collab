@@ -36,6 +36,7 @@ const nav: NavItem[] = [
   { id: "annonces-portails", label: "Annonces portails", icon: "📣", href: "/annonces-portails", group: "Gestion" },
   { id: "formation", label: "Formation",            icon: "◈",  href: "/formation",          group: "Agence" },
   { id: "procedures",label: "Procédures",           icon: "📚", href: "/procedures",         group: "Agence" },
+  { id: "veille",    label: "Veille juridique",     icon: "⚖️", href: "/veille-juridique",   group: "Agence" },
   { id: "suggestions", label: "Idées & améliorations", icon: "💡", href: "/suggestions",      group: "Agence" },
   { id: "forum",     label: "Forum",                icon: "🗣️", href: "/forum",              group: "Agence" },
   { id: "assistants", label: "Assistants IA",        icon: "🤖", href: "/assistants",         group: "Agence" },
