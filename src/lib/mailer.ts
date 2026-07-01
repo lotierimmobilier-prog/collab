@@ -30,14 +30,14 @@ function smtpCombos(port: number): { port: number; secure: boolean }[] {
   return list;
 }
 
-export async function sendMail({ to, subject, html, attachments, transactional }: { to: string; subject: string; html: string; attachments?: MailAttachment[]; transactional?: boolean }): Promise<boolean> {
+export async function sendMail({ to, cc, replyTo, subject, html, attachments, transactional }: { to: string; cc?: string; replyTo?: string; subject: string; html: string; attachments?: MailAttachment[]; transactional?: boolean }): Promise<boolean> {
   const cfg = await getMailSettings();
   // Les emails « transactionnels » (code de connexion…) s'envoient même si la
   // bascule « notifications » est désactivée — il faut seulement des identifiants
   // SMTP valides (hôte + mot de passe).
   if ((!cfg.enabled && !transactional) || !cfg.pass || !cfg.host) return false;
 
-  const message = { from: cfg.from, to, subject, html, ...(attachments?.length ? { attachments } : {}) };
+  const message = { from: cfg.from, to, ...(cc ? { cc } : {}), ...(replyTo ? { replyTo } : {}), subject, html, ...(attachments?.length ? { attachments } : {}) };
   let lastErr: unknown = null;
   for (const { port, secure } of smtpCombos(cfg.port)) {
     try {

@@ -34,6 +34,7 @@ export const nav: NavItem[] = [
   { id: "assistance",label: "Assistance locataire", icon: "🛟", href: "/assistance",         group: "Gestion" },
   { id: "ods",       label: "Ordres de service",    icon: "📋", href: "/ordres-de-service",  group: "Gestion" },
   { id: "annonces-portails", label: "Annonces portails", icon: "📣", href: "/annonces-portails", group: "Gestion" },
+  { id: "mail-bienvenue", label: "Mail de bienvenue", icon: "🏠", href: "/mail-bienvenue", group: "Gestion" },
   { id: "formation", label: "Formation",            icon: "◈",  href: "/formation",          group: "Agence" },
   { id: "procedures",label: "Procédures",           icon: "📚", href: "/procedures",         group: "Agence" },
   { id: "suggestions", label: "Idées & améliorations", icon: "💡", href: "/suggestions",      group: "Agence" },
@@ -149,7 +150,8 @@ export default function Sidebar({ active }: { active: string }) {
   );
   const visibleNav = effectiveNav.filter(n => {
     if (n.id === "rh" && !isEmployee && !isDirection) return false;
-    if (n.group === "Gestion" && !canGestion) return false; // jamais pour les agents
+    // « Mail de bienvenue » est accessible aussi aux agents commerciaux.
+    if (n.group === "Gestion" && !canGestion && n.id !== "mail-bienvenue") return false;
     if (ALWAYS_GROUPS.includes(n.group)) return true;
     if (hiddenNav.includes(n.id)) return false;             // masqué individuellement
     const mod = NAV_MODULE[n.id];
