@@ -80,6 +80,8 @@ export default function MailBoard() {
   // Responsive : sur mobile la sidebar devient un tiroir coulissant
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 3500); return () => clearTimeout(t); }, [toast]);
 
   // Ref pour accéder aux comptes dans le timer sans stale closure
   const accountsRef    = useRef<MailAccount[]>([]);
@@ -494,10 +496,13 @@ export default function MailBoard() {
   /* ── Label / thread ops ─────────────────────────────────── */
   function applyLabel(threadId: string, labelId: string) {
     setMessages(prev => { const u = prev.map(m => m.threadId === threadId && !m.labels.includes(labelId) ? { ...m, labels: [...m.labels, labelId] } : m); rebuildThreads(u); return u; });
+    // Refléter aussi sur la conversation ouverte (sinon le bandeau ne bouge pas).
+    setSelectedThread(prev => prev?.id === threadId ? { ...prev, messages: prev.messages.map(m => m.labels.includes(labelId) ? m : { ...m, labels: [...m.labels, labelId] }) } : prev);
     fetch("/api/mail/messages", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threadId, addLabels: [labelId] }) }).catch(() => {});
   }
   function removeLabel(threadId: string, labelId: string) {
     setMessages(prev => { const u = prev.map(m => m.threadId === threadId ? { ...m, labels: m.labels.filter(l => l !== labelId) } : m); rebuildThreads(u); return u; });
+    setSelectedThread(prev => prev?.id === threadId ? { ...prev, messages: prev.messages.map(m => ({ ...m, labels: m.labels.filter(l => l !== labelId) })) } : prev);
     fetch("/api/mail/messages", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threadId, removeLabels: [labelId] }) }).catch(() => {});
   }
   function setThreadLabels(threadId: string, newLabels: string[]) {
@@ -985,9 +990,20 @@ export default function MailBoard() {
                 removeLabel(selectedThread.id, "pub");
                 applyLabel(selectedThread.id, "inbox");
                 if (email) fetch("/api/mail/allowlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) }).catch(() => {});
+                // Confirmation + fermeture : on revient à la liste (le mail est
+                // désormais en boîte de réception).
+                setToast(email ? `↩ Remis en boîte de réception — ${email} ne sera plus classé en Publicité.` : "↩ Remis en boîte de réception.");
+                setSelectedThread(null);
               }}
             />
           </div>
+        </div>
+      )}
+
+      {/* Confirmation flottante (toast) */}
+      {toast && (
+        <div style={{ position: "fixed", bottom: 22, left: "50%", transform: "translateX(-50%)", background: "#065F46", color: "#fff", padding: "11px 18px", borderRadius: 10, fontSize: 13, fontWeight: 600, boxShadow: "0 8px 28px rgba(0,0,0,0.22)", zIndex: 9999, maxWidth: "90vw", textAlign: "center" }}>
+          {toast}
         </div>
       )}
     </div>
