@@ -28,6 +28,14 @@ export async function POST(req: NextRequest) {
 
   const id = randomUUID();
   try {
+    // Filet de sécurité : garantit la présence de la table même si la
+    // migration n'a pas encore été appliquée sur cet environnement.
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS parrainage_doc (
+         id TEXT PRIMARY KEY, "ownerId" TEXT NOT NULL, "fileName" TEXT NOT NULL,
+         mime TEXT, size INTEGER, note TEXT, data TEXT NOT NULL,
+         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP )`,
+    );
     await prisma.$executeRawUnsafe(
       `INSERT INTO parrainage_doc (id, "ownerId", "fileName", mime, size, note, data)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,

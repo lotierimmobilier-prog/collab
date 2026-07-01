@@ -40,12 +40,23 @@ export default function DriveParrainagePage() {
   async function onFiles(files: FileList | null) {
     if (!files || !files.length) return;
     setUploading(true);
+    let failed = "";
     for (const file of Array.from(files)) {
       if (file.size > 20 * 1024 * 1024) { alert(`« ${file.name} » dépasse 20 Mo.`); continue; }
-      const data = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] ?? ""); r.onerror = rej; r.readAsDataURL(file); });
-      await fetch("/api/parrainage/docs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: file.name, mime: file.type, size: file.size, data }) }).catch(() => {});
+      try {
+        const data = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] ?? ""); r.onerror = rej; r.readAsDataURL(file); });
+        const resp = await fetch("/api/parrainage/docs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: file.name, mime: file.type, size: file.size, data }) });
+        if (!resp.ok) {
+          const j = await resp.json().catch(() => ({}));
+          failed += `\n• ${file.name} : ${j.error || `erreur ${resp.status}`}`;
+        }
+      } catch (e) {
+        failed += `\n• ${file.name} : ${e instanceof Error ? e.message : "échec de l'envoi"}`;
+      }
     }
-    setUploading(false); if (fileRef.current) fileRef.current.value = ""; load();
+    setUploading(false); if (fileRef.current) fileRef.current.value = "";
+    if (failed) alert(`Le dépôt a échoué :${failed}`);
+    load();
   }
   async function del(id: string) { if (!confirm("Supprimer ce document ?")) return; await fetch(`/api/parrainage/docs?id=${id}`, { method: "DELETE" }); load(); }
 
