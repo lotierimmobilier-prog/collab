@@ -12,19 +12,19 @@ const inp: React.CSSProperties = { width: "100%", fontSize: 13, padding: "7px 9p
 const grid = (n: number): React.CSSProperties => ({ display: "grid", gridTemplateColumns: `repeat(${n}, 1fr)`, gap: 10 });
 
 interface Data {
-  civilite: "M" | "Mme" | "MM" | "asso" | "societe"; prenom1: string; nom1: string; email1: string;
+  civilite: "M" | "Mme" | "MM" | "asso" | "societe"; proprietaire: string; prenom1: string; nom1: string; email1: string;
   prenom2: string; nom2: string; email2: string;
   agentPrenom: string; agentNom: string; agentTel: string; agentEmail: string;
   adresse: string; etage: string; numPorte: string;
   typeLgt: "nu" | "meuble" | "commercial"; dateEntree: string;
   loyer: string; charges: string; hono: string; depot: string;
-  pdlEdf: string; ancienEdf: string; numEau: string; ancienEau: string; numGaz: string; ancienGaz: string;
+  pdlEdf: string; ancienEdf: string; eauMode: "individuel" | "charges" | "divisionnaire"; numEau: string; ancienEau: string; numGaz: string; ancienGaz: string;
 }
 const EMPTY: Data = {
-  civilite: "M", prenom1: "", nom1: "", email1: "", prenom2: "", nom2: "", email2: "",
+  civilite: "M", proprietaire: "", prenom1: "", nom1: "", email1: "", prenom2: "", nom2: "", email2: "",
   agentPrenom: "", agentNom: "", agentTel: "", agentEmail: "",
   adresse: "", etage: "", numPorte: "", typeLgt: "nu", dateEntree: "",
-  loyer: "", charges: "", hono: "", depot: "", pdlEdf: "", ancienEdf: "", numEau: "", ancienEau: "", numGaz: "", ancienGaz: "",
+  loyer: "", charges: "", hono: "", depot: "", pdlEdf: "", ancienEdf: "", eauMode: "individuel", numEau: "", ancienEau: "", numGaz: "", ancienGaz: "",
 };
 
 export default function MailBienvenuePage() {
@@ -42,9 +42,18 @@ export default function MailBienvenuePage() {
   const [agents, setAgents] = useState<{ id: string; prenom: string; nom: string; email: string; phone: string | null }[]>([]);
   const [meCommercial, setMeCommercial] = useState(false);
   const [agentId, setAgentId] = useState("");
+  const [canConfig, setCanConfig] = useState(false);
+  const [defaultPdfName, setDefaultPdfName] = useState("");
+  const [dossiers, setDossiers] = useState<{ id: string; tenantName: string | null; address: string | null; sentTo: string | null; createdAt: string; senderName: string | null }[]>([]);
+  const reloadDossiers = useCallback(() => {
+    fetch("/api/gestion/mail-bienvenue").then(r => r.json()).then(dta => setDossiers(dta.dossiers ?? [])).catch(() => {});
+  }, []);
   useEffect(() => {
     fetch("/api/gestion/mail-bienvenue").then(r => r.json()).then(dta => {
       setAgents(dta.agents ?? []);
+      setCanConfig(!!dta.canConfig);
+      setDefaultPdfName(dta.defaultPdfName ?? "");
+      setDossiers(dta.dossiers ?? []);
       const me = dta.me;
       if (me?.isCommercial) {
         // Mail créé par l'agent : toutes ses informations.
@@ -53,6 +62,29 @@ export default function MailBienvenuePage() {
       }
     }).catch(() => {});
   }, []);
+
+  async function uploadDefaultPdf(list: FileList | null) {
+    const f = list?.[0]; if (!f) return;
+    if (f.size > 7 * 1024 * 1024) { alert("PDF trop volumineux (max 7 Mo)."); return; }
+    const content = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] ?? ""); r.onerror = rej; r.readAsDataURL(f); });
+    const r = await fetch("/api/gestion/mail-bienvenue/default-pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: f.name, content }) });
+    const j = await r.json();
+    if (r.ok) setDefaultPdfName(j.name); else alert(j.error || "Échec");
+  }
+  async function removeDefaultPdf() {
+    if (!confirm("Retirer le PDF joint par défaut (retour au RIB généré) ?")) return;
+    await fetch("/api/gestion/mail-bienvenue/default-pdf", { method: "DELETE" });
+    setDefaultPdfName("");
+  }
+  async function sendTest() {
+    setBusy(true); setMsg(null);
+    try {
+      const r = await fetch("/api/gestion/mail-bienvenue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ test: true, ...payload() }) });
+      const j = await r.json();
+      setMsg(r.ok && j.ok ? { ok: true, text: "Mail test envoyé à jerome.bouba@lotier-immobilier.com." } : { ok: false, text: j.error || "Envoi test échoué." });
+    } catch { setMsg({ ok: false, text: "Erreur réseau." }); }
+    setBusy(false);
+  }
 
   function pickAgent(id: string) {
     setAgentId(id);
@@ -111,7 +143,7 @@ export default function MailBienvenuePage() {
     try {
       const r = await fetch("/api/gestion/mail-bienvenue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload()) });
       const j = await r.json();
-      if (r.ok && j.ok) { setMsg({ ok: true, text: `Envoyé à ${j.sentTo.join(", ")} (copie : ${j.cc.join(", ")}).` }); }
+      if (r.ok && j.ok) { setMsg({ ok: true, text: `Envoyé à ${j.sentTo.join(", ")} (copie : ${j.cc.join(", ")}).` }); reloadDossiers(); }
       else setMsg({ ok: false, text: j.error || "Envoi échoué." });
     } catch { setMsg({ ok: false, text: "Erreur réseau." }); }
     setBusy(false);
@@ -173,7 +205,8 @@ export default function MailBienvenuePage() {
             </div>
             <div style={{ ...card, marginBottom: 0 }}>
               <div style={h2}>Logement</div>
-              <div><label style={lbl}>Adresse</label><input value={d.adresse} onChange={e => set("adresse", e.target.value)} style={inp} /></div>
+              <div><label style={lbl}>Propriétaire (bailleur)</label><input value={d.proprietaire} onChange={e => set("proprietaire", e.target.value)} placeholder="Nom du propriétaire" style={inp} /></div>
+              <div style={{ marginTop: 8 }}><label style={lbl}>Adresse</label><input value={d.adresse} onChange={e => set("adresse", e.target.value)} style={inp} /></div>
               <div style={{ ...grid(2), marginTop: 8 }}>
                 <div><label style={lbl}>Étage</label><input value={d.etage} onChange={e => set("etage", e.target.value)} style={inp} /></div>
                 <div><label style={lbl}>N° de porte</label><input value={d.numPorte} onChange={e => set("numPorte", e.target.value)} style={inp} /></div>
@@ -206,16 +239,49 @@ export default function MailBienvenuePage() {
             <div style={grid(2)}>
               <div><label style={lbl}>PDL EDF</label><input value={d.pdlEdf} onChange={e => set("pdlEdf", e.target.value)} style={inp} /></div>
               <div><label style={lbl}>Ancien titulaire EDF</label><input value={d.ancienEdf} onChange={e => set("ancienEdf", e.target.value)} style={inp} /></div>
-              <div><label style={lbl}>N° compteur eau</label><input value={d.numEau} onChange={e => set("numEau", e.target.value)} style={inp} /></div>
-              <div><label style={lbl}>Ancien titulaire eau</label><input value={d.ancienEau} onChange={e => set("ancienEau", e.target.value)} style={inp} /></div>
+            </div>
+            {/* Eau : compteur individuel / dans les charges / divisionnaire */}
+            <div style={{ marginTop: 10 }}>
+              <label style={lbl}>💧 Eau</label>
+              <select value={d.eauMode} onChange={e => set("eauMode", e.target.value)} style={inp}>
+                <option value="individuel">Compteur individuel (à ouvrir)</option>
+                <option value="charges">Comprise dans les charges (aucune action)</option>
+                <option value="divisionnaire">Compteur divisionnaire (aucune action)</option>
+              </select>
+            </div>
+            {d.eauMode === "individuel" && (
+              <div style={{ ...grid(2), marginTop: 8 }}>
+                <div><label style={lbl}>N° compteur eau</label><input value={d.numEau} onChange={e => set("numEau", e.target.value)} style={inp} /></div>
+                <div><label style={lbl}>Ancien titulaire eau</label><input value={d.ancienEau} onChange={e => set("ancienEau", e.target.value)} style={inp} /></div>
+              </div>
+            )}
+            <div style={{ ...grid(2), marginTop: 8 }}>
               <div><label style={lbl}>N° compteur gaz</label><input value={d.numGaz} onChange={e => set("numGaz", e.target.value)} placeholder="Vide si absent" style={inp} /></div>
               <div><label style={lbl}>Ancien titulaire gaz</label><input value={d.ancienGaz} onChange={e => set("ancienGaz", e.target.value)} style={inp} /></div>
             </div>
           </div>
 
+          {canConfig && (
+            <div style={card}>
+              <div style={h2}>PDF joint par défaut (administration)</div>
+              <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 10px" }}>Ce PDF remplace le RIB généré automatiquement et sera joint à chaque mail de bienvenue.</p>
+              {defaultPdfName ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#f0f7ec", border: "1px solid #c3ddb0", borderRadius: 6, padding: "8px 12px", fontSize: 12.5, color: "#3a6e1a" }}>
+                  <span style={{ flex: 1 }}>📎 {defaultPdfName}</span>
+                  <button onClick={removeDefaultPdf} style={{ background: "none", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 8px", fontSize: 12, color: RED, cursor: "pointer" }}>Retirer</button>
+                </div>
+              ) : (
+                <label style={{ display: "block", border: "1px dashed #ccc", borderRadius: 6, padding: 12, textAlign: "center", cursor: "pointer", fontSize: 12, color: "#888" }}>
+                  + Téléverser un PDF (max 7 Mo)
+                  <input type="file" accept=".pdf" onChange={e => uploadDefaultPdf(e.target.files)} style={{ display: "none" }} />
+                </label>
+              )}
+            </div>
+          )}
+
           <div style={card}>
             <div style={h2}>Pièces jointes</div>
-            <div style={{ background: "#f0f7ec", border: "1px solid #c3ddb0", borderRadius: 6, padding: "8px 12px", fontSize: 12, color: "#3a6e1a", marginBottom: 8 }}>📄 RIB LOTIER (PDF) — joint automatiquement</div>
+            <div style={{ background: "#f0f7ec", border: "1px solid #c3ddb0", borderRadius: 6, padding: "8px 12px", fontSize: 12, color: "#3a6e1a", marginBottom: 8 }}>📄 {defaultPdfName || "RIB LOTIER (PDF)"} — joint automatiquement</div>
             <label style={{ display: "block", border: "1px dashed #ccc", borderRadius: 6, padding: 12, textAlign: "center", cursor: "pointer", fontSize: 12, color: "#888" }}>
               + Ajouter d&apos;autres PDF
               <input type="file" accept=".pdf" multiple onChange={e => onFiles(e.target.files)} style={{ display: "none" }} />
@@ -230,6 +296,7 @@ export default function MailBienvenuePage() {
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
             <button onClick={doPreview} disabled={busy} style={{ background: "#fff", color: NAVY, border: `1px solid ${NAVY}`, borderRadius: 8, padding: "10px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>👁 Aperçu du mail</button>
+            <button onClick={sendTest} disabled={busy} title="Envoyer un exemple à jerome.bouba@ pour voir le rendu" style={{ background: "#fff", color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 8, padding: "10px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>🧪 Envoyer un test</button>
             <button onClick={send} disabled={busy} style={{ background: GREEN, color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{busy ? "…" : "✉️ Envoyer le mail de bienvenue"}</button>
           </div>
 
@@ -239,6 +306,24 @@ export default function MailBienvenuePage() {
             <div style={{ marginBottom: 24 }}>
               <div style={{ fontSize: 12, color: "#888", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 8 }}>Aperçu</div>
               <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden", background: "#f4f4f4", padding: 16 }} dangerouslySetInnerHTML={{ __html: preview }} />
+            </div>
+          )}
+
+          {/* Historique des envois (avec l'auteur). */}
+          {dossiers.length > 0 && (
+            <div style={{ ...card, marginTop: 8 }}>
+              <div style={h2}>Derniers mails envoyés</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {dossiers.slice(0, 30).map(x => (
+                  <div key={x.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, borderBottom: "1px solid #f0f0f0", paddingBottom: 6, flexWrap: "wrap" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: DARK }}>{x.tenantName || "—"}{x.address ? <span style={{ color: "#9ca3af", fontWeight: 400 }}> · {x.address}</span> : null}</div>
+                      <div style={{ fontSize: 11, color: "#9ca3af" }}>{x.sentTo ? `Envoyé à ${x.sentTo}` : "Non envoyé"}{x.senderName ? ` · par ${x.senderName}` : ""}</div>
+                    </div>
+                    <span style={{ fontSize: 11, color: "#9ca3af", flexShrink: 0 }}>{new Date(x.createdAt).toLocaleString("fr-FR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </main>
