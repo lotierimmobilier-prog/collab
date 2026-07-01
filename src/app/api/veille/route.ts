@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { fetchFeed, analyzeFeed } from "@/lib/veille";
+import { canManageContent } from "@/lib/superadmin";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -44,14 +45,16 @@ export async function GET() {
     after(async () => { for (const f of stale) await refreshFeed(f.id, f.title, f.url); });
   }
 
-  return NextResponse.json({ families, feeds });
+  return NextResponse.json({ families, feeds, canManage: canManageContent(session.user) });
 }
 
-// POST — créer une famille ou un flux. { kind: "family", name, color } |
-// { kind: "feed", title, url, familyId }
+// POST — créer une famille ou un flux (admin uniquement). Les autres
+// utilisateurs sont en consultation / analyse.
+// { kind: "family", name, color } | { kind: "feed", title, url, familyId }
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!canManageContent(session.user)) return NextResponse.json({ error: "Réservé à l'administration" }, { status: 403 });
   const body = await req.json().catch(() => ({}));
 
   if (body.kind === "family") {
@@ -86,6 +89,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!canManageContent(session.user)) return NextResponse.json({ error: "Réservé à l'administration" }, { status: 403 });
   const kind = req.nextUrl.searchParams.get("kind");
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id requis" }, { status: 400 });

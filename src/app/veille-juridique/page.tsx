@@ -44,6 +44,7 @@ export default function VeilleJuridiquePage() {
   const [famName, setFamName] = useState(""); const [famColor, setFamColor] = useState(COLORS[0]);
   const [showFam, setShowFam] = useState(false);
   const [query, setQuery] = useState("");            // moteur de recherche
+  const [canManage, setCanManage] = useState(false); // ajout réservé à l'admin
   const [open, setOpen] = useState<Set<string>>(new Set()); // flux dépliés
   const toggle = (id: string) => setOpen(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
@@ -52,6 +53,7 @@ export default function VeilleJuridiquePage() {
       const d = await fetch("/api/veille").then(r => r.json());
       setFamilies(d.families ?? []);
       setFeeds((d.feeds ?? []).map((f: Feed) => ({ ...f, items: typeof f.items === "string" ? JSON.parse(f.items) : f.items })));
+      setCanManage(!!d.canManage);
     } catch { /* ignore */ }
     setLoading(false);
   }, []);
@@ -88,10 +90,13 @@ export default function VeilleJuridiquePage() {
       <main style={{ flex: 1, padding: "28px 32px", maxWidth: 1000, margin: "0 auto", width: "100%" }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: DARK, margin: 0 }}>⚖️ Veille juridique</h1>
         <p style={{ color: "#6b7280", fontSize: 13, marginTop: 4, marginBottom: 20 }}>
-          Ajoutez un flux RSS <strong>ou l&apos;adresse d&apos;un site web</strong> : Auguste récupère les articles (titre, résumé, lien) et les analyse automatiquement toutes les 24 h et à chaque ajout. Visible par toute l&apos;équipe.
+          {canManage
+            ? <>Ajoutez un flux RSS <strong>ou l&apos;adresse d&apos;un site web</strong> : Auguste récupère les articles (titre, résumé, lien) et les analyse automatiquement toutes les 24 h et à chaque ajout. Visible par toute l&apos;équipe.</>
+            : <>Les flux référencés par l&apos;administration, analysés par Auguste toutes les 24 h. Consultation et analyse.</>}
         </p>
 
-        {/* Ajout d'un flux */}
+        {/* Ajout d'un flux — administration uniquement */}
+        {canManage && (
         <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16, marginBottom: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr auto auto", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <input value={fTitle} onChange={e => setFTitle(e.target.value)} placeholder="Titre du flux (ex. Légifrance – Immobilier)" style={inp} />
@@ -117,6 +122,7 @@ export default function VeilleJuridiquePage() {
             )}
           </div>
         </div>
+        )}
 
         {/* Moteur de recherche */}
         <div style={{ marginBottom: 16, position: "relative" }}>
@@ -140,7 +146,7 @@ export default function VeilleJuridiquePage() {
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
               <span style={{ width: 10, height: 10, borderRadius: "50%", background: g.fam?.color ?? "#9ca3af" }} />
               <h2 style={{ fontSize: 15, fontWeight: 800, color: DARK, margin: 0 }}>{g.fam?.name ?? "Sans famille"}</h2>
-              {g.fam && <button onClick={() => delFamily(g.fam!.id)} title="Supprimer la famille" style={{ background: "none", border: "none", color: "#d1d5db", cursor: "pointer", fontSize: 13 }}>🗑</button>}
+              {g.fam && canManage && <button onClick={() => delFamily(g.fam!.id)} title="Supprimer la famille" style={{ background: "none", border: "none", color: "#d1d5db", cursor: "pointer", fontSize: 13 }}>🗑</button>}
             </div>
             {g.feeds.map(f => {
               const isOpen = open.has(f.id) || !!ql;   // recherche active → tout déplié
@@ -157,7 +163,7 @@ export default function VeilleJuridiquePage() {
                   </div>
                   <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                     <button onClick={e => { e.stopPropagation(); refreshFeed(f.id); }} disabled={refreshing === f.id} style={{ background: GOLD_BG, color: GOLD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{refreshing === f.id ? "⏳ Analyse…" : "🔄 Analyser"}</button>
-                    <button onClick={e => { e.stopPropagation(); delFeed(f.id); }} title="Supprimer" style={{ background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "5px 8px", fontSize: 12, color: RED, cursor: "pointer" }}>🗑</button>
+                    {canManage && <button onClick={e => { e.stopPropagation(); delFeed(f.id); }} title="Supprimer" style={{ background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "5px 8px", fontSize: 12, color: RED, cursor: "pointer" }}>🗑</button>}
                   </div>
                 </div>
 

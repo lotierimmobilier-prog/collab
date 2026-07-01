@@ -20,3 +20,10 @@ export function isAgencyEmail(email?: string | null): boolean {
 export function isAdminRole(roleId?: string | null): boolean {
   return roleId === "admin" || roleId === "dirigeant";
 }
+
+// Peut administrer les contenus éditoriaux (flux de Veille, sites d'Actualité) :
+// super admin OU administrateur. Les autres sont en consultation/analyse.
+export function canManageContent(user?: { superAdmin?: boolean; email?: string | null; roleId?: string | null } | null): boolean {
+  if (!user) return false;
+  return user.superAdmin === true || isSuperAdminEmail(user.email) || isAdminRole(user.roleId);
+}

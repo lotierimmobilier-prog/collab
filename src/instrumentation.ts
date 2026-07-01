@@ -31,6 +31,9 @@ function scheduleVeilleRefresh() {
       const { refreshAllFeeds } = await import("@/lib/veille-refresh");
       const r = await refreshAllFeeds();
       console.log(`[veille] rafraîchissement nocturne : ${r.refreshed} flux, ${r.errors} échec(s)`);
+      const { refreshAllSources } = await import("@/lib/actualite");
+      const a = await refreshAllSources();
+      console.log(`[actualite] rafraîchissement nocturne : ${a.refreshed} site(s), ${a.errors} échec(s)`);
     } catch (e) {
       console.error("[veille] échec du rafraîchissement nocturne :", e);
     }

@@ -21,28 +21,47 @@ function tag(block: string, name: string): string {
 // Récupère et parse un flux RSS 2.0 ou Atom (max 15). Si l'URL n'est PAS un
 // flux mais une page web classique, on bascule sur l'extraction des articles
 // par Auguste.
-export async function fetchFeed(url: string): Promise<FeedItem[]> {
+// Détecte l'encodage (en-tête HTTP, puis déclaration XML / meta charset) et
+// décode les octets en conséquence. Évite les caractères « � » sur les flux
+// encodés en ISO-8859-1 / Windows-1252 (fréquent sur les sites français).
+function detectCharset(headerCt: string | null, bytes: Uint8Array): string {
+  const ct = (headerCt || "").toLowerCase();
+  let m = ct.match(/charset=([^;]+)/);
+  if (m) return m[1].trim().replace(/["']/g, "");
+  const head = new TextDecoder("ascii").decode(bytes.slice(0, 2048)).toLowerCase();
+  m = head.match(/encoding=["']([^"']+)["']/) || head.match(/charset=["']?([\w-]+)/);
+  return m ? m[1].trim() : "utf-8";
+}
+
+export async function fetchDecoded(url: string, ua = "Collab-Veille/1.0", accept = "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html, */*"): Promise<string> {
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), 20000);
   try {
-    const resp = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "Collab-Veille/1.0", Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html, */*" } });
+    const resp = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": ua, Accept: accept } });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const body = await resp.text();
-    const blocks = body.match(/<item[\s\S]*?<\/item>/gi) || body.match(/<entry[\s\S]*?<\/entry>/gi) || [];
-    if (blocks.length) {
-      return blocks.slice(0, 15).map(b => {
-        let link = tag(b, "link");
-        if (!link) { const lm = b.match(/<link[^>]*href=["']([^"']+)["']/i); if (lm) link = lm[1]; }
-        const date = tag(b, "pubDate") || tag(b, "published") || tag(b, "updated") || tag(b, "dc:date");
-        const summary = (tag(b, "description") || tag(b, "summary") || tag(b, "content")).slice(0, 500);
-        return { title: tag(b, "title"), link, date, summary };
-      }).filter(i => i.title);
-    }
-    // Pas un flux RSS/Atom → page web : extraction des articles par Auguste.
-    return await extractSiteArticles(url, body);
+    const bytes = new Uint8Array(await resp.arrayBuffer());
+    const cs = detectCharset(resp.headers.get("content-type"), bytes);
+    try { return new TextDecoder(cs).decode(bytes); }
+    catch { return new TextDecoder("utf-8").decode(bytes); }
   } finally {
     clearTimeout(to);
   }
+}
+
+export async function fetchFeed(url: string): Promise<FeedItem[]> {
+  const body = await fetchDecoded(url);
+  const blocks = body.match(/<item[\s\S]*?<\/item>/gi) || body.match(/<entry[\s\S]*?<\/entry>/gi) || [];
+  if (blocks.length) {
+    return blocks.slice(0, 15).map(b => {
+      let link = tag(b, "link");
+      if (!link) { const lm = b.match(/<link[^>]*href=["']([^"']+)["']/i); if (lm) link = lm[1]; }
+      const date = tag(b, "pubDate") || tag(b, "published") || tag(b, "updated") || tag(b, "dc:date");
+      const summary = (tag(b, "description") || tag(b, "summary") || tag(b, "content")).slice(0, 500);
+      return { title: tag(b, "title"), link, date, summary };
+    }).filter(i => i.title);
+  }
+  // Pas un flux RSS/Atom → page web : extraction des articles par Auguste.
+  return await extractSiteArticles(url, body);
 }
 
 // Extrait les liens (texte + URL absolue) d'une page HTML.
