@@ -120,6 +120,7 @@ run_sql prisma/migrations_auguste_tokens.sql
 run_sql prisma/migrations_protexa_mandates.sql
 run_sql prisma/migrations_suggestions.sql
 run_sql prisma/migrations_shop.sql
+run_sql prisma/migrations_shop_image.sql
 run_sql prisma/migrations_ai_agents.sql
 run_sql prisma/migrations_ai_agents_cv.sql
 run_sql prisma/migrations_ai_agents_more.sql
