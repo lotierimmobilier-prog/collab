@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import Sidebar from "@/components/Sidebar";
+import Markdown from "@/components/Markdown";
 
 const GOLD = "#B8966A"; const DARK = "#1C1A17"; const BORDER = "#E6E1D9"; const GOLD_BG = "#F7F0E6";
 const BLUE = "#2563EB"; const RED = "#DC2626"; const GREEN = "#2F855A";
@@ -136,7 +137,7 @@ export default function VeilleJuridiquePage() {
                 {f.analysis && (
                   <div style={{ marginTop: 12, background: "#F0F7FF", border: "1px solid #BFDBFE", borderRadius: 10, padding: "12px 14px" }}>
                     <div style={{ fontSize: 11, fontWeight: 800, color: "#1D4ED8", marginBottom: 6 }}>✦ Analyse d&apos;Auguste</div>
-                    <div style={{ fontSize: 13, color: "#1E3A5F", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{f.analysis}</div>
+                    <div style={{ fontSize: 13, color: "#1E3A5F", lineHeight: 1.6 }}><Markdown text={f.analysis} /></div>
                   </div>
                 )}
 
