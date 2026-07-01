@@ -84,8 +84,12 @@ export default function Markdown({ text }: { text: string }) {
     // Ligne vide
     if (!line.trim()) { i++; continue; }
 
-    // Paragraphe (regroupe les lignes consécutives)
-    const para: string[] = [];
+    // Paragraphe (regroupe les lignes consécutives). On consomme d'abord la
+    // ligne courante pour GARANTIR une progression : sans cela, une ligne
+    // commençant par « | » sans vraie ligne de séparation (donc ni tableau, ni
+    // paragraphe car exclue ci-dessous) ne serait jamais consommée → boucle
+    // infinie qui fige l'onglet.
+    const para: string[] = [lines[i]]; i++;
     while (i < lines.length && lines[i].trim() && !/^\s*([-*•]|\d+[.)]|#{1,4}\s|>|\|)/.test(lines[i]) && !/^\s*-{3,}\s*$/.test(lines[i])) { para.push(lines[i]); i++; }
     blocks.push(<p key={k++} style={{ margin: "5px 0", lineHeight: 1.55 }}>{para.map((p, j) => <React.Fragment key={j}>{j > 0 && <br />}{inline(p, `p${k}-${j}`)}</React.Fragment>)}</p>);
   }
