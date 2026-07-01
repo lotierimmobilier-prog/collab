@@ -76,14 +76,14 @@ export default function VeilleJuridiquePage() {
       <main style={{ flex: 1, padding: "28px 32px", maxWidth: 1000, margin: "0 auto", width: "100%" }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: DARK, margin: 0 }}>⚖️ Veille juridique</h1>
         <p style={{ color: "#6b7280", fontSize: 13, marginTop: 4, marginBottom: 20 }}>
-          Ajoutez des flux RSS juridiques. Auguste les analyse automatiquement toutes les 24 h et à chaque ajout. Visible par toute l&apos;équipe.
+          Ajoutez un flux RSS <strong>ou l&apos;adresse d&apos;un site web</strong> : Auguste récupère les articles (titre, résumé, lien) et les analyse automatiquement toutes les 24 h et à chaque ajout. Visible par toute l&apos;équipe.
         </p>
 
         {/* Ajout d'un flux */}
         <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16, marginBottom: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr auto auto", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <input value={fTitle} onChange={e => setFTitle(e.target.value)} placeholder="Titre du flux (ex. Légifrance – Immobilier)" style={inp} />
-            <input value={fUrl} onChange={e => setFUrl(e.target.value)} placeholder="URL du flux RSS (https://…)" style={inp} />
+            <input value={fUrl} onChange={e => setFUrl(e.target.value)} placeholder="URL d'un flux RSS ou d'un site web (https://…)" style={inp} />
             <select value={fFamily} onChange={e => setFFamily(e.target.value)} style={{ ...inp, cursor: "pointer" }}>
               <option value="">Sans famille</option>
               {families.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
