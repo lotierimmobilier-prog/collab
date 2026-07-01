@@ -3,7 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { resolveAccountOwner, resolveImapCreds } from "@/lib/mailOwner";
 import { isAgencyEmail } from "@/lib/superadmin";
-import { detectPortal } from "@/lib/portalLeads";
+import { detectPortal, keepInInbox } from "@/lib/portalLeads";
+import { allowedSendersFor } from "@/lib/mailAllowlist";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { ImapFlow } = require("imapflow");
 
@@ -38,7 +39,7 @@ async function identifySender(email: string): Promise<{ senderType: string; send
 
 // Synchronise un dossier IMAP donné, page par page
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function syncFolder(client: any, folder: string, accountId: string, since: Date, page: number, ownerId: string) {
+async function syncFolder(client: any, folder: string, accountId: string, since: Date, page: number, ownerId: string, allowSet: Set<string>) {
   const messages: Array<Record<string, unknown>> = [];
   let total = 0;
   let totalPages = 0;
@@ -79,8 +80,12 @@ async function syncFolder(client: any, folder: string, accountId: string, since:
           const hdrs    = (msg.headers ? msg.headers.toString() : "").toLowerCase();
           const subjLc  = (env.subject ?? "").toLowerCase();
           const fromLc  = fromEmail.toLowerCase();
-          const isPortal = !!detectPortal(fromEmail, env.from?.[0]?.name);
-          const isPub   = !isSent && !isPortal && (
+          // Doit rester en boîte de réception : portail/partenaire connu
+          // (Leboncoin, Bien'ici, Le Figaro, Green Acre, Athome…) OU expéditeur
+          // remis manuellement en boîte de réception (allowlist mémorisée).
+          const fromDomain = fromLc.includes("@") ? fromLc.split("@")[1] : "";
+          const trusted = keepInInbox(fromEmail, env.from?.[0]?.name) || allowSet.has(fromLc) || (!!fromDomain && allowSet.has(fromDomain));
+          const isPub   = !isSent && !trusted && (
             hdrs.includes("list-unsubscribe") ||
             hdrs.includes("precedence: bulk") ||
             /désinscri|desinscri|se d[ée]sabonner|unsubscribe|newsletter|no[-_]?reply|nepasrepondre|ne-pas-repondre/.test(`${subjLc} ${fromLc}`)
@@ -96,9 +101,10 @@ async function syncFolder(client: any, folder: string, accountId: string, since:
               select: { id: true },
             }).catch(() => null);
             if (tomb) continue;
-            // Correction : un mail de portail déjà rangé en « pub » par erreur
-            // est remis en boîte de réception (en conservant ses autres tags).
-            if (isPortal) {
+            // Correction : un mail de confiance (portail/partenaire ou
+            // expéditeur remis manuellement en boîte) déjà rangé en « pub » par
+            // erreur est remis en boîte de réception (en conservant ses tags).
+            if (trusted) {
               const ex = await prisma.emailMessage.findFirst({ where: { accountId, messageId: cleanMid, labels: { has: "pub" } }, select: { id: true, labels: true } }).catch(() => null);
               if (ex) {
                 const fixed = ex.labels.filter(l => l !== "pub");
@@ -201,6 +207,10 @@ export async function POST(req: NextRequest) {
   // pour un compte local non géré en base, à l'utilisateur courant.
   const ownerId = (accountId ? await resolveAccountOwner(accountId) : null) ?? session.user.id;
 
+  // Expéditeurs de confiance (allowlist) de l'agent : leurs mails restent
+  // toujours en boîte de réception.
+  const allowSet = (await allowedSendersFor([ownerId])).get(ownerId) ?? new Set<string>();
+
   const since = new Date();
   since.setMonth(since.getMonth() - MONTHS_BACK);
 
@@ -210,17 +220,17 @@ export async function POST(req: NextRequest) {
     await client.connect();
 
     // Sync INBOX
-    const inbox = await syncFolder(client, "INBOX", accountId, since, page, ownerId);
+    const inbox = await syncFolder(client, "INBOX", accountId, since, page, ownerId, allowSet);
 
     // Sync Envoyés — historique complet (6 mois) lors de la synchro page 1
     let sentCount = 0;
     if (syncSent && page === 1) {
       const sentFolder = await detectSentFolder(client);
       if (sentFolder) {
-        const first = await syncFolder(client, sentFolder, accountId, since, 1, ownerId);
+        const first = await syncFolder(client, sentFolder, accountId, since, 1, ownerId, allowSet);
         sentCount = first.messages.length;
         for (let p = 2; p <= first.totalPages; p++) {
-          const more = await syncFolder(client, sentFolder, accountId, since, p, ownerId);
+          const more = await syncFolder(client, sentFolder, accountId, since, p, ownerId, allowSet);
           sentCount += more.messages.length;
         }
       }

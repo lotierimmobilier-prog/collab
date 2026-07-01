@@ -43,6 +43,7 @@ const FILES = [
   "migrations_user_superadmin.sql",
   "migrations_mail_public_views.sql",
   "migrations_mail_blocklist.sql",
+  "migrations_mail_allowlist.sql",
   "migrations_mail_signatures.sql",
   "migrations_client_portal.sql",
   "migrations_tenant_documents.sql",

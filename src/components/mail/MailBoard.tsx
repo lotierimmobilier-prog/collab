@@ -978,6 +978,14 @@ export default function MailBoard() {
               }}
               customLabels={customLabels}
               onSetLabels={(lbls) => setThreadLabels(selectedThread.id, lbls)}
+              onKeepInInbox={() => {
+                // Remet la conversation en boîte de réception et mémorise
+                // l'expéditeur (ses prochains mails ne seront plus en Publicité).
+                const email = selectedThread.messages[0]?.from?.email;
+                removeLabel(selectedThread.id, "pub");
+                applyLabel(selectedThread.id, "inbox");
+                if (email) fetch("/api/mail/allowlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) }).catch(() => {});
+              }}
             />
           </div>
         </div>
