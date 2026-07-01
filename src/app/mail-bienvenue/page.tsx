@@ -11,6 +11,16 @@ const lbl: React.CSSProperties = { fontSize: 12, color: "#666", display: "block"
 const inp: React.CSSProperties = { width: "100%", fontSize: 13, padding: "7px 9px", border: `1px solid ${BORDER}`, borderRadius: 6, boxSizing: "border-box", outline: "none" };
 const grid = (n: number): React.CSSProperties => ({ display: "grid", gridTemplateColumns: `repeat(${n}, 1fr)`, gap: 10 });
 
+// Case « à fournir plus tard » : le n° de compteur sera communiqué par l'agent.
+function LaterToggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <label style={{ display: "flex", alignItems: "center", gap: 8, margin: "10px 0 2px", fontSize: 12.5, color: checked ? NAVY : "#555", cursor: "pointer", fontWeight: checked ? 700 : 500 }}>
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} style={{ accentColor: GOLD }} />
+      {label}
+    </label>
+  );
+}
+
 interface Data {
   civilite: "M" | "Mme" | "MM" | "asso" | "societe"; proprietaire: string; prenom1: string; nom1: string; email1: string;
   prenom2: string; nom2: string; email2: string;
@@ -19,12 +29,14 @@ interface Data {
   typeLgt: "nu" | "meuble" | "commercial"; dateEntree: string;
   loyer: string; charges: string; hono: string; depot: string;
   pdlEdf: string; ancienEdf: string; eauMode: "individuel" | "charges" | "divisionnaire"; numEau: string; ancienEau: string; numGaz: string; ancienGaz: string;
+  edfLater: boolean; eauLater: boolean; gazLater: boolean;
 }
 const EMPTY: Data = {
   civilite: "M", proprietaire: "", prenom1: "", nom1: "", email1: "", prenom2: "", nom2: "", email2: "",
   agentPrenom: "", agentNom: "", agentTel: "", agentEmail: "",
   adresse: "", etage: "", numPorte: "", typeLgt: "nu", dateEntree: "",
   loyer: "", charges: "", hono: "", depot: "", pdlEdf: "", ancienEdf: "", eauMode: "individuel", numEau: "", ancienEau: "", numGaz: "", ancienGaz: "",
+  edfLater: false, eauLater: false, gazLater: false,
 };
 
 export default function MailBienvenuePage() {
@@ -36,6 +48,7 @@ export default function MailBienvenuePage() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const set = (k: keyof Data, v: string) => setD(p => ({ ...p, [k]: v }));
+  const setB = (k: keyof Data, v: boolean) => setD(p => ({ ...p, [k]: v }));
 
   // Agent : soit l'utilisateur connecté (s'il est commercial), soit un agent
   // choisi dans une liste (si admin / gestionnaire).
@@ -236,10 +249,14 @@ export default function MailBienvenuePage() {
 
           <div style={card}>
             <div style={h2}>Compteurs</div>
-            <div style={grid(2)}>
-              <div><label style={lbl}>PDL EDF</label><input value={d.pdlEdf} onChange={e => set("pdlEdf", e.target.value)} style={inp} /></div>
-              <div><label style={lbl}>Ancien titulaire EDF</label><input value={d.ancienEdf} onChange={e => set("ancienEdf", e.target.value)} style={inp} /></div>
-            </div>
+            {/* Électricité */}
+            <LaterToggle checked={d.edfLater} onChange={v => setB("edfLater", v)} label="⚡ N° de PDL à fournir plus tard par l'agent" />
+            {!d.edfLater && (
+              <div style={grid(2)}>
+                <div><label style={lbl}>PDL EDF</label><input value={d.pdlEdf} onChange={e => set("pdlEdf", e.target.value)} style={inp} /></div>
+                <div><label style={lbl}>Ancien titulaire EDF</label><input value={d.ancienEdf} onChange={e => set("ancienEdf", e.target.value)} style={inp} /></div>
+              </div>
+            )}
             {/* Eau : compteur individuel / dans les charges / divisionnaire */}
             <div style={{ marginTop: 10 }}>
               <label style={lbl}>💧 Eau</label>
@@ -250,15 +267,24 @@ export default function MailBienvenuePage() {
               </select>
             </div>
             {d.eauMode === "individuel" && (
+              <>
+                <LaterToggle checked={d.eauLater} onChange={v => setB("eauLater", v)} label="💧 N° de compteur eau à fournir plus tard par l'agent" />
+                {!d.eauLater && (
+                  <div style={{ ...grid(2), marginTop: 8 }}>
+                    <div><label style={lbl}>N° compteur eau</label><input value={d.numEau} onChange={e => set("numEau", e.target.value)} style={inp} /></div>
+                    <div><label style={lbl}>Ancien titulaire eau</label><input value={d.ancienEau} onChange={e => set("ancienEau", e.target.value)} style={inp} /></div>
+                  </div>
+                )}
+              </>
+            )}
+            {/* Gaz */}
+            <LaterToggle checked={d.gazLater} onChange={v => setB("gazLater", v)} label="🔥 N° de compteur gaz à fournir plus tard par l'agent" />
+            {!d.gazLater && (
               <div style={{ ...grid(2), marginTop: 8 }}>
-                <div><label style={lbl}>N° compteur eau</label><input value={d.numEau} onChange={e => set("numEau", e.target.value)} style={inp} /></div>
-                <div><label style={lbl}>Ancien titulaire eau</label><input value={d.ancienEau} onChange={e => set("ancienEau", e.target.value)} style={inp} /></div>
+                <div><label style={lbl}>N° compteur gaz</label><input value={d.numGaz} onChange={e => set("numGaz", e.target.value)} placeholder="Vide si absent" style={inp} /></div>
+                <div><label style={lbl}>Ancien titulaire gaz</label><input value={d.ancienGaz} onChange={e => set("ancienGaz", e.target.value)} style={inp} /></div>
               </div>
             )}
-            <div style={{ ...grid(2), marginTop: 8 }}>
-              <div><label style={lbl}>N° compteur gaz</label><input value={d.numGaz} onChange={e => set("numGaz", e.target.value)} placeholder="Vide si absent" style={inp} /></div>
-              <div><label style={lbl}>Ancien titulaire gaz</label><input value={d.ancienGaz} onChange={e => set("ancienGaz", e.target.value)} style={inp} /></div>
-            </div>
           </div>
 
           {canConfig && (

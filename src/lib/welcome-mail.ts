@@ -18,6 +18,8 @@ export interface WelcomeData {
   typeLgt: "nu" | "meuble" | "commercial"; dateEntree?: string;
   loyer?: number; charges?: number; hono?: number; depot?: number;
   pdlEdf?: string; ancienEdf?: string; eauMode?: "individuel" | "charges" | "divisionnaire"; numEau?: string; ancienEau?: string; numGaz?: string; ancienGaz?: string;
+  // Compteur « à fournir plus tard » : la référence sera communiquée par l'agent.
+  edfLater?: boolean; eauLater?: boolean; gazLater?: boolean;
 }
 
 const esc = (s?: string) => (s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -52,8 +54,13 @@ export function computeAmounts(d: WelcomeData) {
   return { loyer, charges, hono, depot, base, jm, jo, pro, total };
 }
 
+// Objet du mail : même format que le titre affiché dans le corps
+// (🏠 Bienvenue… ! PROPRIÉTAIRE / LOCATAIRE · ADRESSE).
 export function welcomeSubject(d: WelcomeData): string {
-  return `🏠 Bienvenue dans votre nouveau logement – ${locName(d)}${d.adresse ? " – " + d.adresse : ""}`;
+  const prop = (d.proprietaire || "").trim();
+  const adr = (d.adresse || "").trim();
+  const subLine = `${prop ? prop + " / " : ""}${locName(d)}${adr ? " · " + adr : ""}`;
+  return `🏠 Bienvenue dans votre nouveau logement ! ${subLine}`.trim();
 }
 export function tenantEmails(d: WelcomeData): string[] {
   return [d.email1, d.email2].map(e => (e || "").trim()).filter(Boolean);
@@ -72,7 +79,10 @@ export function buildWelcomeEmailHtml(d: WelcomeData): string {
   const ini = (d.agentPrenom?.[0] || "") + (d.agentNom?.[0] || "");
   const depLabel = d.typeLgt === "meuble" ? "2 mois HC" : d.typeLgt === "commercial" ? "libre" : "1 mois HC";
   const hasGaz = !!(d.numGaz && d.numGaz.trim());
+  const showGaz = hasGaz || !!d.gazLater;
   const eur = (n: number) => `${n.toFixed(2)} €`;
+  // Formule « compteur à fournir plus tard » : la référence sera communiquée par l'agent.
+  const later = (label: string) => `${label} vous sera communiqué prochainement par <strong>${ag}</strong>.`;
 
   // Sous-titre de l'en-tête : PROPRIÉTAIRE / LOCATAIRE · ADRESSE.
   const prop = esc(d.proprietaire);
@@ -84,6 +94,8 @@ export function buildWelcomeEmailHtml(d: WelcomeData): string {
     ? `💧 Eau — comprise dans vos charges : <strong>aucune action n'est à faire de votre part.</strong>`
     : eauMode === "divisionnaire"
     ? `💧 Eau — compteur divisionnaire (relevé par l'agence, régularisé dans vos charges) : <strong>aucune action n'est à faire de votre part.</strong>`
+    : d.eauLater
+    ? `💧 Eau (SUEZ) — ${later("le numéro de compteur")}`
     : `💧 Eau (SUEZ) — N° : <strong>${esc(d.numEau) || "[N°]"}</strong> · Ancien titulaire : ${esc(d.ancienEau) || "[Nom]"}`;
   const accesLine = [d.etage, d.numPorte].filter(Boolean).map(esc).join(" · ");
 
@@ -93,7 +105,7 @@ export function buildWelcomeEmailHtml(d: WelcomeData): string {
   return `
 <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;background:#fff;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden">
   <div style="background:#fff;padding:22px 32px;text-align:center;border-bottom:2px solid ${GOLD}">
-    <img src="${LOGO}" alt="LOTIER" style="height:52px"><div style="color:${NAVY};font-size:12px;margin-top:6px;letter-spacing:.05em">Vente · Location · Syndic</div>
+    <img src="${LOGO}" alt="LOTIER" width="auto" height="52" style="height:52px;width:auto;max-width:220px;display:inline-block"><div style="color:${NAVY};font-size:12px;margin-top:6px;letter-spacing:.05em">Vente · Location · Syndic</div>
   </div>
   <div style="background:${GOLD};padding:20px 32px;text-align:center;color:#fff">
     <h1 style="font-size:21px;font-weight:700;margin:0">🏠 Bienvenue dans votre nouveau logement !</h1>
@@ -125,8 +137,10 @@ export function buildWelcomeEmailHtml(d: WelcomeData): string {
     ${section("⚡ Ouverture de vos contrats énergie — Papernest", `
       <div style="background:#eef6ff;border:1px solid #b8d4f0;border-radius:8px;padding:12px 16px;font-size:13px;color:${NAVY};line-height:1.6">Notre partenaire <strong>Papernest</strong> vous appellera pour prendre en charge l'ouverture de vos contrats d'énergie. Ce service est <strong>100 % gratuit</strong> et inclus dans votre accompagnement LOTIER — accueillez bien leur appel !</div>
       <p style="font-size:12px;color:#666;margin:10px 0 4px">Références utiles :</p>
-      <div style="font-size:12px;color:#444;line-height:1.7">🔌 Électricité — PDL : <strong>${esc(d.pdlEdf) || "[PDL]"}</strong> · Ancien titulaire : ${esc(d.ancienEdf) || "[Nom]"}<br>
-      ${waterLine}${hasGaz ? `<br>🔥 Gaz — N° : <strong>${esc(d.numGaz)}</strong> · Ancien titulaire : ${esc(d.ancienGaz) || "[Nom]"}` : ""}</div>`)}
+      <div style="font-size:12px;color:#444;line-height:1.7">${d.edfLater
+        ? `🔌 Électricité — ${later("le numéro de PDL")}`
+        : `🔌 Électricité — PDL : <strong>${esc(d.pdlEdf) || "[PDL]"}</strong> · Ancien titulaire : ${esc(d.ancienEdf) || "[Nom]"}`}<br>
+      ${waterLine}${showGaz ? `<br>${d.gazLater ? `🔥 Gaz — ${later("le numéro de compteur")}` : `🔥 Gaz — N° : <strong>${esc(d.numGaz)}</strong> · Ancien titulaire : ${esc(d.ancienGaz) || "[Nom]"}`}` : ""}</div>`)}
 
     ${section("💳 RIB pour vos virements", `
       <table style="width:100%;border-collapse:collapse;background:#f8f5f0;border-radius:8px;overflow:hidden">
@@ -153,7 +167,7 @@ export function buildWelcomeEmailHtml(d: WelcomeData): string {
     <p style="font-size:13px;color:#666;text-align:center;margin:8px 0 0;line-height:1.6">Nous restons à votre disposition pour toute question.<br><strong style="color:${NAVY}">Bienvenue chez vous, et bonne installation !</strong></p>
   </div>
   <div style="background:#fafafa;padding:18px 32px;text-align:center;border-top:1px solid #eee">
-    <img src="${LOGO}" alt="LOTIER" style="height:34px"><p style="font-size:11px;color:#999;margin:8px 0 0;line-height:1.6">LOTIER Immobilier — Votre partenaire immobilier de confiance<br><a href="mailto:${AGENCE.email}" style="color:${GOLD}">${AGENCE.email}</a> · ${AGENCE.tel}<br>${AGENCE.adresse}</p>
+    <img src="${LOGO}" alt="LOTIER" width="auto" height="34" style="height:34px;width:auto;max-width:150px;display:inline-block"><p style="font-size:11px;color:#999;margin:8px 0 0;line-height:1.6">LOTIER Immobilier — Votre partenaire immobilier de confiance<br><a href="mailto:${AGENCE.email}" style="color:${GOLD}">${AGENCE.email}</a> · ${AGENCE.tel}<br>${AGENCE.adresse}</p>
   </div>
 </div>`;
 }
