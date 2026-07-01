@@ -114,10 +114,16 @@ export default function Sidebar({ active }: { active: string }) {
   const [actuOpen, setActuOpen] = useState(true);
   const actuActive = ["veille", "actualite"].includes(active);
   const [badges, setBadges] = useState<{ mail: { count: number; urgent: boolean }; chat: { count: number; urgent: boolean }; legal?: { count: number; urgent: boolean }; isEmployee?: boolean; hidden?: string[]; hiddenNav?: string[] } | null>(null);
-  // Personnalisation du menu par le super admin (label / icône / ordre).
-  const [menuCustom, setMenuCustom] = useState<Record<string, { label?: string; icon?: string; order?: number }>>({});
+  // Personnalisation du menu par le super admin (label / icône / ordre /
+  // groupe, + ordre des groupes). Compatible avec l'ancien format « plat ».
+  const [mcItems, setMcItems] = useState<Record<string, { label?: string; icon?: string; order?: number; group?: string }>>({});
+  const [mcGroupOrder, setMcGroupOrder] = useState<string[]>([]);
   useEffect(() => {
-    fetch("/api/menu-custom").then(r => r.json()).then(d => setMenuCustom(d.custom ?? {})).catch(() => {});
+    fetch("/api/menu-custom").then(r => r.json()).then(d => {
+      const c = d.custom ?? {};
+      if (c && typeof c === "object" && (c.items || c.groupOrder)) { setMcItems(c.items ?? {}); setMcGroupOrder(Array.isArray(c.groupOrder) ? c.groupOrder : []); }
+      else setMcItems(c); // ancien format plat
+    }).catch(() => {});
   }, []);
   const [winW, setWinW] = useState(0);
 
@@ -140,13 +146,18 @@ export default function Sidebar({ active }: { active: string }) {
   const roleId = session?.user?.roleId ?? "";
   const isSuper = session?.user?.superAdmin === true;
   const canGestion = isSuper || GESTION_ROLES.includes(roleId);
-  // Applique la personnalisation : libellé / icône remplacés, et réordonnancement
-  // À L'INTÉRIEUR de chaque groupe selon l'ordre choisi par le super admin.
-  const effectiveNav: NavItem[] = groups.flatMap(g =>
-    nav.filter(n => n.group === g)
+  // Ordre des groupes (catégories) personnalisé par le super admin.
+  const orderedGroups: string[] = (() => {
+    const go = mcGroupOrder.filter(g => groups.includes(g));
+    return [...go, ...groups.filter(g => !go.includes(g))];
+  })();
+  // Applique la personnalisation : libellé / icône / GROUPE remplacés, ordre des
+  // groupes et réordonnancement à l'intérieur de chaque groupe.
+  const effectiveNav: NavItem[] = orderedGroups.flatMap(g =>
+    nav.filter(n => (mcItems[n.id]?.group ?? n.group) === g)
       .map((n, i) => ({ n, i }))
-      .sort((a, b) => (menuCustom[a.n.id]?.order ?? a.i) - (menuCustom[b.n.id]?.order ?? b.i))
-      .map(({ n }) => ({ ...n, label: menuCustom[n.id]?.label || n.label, icon: menuCustom[n.id]?.icon || n.icon })),
+      .sort((a, b) => (mcItems[a.n.id]?.order ?? a.i) - (mcItems[b.n.id]?.order ?? b.i))
+      .map(({ n }) => ({ ...n, group: mcItems[n.id]?.group ?? n.group, label: mcItems[n.id]?.label || n.label, icon: mcItems[n.id]?.icon || n.icon })),
   );
   const visibleNav = effectiveNav.filter(n => {
     if (n.id === "rh" && !isEmployee && !isDirection) return false;
@@ -229,7 +240,7 @@ export default function Sidebar({ active }: { active: string }) {
 
 
               {/* Nav items */}
-              {groups.map(group => {
+              {orderedGroups.map(group => {
                 const gItems = visibleNav.filter(n => n.group === group);
                 if (gItems.length === 0) return null;
                 return (
@@ -371,7 +382,7 @@ export default function Sidebar({ active }: { active: string }) {
 
       {/* Navigation */}
       <nav style={{ flex: 1, overflowY: "auto", overflowX: "hidden", paddingTop: 8, paddingBottom: 8 }}>
-        {groups.map(group => {
+        {orderedGroups.map(group => {
           const items = visibleNav.filter(n => n.group === group);
           if (items.length === 0) return null;
           return (
