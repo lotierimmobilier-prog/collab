@@ -326,6 +326,7 @@ model EmailMessage {
   accountId   String
   fromEmail   String
   fromName    String?
+  replyTo     String?
   toEmail     String
   subject     String
   bodyText    String?

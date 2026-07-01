@@ -161,6 +161,7 @@ export default function MailBoard() {
             threadId:  m.threadId || `${m.accountId}-${m.uid}`,
             accountId: m.accountId,
             from:      { name: m.fromName || m.fromEmail, email: m.fromEmail },
+            replyTo:   m.replyTo || undefined,
             to:        String(m.toEmail || "").split(",").map((e: string) => ({ name: e.trim(), email: e.trim() })),
             subject:   m.subject,
             body:      m.bodyHtml || "",

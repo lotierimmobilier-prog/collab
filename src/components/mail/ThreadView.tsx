@@ -524,7 +524,9 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
       threadId: thread.id,
       accountId: thread.accountId,
       from:    { name: account?.name ?? "Moi", email: account?.email ?? "moi@agence.fr" },
-      to:      [{ name: lastMsg.from.name, email: lastMsg.from.email }],
+      // Répondre à l'adresse Reply-To si elle diffère de l'expéditeur (ex. mail
+      // envoyé depuis collab@ avec réponse dirigée vers jerome.bouba@).
+      to:      [{ name: lastMsg.replyTo ? lastMsg.replyTo : lastMsg.from.name, email: lastMsg.replyTo || lastMsg.from.email }],
       subject: `Re: ${thread.subject}`,
       body:    `<p>${replyBody.replace(/\n/g, "<br/>")}</p>`,
       bodyText: replyBody,

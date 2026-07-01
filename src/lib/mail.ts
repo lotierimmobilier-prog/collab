@@ -57,6 +57,7 @@ export interface MailMessage {
   threadId: string;
   accountId: string;
   from: { name: string; email: string };
+  replyTo?: string;       // adresse de réponse si différente de l'expéditeur
   to:   { name: string; email: string }[];
   cc?:  { name: string; email: string }[];
   subject: string;
