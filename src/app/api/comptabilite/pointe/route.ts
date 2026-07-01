@@ -117,7 +117,7 @@ export async function PATCH(req: NextRequest) {
   const { id, amount } = await req.json().catch(() => ({}));
   if (!id || typeof amount !== "number") return NextResponse.json({ error: "id et montant requis" }, { status: 400 });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows: any[] = await prisma.$queryRawUnsafe(`SELECT id, service, "fileName", data FROM treso_pointe WHERE id = $1`, String(id)).catch(() => []);
+  const rows = (await prisma.$queryRawUnsafe(`SELECT id, service, "fileName", data FROM treso_pointe WHERE id = $1`, String(id)).catch(() => [])) as any[];
   const p = rows[0];
   if (!p) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   await prisma.$executeRawUnsafe(`UPDATE treso_pointe SET amount = $1 WHERE id = $2`, amount, String(id));

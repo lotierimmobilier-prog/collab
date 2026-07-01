@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   if (!feedId) return NextResponse.json({ error: "feedId requis" }, { status: 400 });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows: any[] = await prisma.$queryRawUnsafe(`SELECT id, title, url FROM veille_feed WHERE id = $1`, String(feedId)).catch(() => []);
+  const rows = (await prisma.$queryRawUnsafe(`SELECT id, title, url FROM veille_feed WHERE id = $1`, String(feedId)).catch(() => [])) as any[];
   const feed = rows[0];
   if (!feed) return NextResponse.json({ error: "Flux introuvable" }, { status: 404 });
 
