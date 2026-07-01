@@ -29,6 +29,7 @@ const nav: NavItem[] = [
   { id: "appels",    label: "Appels téléphoniques", icon: "📞", href: "/appels",             group: "Principal" },
   { id: "annuaire",  label: "Annuaire",             icon: "▤",  href: "/annuaire",           group: "Principal" },
   { id: "drive",     label: "Drive",                icon: "🗂", href: "/drive",              group: "Drive" },
+  { id: "drive-parrainage", label: "Drive Parrain/Filleul", icon: "🤝", href: "/drive-parrainage", group: "Drive" },
   { id: "gestion",   label: "Gestion locative",     icon: "🏠", href: "/gestion",            group: "Gestion" },
   { id: "espace-client", label: "Espace client",    icon: "🔑", href: "/espace-client-agence", group: "Gestion" },
   { id: "assistance",label: "Assistance locataire", icon: "🛟", href: "/assistance",         group: "Gestion" },
