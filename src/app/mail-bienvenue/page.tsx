@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
 
@@ -29,7 +28,6 @@ const EMPTY: Data = {
 };
 
 export default function MailBienvenuePage() {
-  const { data: session } = useSession();
   const [d, setD] = useState<Data>(EMPTY);
   const [second, setSecond] = useState(false);
   const [files, setFiles] = useState<{ filename: string; content: string; mime: string }[]>([]);
@@ -39,13 +37,28 @@ export default function MailBienvenuePage() {
 
   const set = (k: keyof Data, v: string) => setD(p => ({ ...p, [k]: v }));
 
-  // Préremplit l'agent avec l'utilisateur connecté.
+  // Agent : soit l'utilisateur connecté (s'il est commercial), soit un agent
+  // choisi dans une liste (si admin / gestionnaire).
+  const [agents, setAgents] = useState<{ id: string; prenom: string; nom: string; email: string; phone: string | null }[]>([]);
+  const [meCommercial, setMeCommercial] = useState(false);
+  const [agentId, setAgentId] = useState("");
   useEffect(() => {
-    const u = session?.user as { name?: string; email?: string } | undefined;
-    if (!u) return;
-    const parts = (u.name || "").split(" ");
-    setD(p => ({ ...p, agentPrenom: p.agentPrenom || parts[0] || "", agentNom: p.agentNom || parts.slice(1).join(" ") || "", agentEmail: p.agentEmail || u.email || "" }));
-  }, [session]);
+    fetch("/api/gestion/mail-bienvenue").then(r => r.json()).then(dta => {
+      setAgents(dta.agents ?? []);
+      const me = dta.me;
+      if (me?.isCommercial) {
+        // Mail créé par l'agent : toutes ses informations.
+        setMeCommercial(true);
+        setD(p => ({ ...p, agentPrenom: me.prenom || "", agentNom: me.nom || "", agentEmail: me.email || "", agentTel: me.phone || "" }));
+      }
+    }).catch(() => {});
+  }, []);
+
+  function pickAgent(id: string) {
+    setAgentId(id);
+    const ag = agents.find(a => a.id === id);
+    if (ag) setD(p => ({ ...p, agentPrenom: ag.prenom || "", agentNom: ag.nom || "", agentEmail: ag.email || "", agentTel: ag.phone || "" }));
+  }
 
   // Calcul du dépôt + prorata + total (aperçu).
   const nums = () => {
@@ -138,7 +151,19 @@ export default function MailBienvenuePage() {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             <div style={{ ...card, marginBottom: 0 }}>
-              <div style={h2}>Agent en charge</div>
+              <div style={h2}>Agent commercial en charge</div>
+              {meCommercial ? (
+                <div style={{ fontSize: 12, color: "#3a6e1a", background: "#f0f7ec", border: "1px solid #c3ddb0", borderRadius: 6, padding: "7px 10px", marginBottom: 10 }}>Vos informations sont pré-remplies (vous êtes en copie du mail).</div>
+              ) : (
+                <div style={{ marginBottom: 10 }}>
+                  <label style={lbl}>Choisir l&apos;agent commercial</label>
+                  <select value={agentId} onChange={e => pickAgent(e.target.value)} style={inp}>
+                    <option value="">— Sélectionner —</option>
+                    {agents.map(a => <option key={a.id} value={a.id}>{[a.prenom, a.nom].filter(Boolean).join(" ")}</option>)}
+                  </select>
+                  <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>Son email et son téléphone sont remplis automatiquement ; il est mis en copie du mail.</div>
+                </div>
+              )}
               <div style={grid(2)}>
                 <div><label style={lbl}>Prénom</label><input value={d.agentPrenom} onChange={e => set("agentPrenom", e.target.value)} style={inp} /></div>
                 <div><label style={lbl}>Nom</label><input value={d.agentNom} onChange={e => set("agentNom", e.target.value)} style={inp} /></div>

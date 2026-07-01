@@ -4,10 +4,12 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendMail, MailAttachment } from "@/lib/mailer";
 import { buildWelcomeEmailHtml, buildRibPdf, welcomeSubject, tenantEmails, AGENCE, WelcomeData } from "@/lib/welcome-mail";
+import { isCommercialRole } from "@/lib/admin";
 
 export const maxDuration = 60;
 
-// GET — dossiers de bienvenue enregistrés par l'utilisateur (historique).
+// GET — dossiers enregistrés + infos de l'utilisateur courant (pré-remplissage
+// de l'agent) + liste des agents commerciaux (choix par l'admin/gestionnaire).
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
@@ -16,7 +18,17 @@ export async function GET() {
     `SELECT id, "tenantName", address, "sentTo", "createdAt" FROM welcome_dossier WHERE "createdBy" = $1 ORDER BY "createdAt" DESC LIMIT 100`,
     session.user.id,
   ).catch(() => [])) as any[];
-  return NextResponse.json({ dossiers: rows });
+
+  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { prenom: true, nom: true, email: true, phone: true, roleId: true } }).catch(() => null);
+  const iAmCommercial = isCommercialRole(me?.roleId);
+  // L'admin / gestionnaire choisit l'agent commercial ; on lui fournit la liste.
+  const agents = iAmCommercial ? [] : await prisma.user.findMany({
+    where: { active: true, roleId: { in: ["agent", "commercial"] } },
+    select: { id: true, prenom: true, nom: true, email: true, phone: true },
+    orderBy: [{ prenom: "asc" }, { nom: "asc" }],
+  }).catch(() => []);
+
+  return NextResponse.json({ dossiers: rows, me: me ? { ...me, isCommercial: iAmCommercial } : null, agents });
 }
 
 // POST — enregistre le dossier et envoie le mail de bienvenue depuis collab@,
