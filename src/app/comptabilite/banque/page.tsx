@@ -21,7 +21,7 @@ export default function ComptaBanquePage() {
   const { data: session } = useSession();
   const role = session?.user?.roleId;
   const allowed = role === "admin" || role === "direction" || role === "dirigeant";
-  const [tab, setTab] = useState<"tresorerie" | "operations" | "import">("tresorerie");
+  const [tab, setTab] = useState<"tresorerie" | "operations" | "import" | "pointe">("tresorerie");
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const loadAccounts = useCallback(async () => {
@@ -41,7 +41,7 @@ export default function ComptaBanquePage() {
           <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
             <div style={{ maxWidth: 1040, margin: "0 auto" }}>
               <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
-                {([["tresorerie", "Trésorerie"], ["operations", "Opérations"], ["import", "Importer un relevé"]] as const).map(([id, label]) => (
+                {([["tresorerie", "Trésorerie"], ["operations", "Opérations"], ["import", "Importer un relevé"], ["pointe", "Pointe de trésorerie"]] as const).map(([id, label]) => (
                   <button key={id} onClick={() => setTab(id)}
                     style={{ border: `1px solid ${tab === id ? GOLD : BORDER}`, background: tab === id ? "#F7F0E6" : "#fff", color: tab === id ? GOLD : "#6b7280", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{label}</button>
                 ))}
@@ -49,6 +49,7 @@ export default function ComptaBanquePage() {
               {tab === "tresorerie" && <TresorerieTab accounts={accounts} reloadAccounts={loadAccounts} />}
               {tab === "operations" && <OperationsTab accounts={accounts} />}
               {tab === "import"     && <ImportTab accounts={accounts} onDone={() => setTab("operations")} />}
+              {tab === "pointe"     && <PointeTab />}
             </div>
           </div>
         )}
@@ -335,3 +336,113 @@ function L({ label, children }: { label: string; children: React.ReactNode }) {
 }
 const inp: React.CSSProperties = { width: "100%", height: 38, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 10px", fontSize: 13, outline: "none", background: "#f9fafb", boxSizing: "border-box" };
 const saveBtn: React.CSSProperties = { background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 4 };
+
+// ─── Onglet « Pointe de trésorerie » ──────────────────────────────────
+interface Pointe { id: string; service: string; fileName: string; amount: number | null; createdAt: string; garantie: number; exceeds: boolean }
+interface UserOpt { id: string; prenom: string; nom: string; active: boolean }
+
+function PointeTab() {
+  const [pointes, setPointes] = useState<Pointe[]>([]);
+  const [users, setUsers] = useState<UserOpt[]>([]);
+  const [gGestion, setGGestion] = useState(""); const [gSyndic, setGSyndic] = useState(""); const [notify, setNotify] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [savedCfg, setSavedCfg] = useState(false);
+  const gestRef = useRef<HTMLInputElement>(null); const syndRef = useRef<HTMLInputElement>(null);
+
+  const load = useCallback(async () => {
+    const d = await fetch("/api/comptabilite/pointe").then(r => r.json()).catch(() => ({}));
+    setPointes(d.pointes ?? []);
+    setGGestion(d.gestion ? String(d.gestion) : ""); setGSyndic(d.syndic ? String(d.syndic) : ""); setNotify(d.notifyUserId ?? "");
+  }, []);
+  useEffect(() => { load(); fetch("/api/users").then(r => r.json()).then((u: UserOpt[]) => setUsers(u.filter(x => x.active))).catch(() => {}); }, [load]);
+
+  async function saveCfg() {
+    await fetch("/api/comptabilite/garantie", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ gestion: parseFloat(gGestion) || 0, syndic: parseFloat(gSyndic) || 0, notifyUserId: notify }) });
+    setSavedCfg(true); setTimeout(() => setSavedCfg(false), 2000); load();
+  }
+  async function upload(service: "gestion" | "syndic", files: FileList | null) {
+    if (!files || !files[0]) return;
+    const file = files[0];
+    if (file.size > 20 * 1024 * 1024) { alert("PDF trop volumineux (max 20 Mo)."); return; }
+    setBusy(service);
+    const data = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] ?? ""); r.onerror = rej; r.readAsDataURL(file); });
+    const d = await fetch("/api/comptabilite/pointe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ service, fileName: file.name, data }) }).then(r => r.json()).catch(() => ({}));
+    setBusy(null);
+    if (d.amount == null) alert("Montant non détecté dans le PDF — saisissez-le manuellement dans la liste.");
+    else if (d.exceeds) alert(`⚠️ Dépassement : ${fmtEuro(d.amount)} > garantie ${fmtEuro(d.garantie)}.${d.emailSent ? " Un email d'alerte a été envoyé." : " (aucun utilisateur à alerter configuré)"}`);
+    load();
+  }
+  async function editAmount(p: Pointe) {
+    const v = prompt(`Montant de la pointe « ${p.fileName} » (€) :`, p.amount != null ? String(p.amount) : "");
+    if (v == null) return;
+    const amount = parseFloat(v.replace(",", ".")); if (!isFinite(amount)) return;
+    const d = await fetch("/api/comptabilite/pointe", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: p.id, amount }) }).then(r => r.json()).catch(() => ({}));
+    if (d.exceeds) alert(`⚠️ Dépassement : ${fmtEuro(amount)} > garantie ${fmtEuro(d.garantie)}.${d.emailSent ? " Email d'alerte envoyé." : ""}`);
+    load();
+  }
+  async function del(id: string) { if (!confirm("Supprimer cette pointe ?")) return; await fetch(`/api/comptabilite/pointe?id=${id}`, { method: "DELETE" }); load(); }
+
+  const card: React.CSSProperties = { background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, marginBottom: 14 };
+  function ServiceUpload({ service, label, inputRef }: { service: "gestion" | "syndic"; label: string; inputRef: React.RefObject<HTMLInputElement | null> }) {
+    return (
+      <div style={{ flex: 1, border: `1px dashed ${GOLD}`, borderRadius: 10, padding: 14, textAlign: "center" }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: DARK, marginBottom: 8 }}>{label}</div>
+        <input ref={inputRef} type="file" accept="application/pdf" style={{ display: "none" }} onChange={e => { upload(service, e.target.files); e.target.value = ""; }} />
+        <button onClick={() => inputRef.current?.click()} disabled={busy === service} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+          {busy === service ? "Lecture du PDF…" : "⬆ Téléverser la pointe (PDF)"}
+        </button>
+        <div style={{ fontSize: 10.5, color: "#9ca3af", marginTop: 6 }}>Le montant est lu automatiquement (modifiable ensuite).</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Configuration : garanties + utilisateur alerté */}
+      <div style={card}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: DARK, marginBottom: 12 }}>Garantie financière & alerte</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.4fr", gap: 12, alignItems: "end" }}>
+          <L label="Garantie — Gestion (€)"><input value={gGestion} onChange={e => setGGestion(e.target.value)} inputMode="decimal" placeholder="0" style={inp} /></L>
+          <L label="Garantie — Syndic (€)"><input value={gSyndic} onChange={e => setGSyndic(e.target.value)} inputMode="decimal" placeholder="0" style={inp} /></L>
+          <L label="Utilisateur à alerter en cas de dépassement">
+            <select value={notify} onChange={e => setNotify(e.target.value)} style={{ ...inp, cursor: "pointer" }}>
+              <option value="">— Aucun —</option>
+              {users.map(u => <option key={u.id} value={u.id}>{u.prenom} {u.nom}</option>)}
+            </select>
+          </L>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+          <button onClick={saveCfg} style={{ ...saveBtn, marginTop: 0, padding: "9px 18px" }}>💾 Enregistrer</button>
+          {savedCfg && <span style={{ color: "#2F855A", fontSize: 13, fontWeight: 700 }}>✓ Enregistré</span>}
+        </div>
+      </div>
+
+      {/* Dépôt des pointes */}
+      <div style={{ ...card, display: "flex", gap: 12 }}>
+        <ServiceUpload service="gestion" label="Pointe Gestion" inputRef={gestRef} />
+        <ServiceUpload service="syndic" label="Pointe Syndic" inputRef={syndRef} />
+      </div>
+
+      {/* Liste des pointes */}
+      <div style={card}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: DARK, marginBottom: 12 }}>Historique des pointes</div>
+        {pointes.length === 0 ? <div style={{ color: "#9ca3af", fontSize: 13 }}>Aucune pointe déposée.</div> : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pointes.map(p => (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", border: `1px solid ${p.exceeds ? "#FECDCA" : BORDER}`, background: p.exceeds ? "#FEF3F2" : "#fff", borderRadius: 10 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: p.service === "syndic" ? "#8A6D44" : GOLD, textTransform: "uppercase", width: 60 }}>{p.service}</span>
+                <a href={`/api/comptabilite/pointe/${p.id}`} target="_blank" rel="noreferrer" style={{ flex: 1, minWidth: 0, fontSize: 13, color: DARK, fontWeight: 600, textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📕 {p.fileName}</a>
+                <span style={{ fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap" }}>{new Date(p.createdAt).toLocaleDateString("fr-FR")}</span>
+                <button onClick={() => editAmount(p)} title="Modifier le montant" style={{ fontSize: 13.5, fontWeight: 700, color: p.exceeds ? "#B42318" : DARK, background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "4px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                  {p.amount != null ? fmtEuro(p.amount) : "saisir le montant"}
+                </button>
+                {p.exceeds && <span title={`Dépasse la garantie de ${fmtEuro(p.garantie)}`} style={{ fontSize: 11, fontWeight: 700, color: "#B42318", background: "#FEE2E2", borderRadius: 6, padding: "3px 8px", whiteSpace: "nowrap" }}>⚠ Dépassement</span>}
+                <button onClick={() => del(p.id)} title="Supprimer" style={{ background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "4px 8px", fontSize: 12, color: "#DC2626", cursor: "pointer" }}>🗑</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

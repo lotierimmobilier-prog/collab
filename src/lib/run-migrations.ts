@@ -47,6 +47,7 @@ const FILES = [
   "migrations_veille.sql",
   "migrations_parrain_qcm.sql",
   "migrations_parrainage_drive.sql",
+  "migrations_treso_pointe.sql",
   "migrations_mail_signatures.sql",
   "migrations_client_portal.sql",
   "migrations_tenant_documents.sql",
