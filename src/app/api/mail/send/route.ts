@@ -1,11 +1,36 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { randomUUID } from "node:crypto";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import nodemailer from "nodemailer";
+import MailComposer from "nodemailer/lib/mail-composer";
 import { resolveAccountOwner } from "@/lib/mailOwner";
 import { renderBrandedEmail, textToHtml, emailBaseUrl } from "@/lib/email-template";
 import { isSuperAdminEmail } from "@/lib/superadmin";
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { ImapFlow } = require("imapflow");
+
+// Noms courants du dossier « Envoyés » selon les serveurs (Outlook, Gmail, OVH…)
+const SENT_FOLDERS = ["Sent", "Sent Messages", "Sent Items", "SENT", "Éléments envoyés", "Envoyés", "[Gmail]/Messages envoyés", "[Gmail]/Sent Mail"];
+
+interface ImapCfg { host: string; port: number; ssl: boolean; username: string; password: string }
+
+// Dépose une copie du mail envoyé dans le dossier « Envoyés » IMAP, pour qu'elle
+// apparaisse aussi dans les autres clients de l'utilisateur (Outlook, Gmail…).
+// Best-effort : toute erreur est ignorée (l'envoi SMTP a déjà réussi).
+async function appendToSent(cfg: ImapCfg, raw: Buffer) {
+  const client = new ImapFlow({ host: cfg.host, port: cfg.port, secure: cfg.ssl, auth: { user: cfg.username, pass: cfg.password }, logger: false, tls: { rejectUnauthorized: false } });
+  await client.connect();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const boxes: any[] = await client.list();
+    const found = boxes.find(b => b.specialUse === "\\Sent") || boxes.find(b => SENT_FOLDERS.includes(b.path)) || null;
+    await client.append(found?.path || "Sent", raw, ["\\Seen"]);
+  } finally {
+    await client.logout().catch(() => {});
+  }
+}
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -14,10 +39,13 @@ export async function POST(req: NextRequest) {
   const reqBody = await req.json();
   let { smtpHost, smtpPort, smtpSsl, username, password } = reqBody;
   const { to, cc, subject, body, html, fromEmail, fromName, replyToMessageId, inReplyTo, accountId, attachments } = reqBody;
+  let imapCfg: ImapCfg | null = null;
 
   if (accountId) {
     const dbAcc = await prisma.mailAccountConfig.findUnique({ where: { id: accountId } });
     if (dbAcc) {
+      // Identifiants IMAP pour déposer une copie dans « Envoyés ».
+      imapCfg = { host: dbAcc.host, port: dbAcc.port, ssl: dbAcc.ssl, username: dbAcc.username, password: dbAcc.password };
       // Cloisonnement : on ne peut envoyer que depuis une boîte qui nous est
       // partagée (ou la sienne / super admin).
       const uid = session.user.id;
@@ -94,6 +122,20 @@ export async function POST(req: NextRequest) {
 
   try {
     const info = await transport.sendMail(mailOptions);
+
+    // Dépose une copie dans le dossier « Envoyés » IMAP (visible dans Outlook,
+    // Gmail…). En tâche de fond, best-effort : n'affecte jamais l'envoi.
+    if (imapCfg) {
+      const cfg = imapCfg;
+      after(async () => {
+        try {
+          const raw: Buffer = await new Promise((resolve, reject) => {
+            new MailComposer(mailOptions).compile().build((err: Error | null, msg: Buffer) => err ? reject(err) : resolve(msg));
+          });
+          await appendToSent(cfg, raw);
+        } catch { /* silencieux */ }
+      });
+    }
 
     // Copie publique (lien « voir la version en ligne »).
     await prisma.$executeRawUnsafe(
