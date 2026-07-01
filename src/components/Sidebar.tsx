@@ -36,7 +36,6 @@ export const nav: NavItem[] = [
   { id: "annonces-portails", label: "Annonces portails", icon: "📣", href: "/annonces-portails", group: "Gestion" },
   { id: "formation", label: "Formation",            icon: "◈",  href: "/formation",          group: "Agence" },
   { id: "procedures",label: "Procédures",           icon: "📚", href: "/procedures",         group: "Agence" },
-  { id: "veille",    label: "Veille juridique",     icon: "⚖️", href: "/veille-juridique",   group: "Agence" },
   { id: "suggestions", label: "Idées & améliorations", icon: "💡", href: "/suggestions",      group: "Agence" },
   { id: "forum",     label: "Forum",                icon: "🗣️", href: "/forum",              group: "Agence" },
   { id: "assistants", label: "Assistants IA",        icon: "🤖", href: "/assistants",         group: "Agence" },
@@ -72,6 +71,12 @@ const adminNav = [
   { id: "admin-menu",      label: "Menu (ordre & icônes)", icon: "🧭", href: "/admin/menu" },
 ];
 
+// Sous-menu « Actu Juridique » (déroulant, sous le groupe Agence).
+const actuNav: NavItem[] = [
+  { id: "veille",    label: "Veille",    icon: "🛰", href: "/veille-juridique", group: "Actu" },
+  { id: "actualite", label: "Actualité", icon: "📰", href: "/actualite",        group: "Actu" },
+];
+
 const groups = ["Principal", "Drive", "Gestion", "Agence", "Réseaux sociaux", "Personnel"];
 // Libellés affichés des groupes (les clés restent stables).
 const GROUP_LABEL: Record<string, string> = { Principal: "Principal", Drive: "Drive", Gestion: "Gestion locative", Agence: "Agence", "Réseaux sociaux": "Réseaux sociaux", Personnel: "Personnel" };
@@ -105,6 +110,8 @@ export default function Sidebar({ active }: { active: string }) {
   const adminActive = active.startsWith("admin");
   const [directionOpen, setDirectionOpen] = useState(true);
   const [adminOpen, setAdminOpen] = useState(true);
+  const [actuOpen, setActuOpen] = useState(true);
+  const actuActive = ["veille", "actualite"].includes(active);
   const [badges, setBadges] = useState<{ mail: { count: number; urgent: boolean }; chat: { count: number; urgent: boolean }; legal?: { count: number; urgent: boolean }; isEmployee?: boolean; hidden?: string[]; hiddenNav?: string[] } | null>(null);
   // Personnalisation du menu par le super admin (label / icône / ordre).
   const [menuCustom, setMenuCustom] = useState<Record<string, { label?: string; icon?: string; order?: number }>>({});
@@ -228,6 +235,14 @@ export default function Sidebar({ active }: { active: string }) {
                     {gItems.map(item => (
                       <MobileMenuItem key={item.id} item={item} active={active} onClose={() => setMobileOpen(false)} dot={navDot(item.id)} />
                     ))}
+                    {group === "Agence" && (
+                      <>
+                        <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: LABEL_COLOR, padding: "10px 20px 4px", fontWeight: 600 }}>Actu Juridique</div>
+                        {actuNav.map(item => (
+                          <MobileMenuItem key={item.id} item={item} active={active} onClose={() => setMobileOpen(false)} dot={navDot(item.id)} />
+                        ))}
+                      </>
+                    )}
                     {group === "Personnel" && gItems.some(i => i.id === "espace") && <DriveNav />}
                   </div>
                 );
@@ -363,6 +378,15 @@ export default function Sidebar({ active }: { active: string }) {
               {items.map(item => (
                 <NavItemRow key={item.id} item={item} active={active} collapsed={isCollapsed} dot={navDot(item.id)} />
               ))}
+              {/* Actu Juridique : sous-menu déroulant (Veille + Actualité). */}
+              {group === "Agence" && (isCollapsed
+                ? actuNav.map(item => <NavItemRow key={item.id} item={item} active={active} collapsed dot={navDot(item.id)} />)
+                : (
+                  <>
+                    <GroupHeader icon="⚖️" label="Actu Juridique" open={actuOpen} active={actuActive} onClick={() => setActuOpen(o => !o)} />
+                    {actuOpen && actuNav.map(item => <NavItemRow key={item.id} item={item} active={active} collapsed={false} indent dot={navDot(item.id)} />)}
+                  </>
+                ))}
               {/* Drive personnel déroulable directement sous « Mon espace ». */}
               {group === "Personnel" && !isCollapsed && items.some(i => i.id === "espace") && <DriveNav />}
             </div>
