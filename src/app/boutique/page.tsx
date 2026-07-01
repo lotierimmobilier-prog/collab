@@ -32,6 +32,30 @@ const STATUS_ORDER = ["nouveau", "preparation", "pret", "remis", "annule"];
 // de la photo uploadée), par opposition à un emoji de secours.
 function isUrl(s: string | null): boolean { return !!s && (/^https?:\/\//.test(s) || s.startsWith("/")); }
 
+// Redimensionne une image dans le navigateur et renvoie un data-URI JPEG
+// compressé (bord max = maxPx). Réduit fortement le poids envoyé au serveur.
+function resizeImage(file: File, maxPx: number, quality: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("canvas")); return; }
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h); // fond blanc (PNG transparents)
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("image")); };
+    img.src = url;
+  });
+}
+
 export default function BoutiquePage() {
   const { data: session } = useSession();
   const role = (session?.user as { roleId?: string })?.roleId ?? "";
@@ -317,14 +341,21 @@ function ManageProducts({ products, onChange }: { products: Product[]; onChange:
   };
   const cancel = () => { setEditing(null); resetPhoto(); };
 
-  const onPickPhoto = (file: File | undefined) => {
+  const onPickPhoto = async (file: File | undefined) => {
     setPhotoErr("");
     if (!file) return;
     if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) { setPhotoErr("Format accepté : JPG, PNG, WEBP ou GIF."); return; }
-    if (file.size > 4 * 1024 * 1024) { setPhotoErr("Photo trop lourde (max 4 Mo)."); return; }
-    const reader = new FileReader();
-    reader.onload = () => { setPhoto({ data: String(reader.result || ""), mime: file.type }); setRemovePhoto(false); };
-    reader.readAsDataURL(file);
+    if (file.size > 15 * 1024 * 1024) { setPhotoErr("Photo trop lourde (max 15 Mo)."); return; }
+    try {
+      // On redimensionne/compresse la photo dans le navigateur (max 1200 px,
+      // JPEG) : le fichier envoyé fait ~200 Ko au lieu de plusieurs Mo, ce qui
+      // évite les rejets de taille et allège la boutique.
+      const resized = await resizeImage(file, 1200, 0.82);
+      setPhoto({ data: resized, mime: "image/jpeg" });
+      setRemovePhoto(false);
+    } catch {
+      setPhotoErr("Impossible de lire cette image, réessayez avec une autre.");
+    }
   };
 
   const errText = async (r: Response | null, fallback: string) => {
