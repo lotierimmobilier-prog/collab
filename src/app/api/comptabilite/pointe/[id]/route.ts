@@ -10,7 +10,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!canAccessCompta((session.user as { roleId?: string }).roleId)) return NextResponse.json({ error: "Réservé à la direction" }, { status: 403 });
   const { id } = await params;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows: any[] = await prisma.$queryRawUnsafe(`SELECT "fileName", data FROM treso_pointe WHERE id = $1`, id).catch(() => []);
+  const rows = (await prisma.$queryRawUnsafe(`SELECT "fileName", data FROM treso_pointe WHERE id = $1`, id).catch(() => [])) as any[];
   const p = rows[0];
   if (!p) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   const buf = Buffer.from(p.data, "base64");
