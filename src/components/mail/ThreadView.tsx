@@ -35,7 +35,8 @@ interface AiSummary    { summary: string; points: string[] }
 interface AiTask       { title: string; description: string; priority: string; assigneeId?: string; assigneeName?: string; dueDate?: string; confidence: number }
 interface AiRdv        { found: boolean; title: string; start?: string; end?: string; location?: string; type?: string; attendeeId?: string; attendeeName?: string; confidence: number }
 interface SenderInfo   { senderType: string; name?: string; role?: string }
-interface FullAnalysis { name: string; totalEmails: number; totalInDb: number; firstContact: string; lastContact: string; summary: string; topics: string[]; actions: string[]; sentiment: string; priority: string; notes: string }
+interface TopicOption { subject: string; count: number }
+interface FullAnalysis { name: string; totalEmails: number; totalInDb: number; firstContact: string; lastContact: string; summary: string; topics: string[]; actions: string[]; sentiment: string; priority: string; notes: string; theme?: string | null; analyzed?: number; topicOptions?: TopicOption[]; multipleThemes?: boolean; needsTopic?: boolean }
 interface LegalAdvice  { question: string; answer: string; articles: string[]; warnings: string[]; suggestion: string }
 interface Research     { summary: string; webSources: string[]; mailInsights: string[]; keyPoints: string[]; suggestion: string }
 
@@ -265,14 +266,16 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
   }
 
   // ── Proposer une réponse ────────────────────────────────────
-  async function runFullAnalysis() {
+  async function runFullAnalysis(focusTopic?: string) {
     const email = firstMsg?.from?.email || lastMsg?.from?.email;
     if (!email) return;
     setAiLoading("full"); setFullAnalysis(null);
     try {
       const r = await fetch("/api/mail/ai", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "full_analysis", messages: [], senderEmail: email }),
+        // On cible l'analyse sur le sujet du fil (ou un thème précisé) : Auguste
+        // trie l'historique de l'expéditeur par sujet et n'analyse que celui-ci.
+        body: JSON.stringify({ action: "full_analysis", messages: [], senderEmail: email, threadSubject: thread.subject, topic: focusTopic }),
       });
       const d = await r.json();
       if (d.error) return;
@@ -972,7 +975,7 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
 
       {/* Panneau résumé */}
       {aiSummary && (
-        <div style={{ background: GOLD_BG, borderBottom: `1px solid ${BORDER}`, padding: "12px 20px", flexShrink: 0 }}>
+        <div style={{ background: GOLD_BG, borderBottom: `1px solid ${BORDER}`, padding: "12px 20px", flexShrink: 0, maxHeight: "40vh", overflowY: "auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: GOLD, marginBottom: 6 }}>📝 Résumé de la conversation</div>
@@ -990,13 +993,31 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
         </div>
       )}
 
-      {/* Panneau analyse complète */}
-      {fullAnalysis && (
-        <div style={{ background: "#F0F7FF", borderBottom: "1px solid #BFDBFE", padding: "14px 20px", flexShrink: 0 }}>
+      {/* Panneau analyse complète — défilable quand le contenu est long */}
+      {fullAnalysis && fullAnalysis.needsTopic && (
+        <div style={{ background: "#FFF7ED", borderBottom: "1px solid #FED7AA", padding: "14px 20px", flexShrink: 0, maxHeight: "45vh", overflowY: "auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#9A3412" }}>🤔 Auguste a un doute : sur quel thème analyser ?</span>
+            <button onClick={() => setFullAnalysis(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9CA3AF", fontSize: 16 }}>×</button>
+          </div>
+          <p style={{ fontSize: 12, color: "#7A5C2E", margin: "0 0 10px" }}>Cet expéditeur a plusieurs sujets d'échanges. Précisez le thème pour cibler l'analyse :</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {(fullAnalysis.topicOptions ?? []).map((t, i) => (
+              <button key={i} onClick={() => runFullAnalysis(t.subject)}
+                style={{ background: "#fff", border: "1px solid #FDBA74", borderRadius: 8, padding: "5px 10px", fontSize: 12, color: "#9A3412", cursor: "pointer", fontWeight: 600 }}>
+                {t.subject} <span style={{ color: "#C2853A", fontWeight: 400 }}>({t.count})</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {fullAnalysis && !fullAnalysis.needsTopic && (
+        <div style={{ background: "#F0F7FF", borderBottom: "1px solid #BFDBFE", padding: "14px 20px", flexShrink: 0, maxHeight: "45vh", overflowY: "auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: "#1D4ED8" }}>🔍 Analyse complète — {fullAnalysis.name || firstMsg?.from?.name}</span>
-              <span style={{ fontSize: 11, background: "#DBEAFE", color: "#1D4ED8", borderRadius: 6, padding: "2px 8px", fontWeight: 600 }}>{fullAnalysis.totalInDb ?? fullAnalysis.totalEmails} emails en base</span>
+              {fullAnalysis.theme && <span style={{ fontSize: 11, background: "#EDE9FE", color: "#6D28D9", borderRadius: 6, padding: "2px 8px", fontWeight: 600 }} title="Analyse ciblée sur ce thème">🎯 {fullAnalysis.theme}{typeof fullAnalysis.analyzed === "number" ? ` · ${fullAnalysis.analyzed} mails` : ""}</span>}
+              <span style={{ fontSize: 11, background: "#DBEAFE", color: "#1D4ED8", borderRadius: 6, padding: "2px 8px", fontWeight: 600 }}>{fullAnalysis.totalInDb ?? fullAnalysis.totalEmails} en base</span>
               <span style={{ fontSize: 11, background: fullAnalysis.sentiment === "positif" ? "#DCFCE7" : fullAnalysis.sentiment === "négatif" ? "#FEE2E2" : "#F3F4F6", color: fullAnalysis.sentiment === "positif" ? "#15803D" : fullAnalysis.sentiment === "négatif" ? "#DC2626" : "#6B7280", borderRadius: 6, padding: "2px 8px", fontWeight: 600 }}>
                 {fullAnalysis.sentiment === "positif" ? "😊" : fullAnalysis.sentiment === "négatif" ? "😟" : "😐"} {fullAnalysis.sentiment}
               </span>
@@ -1004,6 +1025,19 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
             </div>
             <button onClick={() => setFullAnalysis(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9CA3AF", fontSize: 16 }}>×</button>
           </div>
+
+          {/* Recibler l'analyse sur un autre thème de cet expéditeur */}
+          {fullAnalysis.multipleThemes && (fullAnalysis.topicOptions?.length ?? 0) > 1 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+              <span style={{ fontSize: 11, color: "#6B7280" }}>Cibler un autre thème :</span>
+              {(fullAnalysis.topicOptions ?? []).filter(t => t.subject !== fullAnalysis.theme).slice(0, 6).map((t, i) => (
+                <button key={i} onClick={() => runFullAnalysis(t.subject)}
+                  style={{ background: "#fff", border: "1px solid #BFDBFE", borderRadius: 7, padding: "3px 8px", fontSize: 11, color: "#1D4ED8", cursor: "pointer", fontWeight: 600 }}>
+                  {t.subject} <span style={{ color: "#60A5FA", fontWeight: 400 }}>({t.count})</span>
+                </button>
+              ))}
+            </div>
+          )}
 
           <p style={{ fontSize: 13, color: "#1E3A5F", margin: "0 0 10px", lineHeight: 1.6 }}>{fullAnalysis.summary}</p>
 

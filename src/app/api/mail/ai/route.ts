@@ -47,6 +47,15 @@ async function resolveContact(email?: string): Promise<ResolvedContact> {
   return { senderType: "unknown" };
 }
 
+// Sujet « de base » : retire les préfixes Re:/Tr:/Fwd: (même empilés) pour
+// regrouper les mails d'un même fil/thème.
+function baseSubject(s?: string | null): string {
+  let x = (s || "").toLowerCase();
+  let prev = "";
+  while (x !== prev) { prev = x; x = x.replace(/^\s*(re|ré|tr|fw|fwd|rep|rép)\s*:\s*/i, ""); }
+  return x.replace(/\s+/g, " ").trim();
+}
+
 async function getKnowledge(category?: string): Promise<string> {
   try {
     const docs = await prisma.knowledgeDoc.findMany({ where: { active: true, ...(category ? { category } : {}) }, select: { title: true, category: true, content: true }, orderBy: { category: "asc" }, take: 8 });
@@ -60,7 +69,7 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const { action, messages, threadSubject, senderEmail, tone = "professionnel", instruction = "", question = "", length = "moyen" } = await req.json();
+  const { action, messages, threadSubject, senderEmail, topic, tone = "professionnel", instruction = "", question = "", length = "moyen" } = await req.json();
   const ctx = buildThreadContext(messages || []);
 
   // Cloisonnement d'Auguste : admin/direction voient tout l'historique ;
@@ -196,19 +205,44 @@ export async function POST(req: NextRequest) {
         { toEmail:   { contains: senderEmail, mode: "insensitive" } },
       ]},
       orderBy: { date: "asc" },
-      take: 80,
+      take: 200,
       select: { fromEmail: true, fromName: true, toEmail: true, subject: true, bodyText: true, date: true },
     });
 
-    const histCtx = allMsgs.map(m =>
+    // Thèmes présents dans l'historique (sujets normalisés) + comptage.
+    const themeCount = new Map<string, number>();
+    for (const m of allMsgs) { const b = baseSubject(m.subject); if (b) themeCount.set(b, (themeCount.get(b) ?? 0) + 1); }
+    const topicOptions = [...themeCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([subject, count]) => ({ subject, count }));
+
+    // Thème ciblé : celui demandé explicitement, sinon le sujet du fil ouvert.
+    const wanted = baseSubject(topic || threadSubject);
+
+    // Doute : aucun thème déductible (fil sans objet) alors qu'il existe
+    // plusieurs sujets → on demande à l'utilisateur de préciser avant d'analyser.
+    if (!wanted && themeCount.size > 1) {
+      return NextResponse.json({ needsTopic: true, topicOptions, totalInDb: allMsgs.length });
+    }
+
+    // Tri par sujet : on n'analyse QUE les échanges du thème visé (garde-fou :
+    // si rien ne correspond, on retombe sur l'ensemble).
+    const onTopic = wanted
+      ? allMsgs.filter(m => { const b = baseSubject(m.subject); return !!b && (b === wanted || b.includes(wanted) || wanted.includes(b)); })
+      : allMsgs;
+    const scope = onTopic.length ? onTopic : allMsgs;
+
+    const histCtx = scope.map(m =>
       `[${new Date(m.date).toLocaleDateString("fr-FR")}] De: ${m.fromName ?? m.fromEmail} → À: ${m.toEmail}\nObjet: ${m.subject}\n${(m.bodyText || "").slice(0, 600)}`
     ).join("\n\n---\n\n");
 
+    const focus = wanted
+      ? `Concentre-toi UNIQUEMENT sur le thème « ${wanted} ». Les ${scope.length} échanges ci-dessous ont été extraits de l'historique complet (${allMsgs.length} mails) pour ce seul thème ; ignore tout autre sujet.`
+      : `Fais un bilan complet des ${scope.length} échanges ci-dessous.`;
+
     const data = await augusteJson<Record<string, unknown>>({
       model: MODELS.smart, max_tokens: 1600, system: SYSTEM,
-      messages: [{ role: "user", content: `Fais un bilan complet de tous les échanges avec ${senderEmail} (${allMsgs.length} emails). Contexte : agence immobilière Lotier Immobilier.\n\n${histCtx}\n\nRéponds UNIQUEMENT en JSON valide :\n{"name":"nom complet du contact","totalEmails":0,"firstContact":"date","lastContact":"date","summary":"résumé global en 2-3 phrases","topics":["sujet1","sujet2"],"actions":["action à faire 1","action à faire 2"],"sentiment":"positif|neutre|négatif","priority":"haute|normale|basse","notes":"observations importantes"}` }],
+      messages: [{ role: "user", content: `${focus} Contact : ${senderEmail}. Contexte : agence immobilière Lotier Immobilier.\n\n${histCtx}\n\nRéponds UNIQUEMENT en JSON valide :\n{"name":"nom complet du contact","totalEmails":0,"firstContact":"date","lastContact":"date","summary":"résumé global en 2-3 phrases (sur le thème visé)","topics":["sujet1","sujet2"],"actions":["action à faire 1","action à faire 2"],"sentiment":"positif|neutre|négatif","priority":"haute|normale|basse","notes":"observations importantes"}` }],
     });
-    return NextResponse.json({ ...data, totalInDb: allMsgs.length });
+    return NextResponse.json({ ...data, totalInDb: allMsgs.length, analyzed: scope.length, theme: wanted || null, topicOptions, multipleThemes: themeCount.size > 1 });
   }
 
   if (action === "classify_thread") {

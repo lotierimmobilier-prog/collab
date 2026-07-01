@@ -286,7 +286,11 @@ export default function ThreadList({
                       {msgCount > 1 && <span style={{ fontSize: 10, color: "#9ca3af", flexShrink: 0 }}>({msgCount})</span>}
                       {acct && <div style={{ width: 5, height: 5, borderRadius: "50%", background: acct.color, flexShrink: 0 }} />}
                     </div>
-                    <span style={{ fontSize: 10, color: "#9ca3af", flexShrink: 0, marginLeft: 4 }}>{last ? formatDate(last.date) : ""}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0, marginLeft: 4 }}>
+                      {/* Repère « répondu » : pastille verte devant l'heure. */}
+                      {repliedId && <span title="Répondu" style={{ width: 7, height: 7, borderRadius: "50%", background: "#22C55E", flexShrink: 0 }} />}
+                      <span style={{ fontSize: 10, color: "#9ca3af" }}>{last ? formatDate(last.date) : ""}</span>
+                    </span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 1 }}>
                     {priority === "haute" && (
