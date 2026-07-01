@@ -86,6 +86,13 @@ export default function Topbar({ title }: { title: string }) {
 
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
 
+        {/* 💡 Raccourci Idées & améliorations */}
+        <button
+          onClick={() => router.push("/suggestions")}
+          title="Idées & améliorations"
+          style={{ background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "5px 10px", cursor: "pointer", fontSize: 15, color: "#78726B", display: "flex", alignItems: "center" }}
+        >💡</button>
+
         {/* 🚀 Nouveautés */}
         <div ref={newsRef} style={{ position: "relative" }}>
           <button

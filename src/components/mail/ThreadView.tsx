@@ -29,6 +29,7 @@ interface Props {
   onBlockSender?: (email: string) => void;
   customLabels: MailLabel[];
   onSetLabels?: (labels: string[]) => void;
+  onKeepInInbox?: () => void;   // remettre en boîte de réception + mémoriser l'expéditeur
 }
 
 interface AiSummary    { summary: string; points: string[] }
@@ -48,7 +49,7 @@ const SENDER_BADGE: Record<string, { label: string; color: string; bg: string }>
   unknown: { label: "Inconnu",       color: "#6B7280", bg: "#F9FAFB" },
 };
 
-export default function ThreadView({ thread, labels, accounts, aiKey, loadingBody, users = [], isCommercial = false, myId, onClose, onReply, onForward, onApplyLabel, onRemoveLabel, onStar, onTrash, onRestore, onDeletePermanent, onBlockSender, customLabels, onSetLabels }: Props) {
+export default function ThreadView({ thread, labels, accounts, aiKey, loadingBody, users = [], isCommercial = false, myId, onClose, onReply, onForward, onApplyLabel, onRemoveLabel, onStar, onTrash, onRestore, onDeletePermanent, onBlockSender, customLabels, onSetLabels, onKeepInInbox }: Props) {
   const isMobile = useIsMobile();
   const [suggestOpen, setSuggestOpen]     = useState(false); // boîte « 🧠 Mémorisé » repliée en icône sur mobile
   const [showReply, setShowReply]         = useState(false);
@@ -972,6 +973,18 @@ export default function ThreadView({ thread, labels, accounts, aiKey, loadingBod
         )}
 
       </div>
+
+      {/* Bandeau « Publicité » : remettre en boîte de réception + mémoriser */}
+      {threadLabelIds.has("pub") && onKeepInInbox && (
+        <div style={{ padding: "9px 20px", background: "#FEF3C7", borderBottom: "1px solid #FDE68A", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", flexShrink: 0 }}>
+          <span style={{ fontSize: 16 }}>📢</span>
+          <span style={{ fontSize: 12.5, color: "#92400E", fontWeight: 600 }}>Ce message est classé en Publicité.</span>
+          <button onClick={onKeepInInbox}
+            style={{ marginLeft: "auto", background: "#059669", color: "#fff", border: "none", borderRadius: 7, padding: "6px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+            ↩ Remettre en boîte de réception
+          </button>
+        </div>
+      )}
 
       {/* Panneau résumé */}
       {aiSummary && (

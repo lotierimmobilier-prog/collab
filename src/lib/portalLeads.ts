@@ -13,6 +13,19 @@ export function portalLabel(id: string): string {
   return PORTALS.find(p => p.id === id)?.label ?? id;
 }
 
+// Partenaires / portails supplémentaires à TOUJOURS garder en boîte de réception
+// (jamais classés en « Publicité »), sans pour autant déclencher la réponse
+// automatique « lead » des portails d'annonces.
+const EXTRA_INBOX_KEYWORDS = ["greenacre", "green acre", "athome", "at-home"];
+
+// Vrai si l'expéditeur doit rester en boîte de réception : portail d'annonces
+// connu OU partenaire de confiance (Green Acre, Athome…).
+export function keepInInbox(fromEmail?: string | null, fromName?: string | null): boolean {
+  if (detectPortal(fromEmail, fromName)) return true;
+  const hay = `${(fromEmail ?? "").toLowerCase()} ${(fromName ?? "").toLowerCase()}`;
+  return EXTRA_INBOX_KEYWORDS.some(k => hay.includes(k));
+}
+
 // Identifie le portail à partir de l'expéditeur (adresse ET nom affiché).
 // Reconnaissance large : un domaine exact/sous-domaine OU n'importe quel
 // domaine d'envoi / nom contenant le mot-clé du portail (ex. mail-leboncoin.fr,
