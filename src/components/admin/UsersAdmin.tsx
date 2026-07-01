@@ -4,11 +4,13 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { User, Role, ModuleAccess, Right, DEFAULT_ROLES, getInitials, avatarColor, MODULES, RIGHTS, getRightStyle } from "@/lib/admin";
 import { isSuperAdminEmail, isAdminRole } from "@/lib/superadmin";
+import { useIsMobile } from "@/lib/useIsMobile";
 import UserModal from "./UserModal";
 
 export default function UsersAdmin() {
   const { data: session, update } = useSession();
   const isSuper = session?.user?.superAdmin === true;
+  const isMobile = useIsMobile();
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [roles] = useState<Role[]>(DEFAULT_ROLES);
@@ -137,8 +139,8 @@ export default function UsersAdmin() {
         </div>
       )}
       {/* Toolbar */}
-      <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "12px 24px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ position: "relative", flex: "0 0 220px" }}>
+      <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: isMobile ? "10px 14px" : "12px 24px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: isMobile ? "1 1 100%" : "0 0 220px" }}>
           <span style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "#9ca3af" }}>🔍</span>
           <input placeholder="Rechercher un utilisateur…" value={search} onChange={e => setSearch(e.target.value)}
             style={{ width: "100%", paddingLeft: 30, height: 34, border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none", background: "#f9fafb" }} />
@@ -161,7 +163,7 @@ export default function UsersAdmin() {
       </div>
 
       {/* Stats */}
-      <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "10px 24px", display: "flex", gap: 24 }}>
+      <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: isMobile ? "10px 14px" : "10px 24px", display: "flex", gap: isMobile ? 14 : 24, flexWrap: isMobile ? "nowrap" : "wrap", overflowX: isMobile ? "auto" : "visible" }}>
         <Stat label="Total" value={users.length} />
         <Stat label="Actifs" value={users.filter(u => u.active).length} color="#059669" />
         <Stat label="Inactifs" value={users.filter(u => !u.active).length} color="#9ca3af" />
@@ -171,7 +173,7 @@ export default function UsersAdmin() {
       </div>
 
       {/* List */}
-      <div style={{ flex: 1, overflowY: "auto", overflowX: "auto", padding: "20px 24px" }}>
+      <div style={{ flex: 1, overflowY: "auto", overflowX: "auto", padding: isMobile ? "12px" : "20px 24px" }}>
         {loading ? (
           <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", padding: "60px 24px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>
             Chargement des utilisateurs...
@@ -185,85 +187,114 @@ export default function UsersAdmin() {
           </div>
         ) : (
           <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", overflow: "hidden" }}>
-            {/* Header */}
-            <div style={{ display: "grid", gridTemplateColumns: "2.1fr 1.5fr 0.9fr 1.1fr 0.9fr 95px 176px", padding: "10px 16px", borderBottom: "1px solid #f3f4f6", fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", gap: 12 }}>
-              <span>Utilisateur</span><span>Email</span><span>Rôle</span><span>Parrain</span><span>Accès modules</span><span>Statut</span><span>Actions</span>
-            </div>
+            {/* Header (masqué sur mobile : affichage en cartes) */}
+            {!isMobile && (
+              <div style={{ display: "grid", gridTemplateColumns: "2.1fr 1.5fr 0.9fr 1.1fr 0.9fr 95px 176px", padding: "10px 16px", borderBottom: "1px solid #f3f4f6", fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", gap: 12 }}>
+                <span>Utilisateur</span><span>Email</span><span>Rôle</span><span>Parrain</span><span>Accès modules</span><span>Statut</span><span>Actions</span>
+              </div>
+            )}
 
             {filtered.map((user, i) => {
               const role = roleOf(user.roleId);
               const ac = avatarColor(user.id);
               const accessCount = role?.modules.filter(m => m.right !== "aucun").length ?? 0;
+              const parrain = user.parrainId ? users.find(x => x.id === user.parrainId) : null;
+
+              const roleBadge = (
+                <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "flex-start" }}>
+                  {role ? (
+                    <span style={{ background: role.color + "18", color: role.color, borderRadius: 6, padding: "3px 10px", fontSize: 12, fontWeight: 600, width: "fit-content" }}>
+                      {role.label}
+                    </span>
+                  ) : <span style={{ color: "#9ca3af", fontSize: 12 }}>—</span>}
+                  {user.superAdmin && (
+                    <span title="Super administrateur" style={{ background: "#1C1A17", color: "#D8B783", borderRadius: 6, padding: "2px 8px", fontSize: 10.5, fontWeight: 700, width: "fit-content", letterSpacing: "0.02em" }}>★ Super admin</span>
+                  )}
+                </div>
+              );
+
+              const accessBar = (
+                <div style={{ fontSize: 12, color: "#6b7280" }}>
+                  {accessCount}/{MODULES.length} modules
+                  <div style={{ height: 3, background: "#f3f4f6", borderRadius: 2, marginTop: 4 }}>
+                    <div style={{ width: `${Math.round((accessCount / MODULES.length) * 100)}%`, height: "100%", background: role?.color ?? "#e5e7eb", borderRadius: 2 }} />
+                  </div>
+                </div>
+              );
+
+              const activeToggle = (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div onClick={() => toggleActive(user.id)} style={{ width: 36, height: 20, borderRadius: 10, background: user.active ? "#B8966A" : "#e5e7eb", cursor: "pointer", position: "relative", transition: "background .2s", flexShrink: 0 }}>
+                    <div style={{ position: "absolute", top: 2, left: user.active ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+                  </div>
+                  <span style={{ fontSize: 11, color: user.active ? "#059669" : "#9ca3af" }}>{user.active ? "Actif" : "Inactif"}</span>
+                </div>
+              );
+
+              // Gouvernance : un admin non super ne gère ni les comptes admin,
+              // ni les super admins (seul le super admin le peut).
+              const targetGoverned = isAdminRole(user.roleId) || !!user.superAdmin;
+              const isBootstrap = isSuperAdminEmail(user.email);
+              const lockManage = targetGoverned && !isSuper && user.id !== session?.user?.id;
+              const lockDelete = isBootstrap || (targetGoverned && !isSuper);
+              const dis: React.CSSProperties = { opacity: 0.4, cursor: "not-allowed" };
+              const actions = (
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: isMobile ? "flex-start" : "flex-end" }}>
+                  {session?.user?.id !== user.id && !(isBootstrap && !isSuper) && (
+                    <button onClick={() => impersonate(user)} title="Prendre la main (voir le logiciel en tant que cet utilisateur)" style={{ background: "#F7F0E6", border: "1px solid #B8966A", borderRadius: 6, padding: "6px 10px", fontSize: 13, cursor: "pointer", color: "#B8966A" }}>👤→</button>
+                  )}
+                  <button onClick={() => !lockManage && setEditing(user)} disabled={lockManage} title={lockManage ? "Réservé au super administrateur" : "Modifier"} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 13, cursor: "pointer", color: "#374151", ...(lockManage ? dis : {}) }}>✏</button>
+                  <button onClick={() => !lockManage && setEditingAccess(user)} disabled={lockManage} title={lockManage ? "Réservé au super administrateur" : "Gérer les accès"} style={{ background: user.accessOverrides?.length ? "#F7F0E6" : "none", border: `1px solid ${user.accessOverrides?.length ? "#B8966A" : "#e5e7eb"}`, borderRadius: 6, padding: "6px 10px", fontSize: 13, cursor: "pointer", color: user.accessOverrides?.length ? "#B8966A" : "#374151", ...(lockManage ? dis : {}) }}>🔐</button>
+                  <button onClick={() => setShowPassword(showPassword === user.id ? null : user.id)} title="Voir le mot de passe" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 13, cursor: "pointer", color: "#374151" }}>🔑</button>
+                  <button onClick={() => resendWelcome(user)} title="Renvoyer l'email d'activation (nouveau lien de mot de passe)" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 13, cursor: "pointer", color: "#374151" }}>📨</button>
+                  <button onClick={() => !lockDelete && deleteUser(user.id)} disabled={lockDelete} title={lockDelete ? "Réservé au super administrateur" : "Supprimer"} style={{ background: "none", border: "1px solid #fecaca", borderRadius: 6, padding: "6px 10px", fontSize: 13, cursor: "pointer", color: "#dc2626", ...(lockDelete ? dis : {}) }}>🗑</button>
+                </div>
+              );
+
+              const avatar = (
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: ac.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: ac.text, flexShrink: 0 }}>
+                  {getInitials(user.prenom, user.nom)}
+                </div>
+              );
+
+              // ── Carte (mobile) ──
+              if (isMobile) {
+                return (
+                  <div key={user.id} style={{ padding: "14px 16px", borderBottom: i < filtered.length - 1 ? "1px solid #f3f4f6" : "none", display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      {avatar}
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 15, fontWeight: 600, color: "#111827" }}>{user.prenom} {user.nom}</div>
+                        <div style={{ fontSize: 12.5, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.email}</div>
+                      </div>
+                      {activeToggle}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                      {roleBadge}
+                      {parrain && <span style={{ fontSize: 12, color: "#6b7280" }}>👥 {parrain.prenom} {parrain.nom}</span>}
+                      <span style={{ fontSize: 12, color: "#9ca3af" }}>{accessCount}/{MODULES.length} modules</span>
+                    </div>
+                    {actions}
+                  </div>
+                );
+              }
+
+              // ── Ligne (bureau) ──
               return (
                 <div key={user.id} style={{ display: "grid", gridTemplateColumns: "2.1fr 1.5fr 0.9fr 1.1fr 0.9fr 95px 176px", padding: "12px 16px", gap: 12, alignItems: "center", borderBottom: i < filtered.length - 1 ? "1px solid #f9fafb" : "none" }}>
-
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: ac.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: ac.text, flexShrink: 0 }}>
-                      {getInitials(user.prenom, user.nom)}
-                    </div>
+                    {avatar}
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 500, color: "#111827" }}>{user.prenom} {user.nom}</div>
                       <div style={{ fontSize: 11, color: "#9ca3af" }}>Créé le {user.createdAt}</div>
                     </div>
                   </div>
-
                   <div style={{ fontSize: 13, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.email}</div>
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "flex-start" }}>
-                    {role ? (
-                      <span style={{ background: role.color + "18", color: role.color, borderRadius: 6, padding: "3px 10px", fontSize: 12, fontWeight: 600, width: "fit-content" }}>
-                        {role.label}
-                      </span>
-                    ) : <span style={{ color: "#9ca3af", fontSize: 12 }}>—</span>}
-                    {user.superAdmin && (
-                      <span title="Super administrateur" style={{ background: "#1C1A17", color: "#D8B783", borderRadius: 6, padding: "2px 8px", fontSize: 10.5, fontWeight: 700, width: "fit-content", letterSpacing: "0.02em" }}>★ Super admin</span>
-                    )}
-                  </div>
-
-                  {/* Parrain */}
-                  {(() => {
-                    const p = user.parrainId ? users.find(x => x.id === user.parrainId) : null;
-                    return <div style={{ fontSize: 12.5, color: p ? "#374151" : "#d1d5db", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p ? `${p.prenom} ${p.nom}` : "—"}</div>;
-                  })()}
-
-                  <div style={{ fontSize: 12, color: "#6b7280" }}>
-                    {accessCount}/{MODULES.length} modules
-                    <div style={{ height: 3, background: "#f3f4f6", borderRadius: 2, marginTop: 4 }}>
-                      <div style={{ width: `${Math.round((accessCount / MODULES.length) * 100)}%`, height: "100%", background: role?.color ?? "#e5e7eb", borderRadius: 2 }} />
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div
-                      onClick={() => toggleActive(user.id)}
-                      style={{ width: 36, height: 20, borderRadius: 10, background: user.active ? "#B8966A" : "#e5e7eb", cursor: "pointer", position: "relative", transition: "background .2s" }}
-                    >
-                      <div style={{ position: "absolute", top: 2, left: user.active ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
-                    </div>
-                    <span style={{ fontSize: 11, color: user.active ? "#059669" : "#9ca3af" }}>{user.active ? "Actif" : "Inactif"}</span>
-                  </div>
-
-                  {(() => {
-                    // Gouvernance : un admin non super ne gère ni les comptes admin,
-                    // ni les super admins (seul le super admin le peut).
-                    const targetGoverned = isAdminRole(user.roleId) || !!user.superAdmin;
-                    const isBootstrap = isSuperAdminEmail(user.email);
-                    const lockManage = targetGoverned && !isSuper && user.id !== session?.user?.id;
-                    const lockDelete = isBootstrap || (targetGoverned && !isSuper);
-                    const dis: React.CSSProperties = { opacity: 0.4, cursor: "not-allowed" };
-                    return (
-                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                        {session?.user?.id !== user.id && !(isBootstrap && !isSuper) && (
-                          <button onClick={() => impersonate(user)} title="Prendre la main (voir le logiciel en tant que cet utilisateur)" style={{ background: "#F7F0E6", border: "1px solid #B8966A", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#B8966A" }}>👤→</button>
-                        )}
-                        <button onClick={() => !lockManage && setEditing(user)} disabled={lockManage} title={lockManage ? "Réservé au super administrateur" : "Modifier"} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#374151", ...(lockManage ? dis : {}) }}>✏</button>
-                        <button onClick={() => !lockManage && setEditingAccess(user)} disabled={lockManage} title={lockManage ? "Réservé au super administrateur" : "Gérer les accès"} style={{ background: user.accessOverrides?.length ? "#F7F0E6" : "none", border: `1px solid ${user.accessOverrides?.length ? "#B8966A" : "#e5e7eb"}`, borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: user.accessOverrides?.length ? "#B8966A" : "#374151", ...(lockManage ? dis : {}) }}>🔐</button>
-                        <button onClick={() => setShowPassword(showPassword === user.id ? null : user.id)} title="Voir le mot de passe" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#374151" }}>🔑</button>
-                        <button onClick={() => resendWelcome(user)} title="Renvoyer l'email d'activation (nouveau lien de mot de passe)" style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#374151" }}>📨</button>
-                        <button onClick={() => !lockDelete && deleteUser(user.id)} disabled={lockDelete} title={lockDelete ? "Réservé au super administrateur" : "Supprimer"} style={{ background: "none", border: "1px solid #fecaca", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer", color: "#dc2626", ...(lockDelete ? dis : {}) }}>🗑</button>
-                      </div>
-                    );
-                  })()}
+                  {roleBadge}
+                  <div style={{ fontSize: 12.5, color: parrain ? "#374151" : "#d1d5db", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{parrain ? `${parrain.prenom} ${parrain.nom}` : "—"}</div>
+                  {accessBar}
+                  {activeToggle}
+                  {actions}
                 </div>
               );
             })}
@@ -336,7 +367,7 @@ function AccessPanel({ user, role, onClose, onSave }: {
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 40 }} />
-      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 500, background: "#fff", zIndex: 50, display: "flex", flexDirection: "column", boxShadow: "-4px 0 24px rgba(0,0,0,0.12)" }}>
+      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "min(500px, 100vw)", maxWidth: "100vw", background: "#fff", zIndex: 50, display: "flex", flexDirection: "column", boxShadow: "-4px 0 24px rgba(0,0,0,0.12)" }}>
         {/* Header */}
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>

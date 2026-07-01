@@ -107,7 +107,7 @@ export default function UserModal({ user, roles, allUsers = [], isSuper = false,
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 40 }} />
       <div style={{
         position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-        width: 560, maxHeight: "88vh", background: "#fff", borderRadius: 16, zIndex: 50,
+        width: "min(560px, 94vw)", maxHeight: "88vh", background: "#fff", borderRadius: 16, zIndex: 50,
         boxShadow: "0 24px 64px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", overflow: "hidden",
       }}>
         {/* Header */}
