@@ -176,6 +176,7 @@ function DriveExplorer() {
             </span>
           ))}
         </div>
+        <a href="/drive-parrainage" title="Documents partagés avec votre lignée de parrainage" style={{ ...miniBtn, color: GOLD, borderColor: GOLD, background: GOLD_BG, textDecoration: "none", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>🤝 Parrain/Filleul</a>
         {canManageCommon && <button onClick={() => setShowCommon(true)} style={{ ...miniBtn, color: DARK }}>🛡 Dossiers imposés</button>}
         <button onClick={newFolder} disabled={busy || !writable} title={writable ? "" : "Dossier en lecture seule"} style={{ background: "#fff", color: writable ? GOLD : "#cbd5e1", border: `1px solid ${writable ? GOLD : BORDER}`, borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: writable ? "pointer" : "not-allowed" }}>📁 Nouveau dossier</button>
         <button onClick={() => fileRef.current?.click()} disabled={!writable} style={{ background: writable ? GOLD : "#e5e7eb", color: "#fff", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 500, border: "none", cursor: writable ? "pointer" : "not-allowed" }}>⬆ Téléverser</button>

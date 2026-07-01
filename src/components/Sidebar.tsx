@@ -20,7 +20,7 @@ interface NavItem {
   group: string; subGroup?: string; indent?: boolean; badge?: number;
 }
 
-const nav: NavItem[] = [
+export const nav: NavItem[] = [
   { id: "dashboard", label: "Tableau de bord",     icon: "⊟",  href: "/",                   group: "Principal" },
   { id: "tasks",     label: "Tâches",               icon: "✓",  href: "/taches",             group: "Principal" },
   { id: "planning",  label: "Planning",             icon: "▦",  href: "/planning",           group: "Principal" },
@@ -29,7 +29,6 @@ const nav: NavItem[] = [
   { id: "appels",    label: "Appels téléphoniques", icon: "📞", href: "/appels",             group: "Principal" },
   { id: "annuaire",  label: "Annuaire",             icon: "▤",  href: "/annuaire",           group: "Principal" },
   { id: "drive",     label: "Drive",                icon: "🗂", href: "/drive",              group: "Drive" },
-  { id: "drive-parrainage", label: "Drive Parrain/Filleul", icon: "🤝", href: "/drive-parrainage", group: "Drive" },
   { id: "gestion",   label: "Gestion locative",     icon: "🏠", href: "/gestion",            group: "Gestion" },
   { id: "espace-client", label: "Espace client",    icon: "🔑", href: "/espace-client-agence", group: "Gestion" },
   { id: "assistance",label: "Assistance locataire", icon: "🛟", href: "/assistance",         group: "Gestion" },
@@ -70,6 +69,7 @@ const adminNav = [
   { id: "admin-settings",  label: "Paramètres",     icon: "⚙", href: "/admin/parametres" },
   { id: "admin-knowledge", label: "Base Auguste",   icon: "✦", href: "/admin/knowledge" },
   { id: "admin-auguste-logs", label: "Historique Auguste", icon: "🕘", href: "/admin/auguste-historique" },
+  { id: "admin-menu",      label: "Menu (ordre & icônes)", icon: "🧭", href: "/admin/menu" },
 ];
 
 const groups = ["Principal", "Drive", "Gestion", "Agence", "Réseaux sociaux", "Personnel"];
@@ -106,6 +106,11 @@ export default function Sidebar({ active }: { active: string }) {
   const [directionOpen, setDirectionOpen] = useState(true);
   const [adminOpen, setAdminOpen] = useState(true);
   const [badges, setBadges] = useState<{ mail: { count: number; urgent: boolean }; chat: { count: number; urgent: boolean }; legal?: { count: number; urgent: boolean }; isEmployee?: boolean; hidden?: string[]; hiddenNav?: string[] } | null>(null);
+  // Personnalisation du menu par le super admin (label / icône / ordre).
+  const [menuCustom, setMenuCustom] = useState<Record<string, { label?: string; icon?: string; order?: number }>>({});
+  useEffect(() => {
+    fetch("/api/menu-custom").then(r => r.json()).then(d => setMenuCustom(d.custom ?? {})).catch(() => {});
+  }, []);
   const [winW, setWinW] = useState(0);
 
   // Largeur de l'écran : la barre du bas s'adapte (nombre de raccourcis +
@@ -127,7 +132,15 @@ export default function Sidebar({ active }: { active: string }) {
   const roleId = session?.user?.roleId ?? "";
   const isSuper = session?.user?.superAdmin === true;
   const canGestion = isSuper || GESTION_ROLES.includes(roleId);
-  const visibleNav = nav.filter(n => {
+  // Applique la personnalisation : libellé / icône remplacés, et réordonnancement
+  // À L'INTÉRIEUR de chaque groupe selon l'ordre choisi par le super admin.
+  const effectiveNav: NavItem[] = groups.flatMap(g =>
+    nav.filter(n => n.group === g)
+      .map((n, i) => ({ n, i }))
+      .sort((a, b) => (menuCustom[a.n.id]?.order ?? a.i) - (menuCustom[b.n.id]?.order ?? b.i))
+      .map(({ n }) => ({ ...n, label: menuCustom[n.id]?.label || n.label, icon: menuCustom[n.id]?.icon || n.icon })),
+  );
+  const visibleNav = effectiveNav.filter(n => {
     if (n.id === "rh" && !isEmployee && !isDirection) return false;
     if (n.group === "Gestion" && !canGestion) return false; // jamais pour les agents
     if (ALWAYS_GROUPS.includes(n.group)) return true;

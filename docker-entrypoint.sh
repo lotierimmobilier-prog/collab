@@ -104,6 +104,7 @@ run_sql prisma/migrations_mail_allowlist.sql
 run_sql prisma/migrations_veille.sql
 run_sql prisma/migrations_parrain_qcm.sql
 run_sql prisma/migrations_parrainage_drive.sql
+run_sql prisma/migrations_treso_pointe.sql
 run_sql prisma/migrations_mail_signatures.sql
 run_sql prisma/migrations_client_portal.sql
 run_sql prisma/migrations_tenant_documents.sql

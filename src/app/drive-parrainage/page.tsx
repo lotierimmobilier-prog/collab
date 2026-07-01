@@ -51,9 +51,10 @@ export default function DriveParrainagePage() {
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#FAF8F5" }}>
-      <Sidebar active="drive-parrainage" />
+      <Sidebar active="drive" />
       <main style={{ flex: 1, padding: "28px 32px", maxWidth: 900, margin: "0 auto", width: "100%" }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: DARK, margin: 0 }}>🤝 Drive Parrain/Filleul</h1>
+        <a href="/drive" style={{ fontSize: 12.5, color: GOLD, textDecoration: "none", fontWeight: 600 }}>← Retour au Drive</a>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: DARK, margin: "6px 0 0" }}>🤝 Drive Parrain/Filleul</h1>
         <p style={{ color: "#6b7280", fontSize: 13, marginTop: 4, marginBottom: 18 }}>
           Espace partagé avec toute votre lignée de parrainage — vos parrains et vos filleuls (et les filleuls de vos filleuls) voient ces documents.
         </p>
