@@ -234,6 +234,19 @@ function DriveExplorer() {
        : (items.length === 0 && shared.length === 0) ? <div style={{ color: "#9ca3af", padding: 40, textAlign: "center" }}>Dossier vide — glissez-déposez vos fichiers ou créez un dossier.</div>
        : (
         <div onContextMenu={e => { if (e.target === e.currentTarget) openCtx(e, null); }} style={{ display: "grid", gridTemplateColumns: view === "list" ? "1fr" : "repeat(auto-fill, minmax(190px, 1fr))", gap: view === "list" ? 6 : 12 }}>
+          {/* Dossier spécial Parrain/Filleul — mis en avant, visible à la racine. */}
+          {parentId === null && (
+            <a href="/drive-parrainage" title="Espace partagé avec toute votre lignée de parrainage"
+              style={{ background: "#FBF3E6", border: `1.5px solid ${GOLD}`, borderRadius: 10, padding: view === "list" ? "7px 12px" : 12, display: "flex", flexDirection: view === "list" ? "row" : "column", alignItems: view === "list" ? "center" : "stretch", gap: view === "list" ? 10 : 8, textDecoration: "none" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flex: view === "list" ? 1 : undefined, minWidth: 0 }}>
+                <div style={{ fontSize: view === "list" ? 18 : 26 }}>🤝</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: GOLD, wordBreak: "break-word" }}>Parrain/Filleul</div>
+                  <div style={{ fontSize: 10.5, color: "#B8966A", marginTop: 3 }}>partagé avec votre lignée</div>
+                </div>
+              </div>
+            </a>
+          )}
           {items.map(it => {
             const isFolder = it.kind === "folder";
             const isDropHere = dropTarget === it.id && isFolder;
