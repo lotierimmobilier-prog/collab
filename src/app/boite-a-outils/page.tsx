@@ -288,9 +288,20 @@ function HonorairesVente() {
   const [taux, setTaux] = useState("5");
   const [charge, setCharge] = useState<"vendeur" | "acq">("acq");
   const r = useMemo(() => {
-    const N = num(net), tx = num(taux); if (!N) return null;
-    const hono = Math.round(N * tx / 100 * 100) / 100;
-    const fai = N + hono;
+    const N = num(net), tx = num(taux) / 100; if (!N) return null;
+    let hono: number, fai: number;
+    if (charge === "acq") {
+      // Charge acquéreur : honoraires = taux × prix NET VENDEUR, ajoutés au prix.
+      hono = N * tx;
+      fai = N + hono;
+    } else {
+      // Charge vendeur : honoraires = taux × prix de VENTE (FAI), déduits du
+      // prix. Le vendeur veut le net → FAI = net / (1 − taux).
+      fai = tx < 1 ? N / (1 - tx) : N;
+      hono = fai - N;
+    }
+    hono = Math.round(hono * 100) / 100;
+    fai = Math.round(fai * 100) / 100;
     // Frais de notaire : base = net vendeur si charge acquéreur (avantage
     // acheteur), sinon prix FAI (honoraires inclus).
     const notaireBase = charge === "acq" ? N : fai;
@@ -312,14 +323,15 @@ function HonorairesVente() {
         </Field>
       </div>
       {r && <div style={{ marginTop: 14 }}>
-        <Row label={`Honoraires (${taux || "0"}% du net vendeur)`} value={euro(r.hono)} color={GOLD} />
+        <Row label={`Honoraires (${taux || "0"}% ${charge === "acq" ? "du net vendeur" : "du prix de vente FAI"})`} value={euro(r.hono)} color={GOLD} />
+        <Row label="Prix net vendeur" value={euro(num(net))} />
         <Highlight label="Prix de vente FAI (affiché)" value={euro(r.fai)} color={DARK} />
         <Row label={`Base frais de notaire (${charge === "acq" ? "net vendeur" : "prix FAI"})`} value={euro(r.notaireBase)} />
       </div>}
       <Note>
         {charge === "acq"
-          ? "Charge acquéreur : honoraires = taux × prix net vendeur ; l'acheteur paie le prix FAI et les frais de notaire sont calculés sur le net vendeur (hors honoraires) — l'avantage du charge acquéreur."
-          : "Charge vendeur : honoraires = taux × prix net vendeur ; les frais de notaire de l'acquéreur sont calculés sur le prix FAI (honoraires inclus)."}
+          ? "Charge acquéreur : honoraires = taux × prix net vendeur, ajoutés au prix. L'acheteur paie le prix FAI ; les frais de notaire sont calculés sur le net vendeur (hors honoraires) — l'avantage du charge acquéreur."
+          : "Charge vendeur : les honoraires sont un pourcentage du PRIX DE VENTE (FAI) et sont déduits du prix ; le vendeur perçoit le net. Le prix affiché = net ÷ (1 − taux). Frais de notaire sur le prix FAI."}
       </Note>
     </Card>
   );
