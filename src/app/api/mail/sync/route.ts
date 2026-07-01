@@ -84,7 +84,10 @@ async function syncFolder(client: any, folder: string, accountId: string, since:
           // (Leboncoin, Bien'ici, Le Figaro, Green Acre, Athome…) OU expéditeur
           // remis manuellement en boîte de réception (allowlist mémorisée).
           const fromDomain = fromLc.includes("@") ? fromLc.split("@")[1] : "";
-          const trusted = keepInInbox(fromEmail, env.from?.[0]?.name) || allowSet.has(fromLc) || (!!fromDomain && allowSet.has(fromDomain));
+          // Les mails de facturation (facture@…) ne doivent JAMAIS aller en
+          // Publicité : ils restent toujours en boîte de réception.
+          const isInvoice = /^factur/.test(fromLc.split("@")[0] || "");
+          const trusted = isInvoice || keepInInbox(fromEmail, env.from?.[0]?.name) || allowSet.has(fromLc) || (!!fromDomain && allowSet.has(fromDomain));
           const isPub   = !isSent && !trusted && (
             hdrs.includes("list-unsubscribe") ||
             hdrs.includes("precedence: bulk") ||
