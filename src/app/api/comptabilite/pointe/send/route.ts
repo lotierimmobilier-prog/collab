@@ -25,8 +25,10 @@ export async function POST(req: NextRequest) {
   // Destinataire : utilisateur choisi OU adresse email libre.
   let to = "";
   if (body?.recipientUserId) {
-    const u = await prisma.user.findUnique({ where: { id: String(body.recipientUserId) }, select: { email: true, active: true } }).catch(() => null);
+    const u = await prisma.user.findUnique({ where: { id: String(body.recipientUserId) }, select: { email: true, active: true, roleId: true } }).catch(() => null);
     if (!u?.email) return NextResponse.json({ error: "Utilisateur introuvable." }, { status: 400 });
+    // Seule la direction peut recevoir la pointe en tant qu'utilisateur interne.
+    if (!canAccessCompta(u.roleId)) return NextResponse.json({ error: "Seule la direction peut recevoir la pointe." }, { status: 403 });
     to = u.email;
   } else {
     const e = String(body?.recipientEmail ?? "").trim();

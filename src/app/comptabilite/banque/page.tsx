@@ -339,7 +339,9 @@ const saveBtn: React.CSSProperties = { background: GOLD, color: "#fff", border: 
 
 // ─── Onglet « Pointe de trésorerie » ──────────────────────────────────
 interface Pointe { id: string; service: string; fileName: string; amount: number | null; createdAt: string; garantie: number; exceeds: boolean }
-interface UserOpt { id: string; prenom: string; nom: string; active: boolean }
+interface UserOpt { id: string; prenom: string; nom: string; active: boolean; roleId?: string }
+// Seule la direction peut recevoir la pointe de trésorerie.
+const DIRECTION_ROLES = ["admin", "direction", "dirigeant"];
 
 function PointeTab() {
   const [pointes, setPointes] = useState<Pointe[]>([]);
@@ -480,7 +482,7 @@ function PointeTab() {
               ))}
             </div>
             {rMode === "user"
-              ? <select value={rUser} onChange={e => setRUser(e.target.value)} style={{ ...inp, cursor: "pointer" }}><option value="">— Choisir —</option>{users.map(u => <option key={u.id} value={u.id}>{u.prenom} {u.nom}</option>)}</select>
+              ? <select value={rUser} onChange={e => setRUser(e.target.value)} style={{ ...inp, cursor: "pointer" }}><option value="">— Choisir (direction) —</option>{users.filter(u => DIRECTION_ROLES.includes(u.roleId ?? "")).map(u => <option key={u.id} value={u.id}>{u.prenom} {u.nom}</option>)}</select>
               : <input value={rEmail} onChange={e => setREmail(e.target.value)} placeholder="destinataire@email.com" style={inp} />}
           </L>
           <L label="Objet"><input value={subject} onChange={e => setSubject(e.target.value)} style={inp} /></L>
