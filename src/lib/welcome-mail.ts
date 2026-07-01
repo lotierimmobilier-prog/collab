@@ -9,7 +9,7 @@ export const RIB = { banque: "DUPUY DE PERSEVAL", titulaire: "SARL LOTIER", iban
 export const AGENCE = { email: "gestion@lotier-immobilier.com", tel: "04 67 11 28 31", adresse: "38/40 rue Française, 34500 BÉZIERS" };
 
 export interface WelcomeData {
-  civilite: "M" | "Mme" | "MM";
+  civilite: "M" | "Mme" | "MM" | "asso" | "societe";
   prenom1: string; nom1: string; email1: string;
   prenom2?: string; nom2?: string; email2?: string;
   agentPrenom?: string; agentNom?: string; agentTel?: string; agentEmail?: string;
@@ -21,7 +21,7 @@ export interface WelcomeData {
 
 const esc = (s?: string) => (s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const num = (n?: number) => (typeof n === "number" && !isNaN(n) ? n : 0);
-const civLabel = (c: string) => c === "Mme" ? "Madame" : c === "MM" ? "Monsieur et Madame" : "Monsieur";
+const civLabel = (c: string) => c === "Mme" ? "Madame" : c === "MM" ? "Monsieur et Madame" : c === "asso" ? "L'association" : c === "societe" ? "La société" : "Monsieur";
 const typeLabel = (t: string) => t === "meuble" ? "Meublé" : t === "commercial" ? "Local commercial" : "Non meublé";
 function locName(d: WelcomeData): string {
   const a = [d.prenom1, d.nom1].filter(Boolean).join(" ");
