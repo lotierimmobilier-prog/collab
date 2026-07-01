@@ -1,8 +1,12 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import CalendarView from "./CalendarView";
 import GoogleSyncPanel from "./GoogleSyncPanel";
 import EventModal from "./EventModal";
+
+const PARRAIN_COLOR = "#1A3A5C";
+const FILLEUL_COLOR = "#B8966A";
 
 export interface LocalEvent {
   id: string;
@@ -16,12 +20,19 @@ export interface LocalEvent {
   calendarId?: string;
   htmlLink?: string;
   attendees?: { type: "user" | "contact"; id?: string; name: string; email: string }[];
+  // Planning parrainage (créneau partagé, double validation)
+  parrainage?: boolean;
+  approvedBy?: string[];
+  createdBy?: string;
+  proposerName?: string | null;
 }
 
 export interface GCal { id: string; summary: string; backgroundColor?: string; primary?: boolean }
 export interface GStatus { connected: boolean; email: string | null; calendars: GCal[]; selected: string[]; configured?: boolean }
 
 export default function PlanningBoard() {
+  const { data: session } = useSession();
+  const myId = (session?.user as { id?: string })?.id ?? "";
   const [view, setView] = useState<"month" | "week" | "day">("week");
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [showSync, setShowSync] = useState(false);
@@ -69,6 +80,10 @@ export default function PlanningBoard() {
         type:        (e.source === "google" || e.type === "google") ? "google" as const : "local" as const,
         htmlLink:    e.htmlLink as string | undefined,
         attendees:   (e.attendees as LocalEvent["attendees"]) ?? [],
+        parrainage:  !!e.parrainage,
+        approvedBy:  Array.isArray(e.approvedBy) ? (e.approvedBy as string[]) : [],
+        createdBy:   e.createdBy as string | undefined,
+        proposerName: (e.proposerName as string | null) ?? null,
       }));
       setEvents(list);
     } catch { /* silencieux */ }
@@ -129,6 +144,15 @@ export default function PlanningBoard() {
     setEditingEvent(null);
     setSelectedEvent(null);
   }
+
+  async function handleValidate(evt: LocalEvent) {
+    const realId = evt.id.replace("local-", "");
+    await fetch(`/api/calendar/${realId}/validate`, { method: "POST" }).catch(() => {});
+    await fetchDbEvents();
+    setSelectedEvent(null);
+  }
+
+  const hasParrainage = events.some(e => e.parrainage);
 
   const connected = !!gstatus?.connected;
   const selectedCount = gstatus?.selected.length ?? 0;
@@ -215,6 +239,18 @@ export default function PlanningBoard() {
         </div>
       )}
 
+      {/* Légende planning parrainage */}
+      {hasParrainage && (
+        <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "6px 20px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700 }}>PARRAINAGE :</span>
+          <LegendDot color={PARRAIN_COLOR} label="Proposé par le parrain" />
+          <LegendDot color={FILLEUL_COLOR} label="Proposé par le filleul" />
+          <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#374151" }}>
+            <span style={{ width: 12, height: 12, borderRadius: 3, border: "2px dashed #9ca3af", display: "inline-block" }} /> À valider par les deux
+          </span>
+        </div>
+      )}
+
       {/* Calendar */}
       <CalendarView
         view={view}
@@ -248,6 +284,8 @@ export default function PlanningBoard() {
       {selectedEvent && !editingEvent && (
         <EventDetail
           event={selectedEvent}
+          myId={myId}
+          onValidate={handleValidate}
           onClose={() => setSelectedEvent(null)}
           onEdit={() => setEditingEvent(selectedEvent)}
           onDelete={async () => {
@@ -280,9 +318,14 @@ export default function PlanningBoard() {
   }
 }
 
-function EventDetail({ event, onClose, onEdit, onDelete }: { event: LocalEvent; onClose: () => void; onEdit: () => void; onDelete: () => void }) {
+function EventDetail({ event, myId, onValidate, onClose, onEdit, onDelete }: { event: LocalEvent; myId: string; onValidate: (e: LocalEvent) => void; onClose: () => void; onEdit: () => void; onDelete: () => void }) {
   const start = event.start ? new Date(event.start) : null;
   const end = event.end ? new Date(event.end) : null;
+  const approved = event.approvedBy ?? [];
+  const bothValidated = event.parrainage && approved.length >= 2;
+  const iValidated = approved.includes(myId);
+  const iAmProposer = event.createdBy === myId;
+  const canValidate = !!event.parrainage && !bothValidated && !iValidated && !iAmProposer;
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 40 }} />
@@ -292,10 +335,20 @@ function EventDetail({ event, onClose, onEdit, onDelete }: { event: LocalEvent; 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
             <div>
               {event.type === "google" && <div style={{ fontSize: 10, color: "#6b7280", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}><span>📅</span> Google Calendar</div>}
+              {event.parrainage && <div style={{ fontSize: 10, color: event.color, fontWeight: 700, marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}><span>🤝</span> Planning parrainage{event.proposerName ? ` · proposé par ${event.proposerName}` : ""}</div>}
               <h2 style={{ fontSize: 16, fontWeight: 600, color: "#111827" }}>{event.title}</h2>
             </div>
             <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>×</button>
           </div>
+
+          {event.parrainage && (
+            <div style={{ background: bothValidated ? "#f0fdf4" : "#fffbeb", border: `1px solid ${bothValidated ? "#bbf7d0" : "#fde68a"}`, borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 12.5, color: bothValidated ? "#166534" : "#92400e", fontWeight: 600 }}>
+              {bothValidated ? "✓ Créneau confirmé (validé par les deux)" : iValidated ? "⏳ En attente de la validation de votre binôme" : iAmProposer ? "⏳ En attente de la validation de votre binôme" : "⏳ À valider — ce créneau vous est proposé"}
+              {canValidate && (
+                <button onClick={() => onValidate(event)} style={{ display: "block", marginTop: 8, background: "#2F855A", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>✓ Valider ce créneau</button>
+              )}
+            </div>
+          )}
           {start && (
             <div style={{ fontSize: 13, color: "#374151", marginBottom: 8 }}>
               🕐 {start.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
@@ -331,6 +384,14 @@ function formatHeader(date: Date, view: string): string {
     return `${start.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} – ${end.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}`;
   }
   return date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#374151" }}>
+      <span style={{ width: 12, height: 12, borderRadius: 3, background: color, display: "inline-block" }} /> {label}
+    </span>
+  );
 }
 
 const iconBtn: React.CSSProperties = { background: "none", border: "1px solid #e5e7eb", borderRadius: 8, padding: "5px 10px", cursor: "pointer", fontSize: 16, color: "#374151" };

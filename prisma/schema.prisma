@@ -145,6 +145,8 @@ model CalendarEvent {
   type        String   @default("autre")
   createdBy   String
   attendees   Json?    // [{type:"user"|"contact", id?, name, email}]
+  parrainage  Boolean  @default(false) // créneau partagé parrain/filleul (double validation)
+  approvedBy  Json?    // identifiants des utilisateurs ayant validé le créneau (proposeur inclus)
   googleId    String?  // ID Google Calendar si synchronisé
   notifSent   Boolean  @default(false)
   createdAt   DateTime @default(now())

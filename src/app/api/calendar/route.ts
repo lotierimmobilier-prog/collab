@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { sendMail, eventMailHtml } from "@/lib/mailer";
+import { getBinomes, proposerRole, colorForRole } from "@/lib/parrainage-binome";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -33,12 +34,24 @@ export async function GET(req: NextRequest) {
     return att.some(a => (a.type === "user" && a.id === uid) || (!!a.email && a.email.toLowerCase() === myEmail));
   });
 
+  // Nom du proposeur pour les créneaux parrainage (affiché sur le planning).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parrainageEvents = events.filter(e => (e as any).parrainage);
+  const proposerNames = new Map<string, string>();
+  if (parrainageEvents.length) {
+    const ids = [...new Set(parrainageEvents.map(e => e.createdBy))];
+    const us = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, prenom: true, nom: true } }).catch(() => []);
+    us.forEach(u => proposerNames.set(u.id, `${u.prenom} ${u.nom}`.trim()));
+  }
+
   const internal = events.map(e => ({
     ...e,
     start: e.start.toISOString(),
     end:   e.end.toISOString(),
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    proposerName: (e as any).parrainage ? (proposerNames.get(e.createdBy) || null) : null,
   }));
 
   // Fusion de l'agenda Google connecté (permanent, côté serveur) sur la même
@@ -65,8 +78,28 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   const body = await req.json();
-  const { title, description, location, start, end, allDay, color, type, attendees } = body;
+  const { title, description, location, start, end, allDay, color, type, attendees, parrainage, binomeId } = body;
   if (!title?.trim() || !start || !end) return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 });
+
+  // Planning parrainage : créneau partagé avec le binôme (parrain/filleul),
+  // confirmé après validation des deux. Couleur selon le rôle du proposeur.
+  let atts0: Array<{ type: string; id?: string; name: string; email: string }> = Array.isArray(attendees) ? attendees : [];
+  let evColor = color ?? "#B8966A";
+  let approvedBy: string[] | null = null;
+  const isParrainage = !!parrainage && !!binomeId;
+  if (isParrainage) {
+    const binomes = await getBinomes(session.user.id);
+    const binome = binomes.find(b => b.id === binomeId);
+    if (binome) {
+      evColor = colorForRole(proposerRole(binome.role));
+      approvedBy = [session.user.id];
+      // Le binôme est ajouté comme participant → il voit le créneau sur son planning.
+      if (!atts0.some(a => a.type === "user" && a.id === binome.id)) {
+        const u = await prisma.user.findUnique({ where: { id: binome.id }, select: { email: true } }).catch(() => null);
+        atts0 = [...atts0, { type: "user", id: binome.id, name: binome.name, email: u?.email || "" }];
+      }
+    }
+  }
 
   const event = await prisma.calendarEvent.create({
     data: {
@@ -76,15 +109,17 @@ export async function POST(req: NextRequest) {
       start: new Date(start),
       end:   new Date(end),
       allDay: !!allDay,
-      color: color ?? "#B8966A",
+      color: evColor,
       type: type ?? "autre",
       createdBy: session.user.id,
-      attendees: attendees ?? null,
+      attendees: atts0.length ? atts0 : null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...(isParrainage && approvedBy ? { parrainage: true, approvedBy } as any : {}),
     },
   });
 
-  // Envoyer les invitations par mail aux participants
-  const atts: { name: string; email: string }[] = Array.isArray(attendees) ? attendees : [];
+  // Envoyer les invitations par mail aux participants (binôme parrainage inclus).
+  const atts = atts0 as ({ type?: string; id?: string; name: string; email: string })[];
   for (const att of atts) {
     if (!att.email) continue;
     try {
@@ -96,14 +131,15 @@ export async function POST(req: NextRequest) {
     } catch { /* non bloquant */ }
   }
 
-  // Notification aux utilisateurs mentionnés (type "user")
-  const userAtts = atts.filter((a: { name: string; email: string } & { type?: string; id?: string }) => (a as { type?: string }).type === "user" && (a as { id?: string }).id);
+  // Notification aux utilisateurs mentionnés (type "user"). Pour un créneau
+  // parrainage, le binôme est invité à valider.
+  const userAtts = atts.filter(a => a.type === "user" && a.id);
   for (const att of userAtts as ({ id: string; name: string; email: string })[]) {
     await prisma.notification.create({
       data: {
         userId: att.id,
         type: "calendar",
-        title: `Nouvel événement : ${title.trim()}`,
+        title: isParrainage ? `Créneau à valider : ${title.trim()}` : `Nouvel événement : ${title.trim()}`,
         body: new Date(start).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }),
         link: "/planning",
       },

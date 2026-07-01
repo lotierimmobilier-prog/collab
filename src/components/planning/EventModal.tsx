@@ -56,10 +56,19 @@ export default function EventModal({ defaultDate, event, onClose, onSave }: {
   const [manualEmail, setManualEmail] = useState({ name: "", email: "" });
   const [saving, setSaving]       = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
+  // Planning parrainage : partage du créneau avec le binôme (parrain/filleul).
+  const [binomes, setBinomes] = useState<{ id: string; name: string; role: string }[]>([]);
+  const [binomeId, setBinomeId] = useState("");
 
   useEffect(() => {
     fetch("/api/users").then(r => r.json()).then((us: (User & { active: boolean })[]) => setUsers(us.filter(u => u.active))).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (isEdit) return; // le partage parrainage se choisit à la création
+    fetch("/api/parrainage/binome").then(r => r.ok ? r.json() : null)
+      .then(d => setBinomes(d?.binomes ?? [])).catch(() => {});
+  }, [isEdit]);
 
   useEffect(() => {
     function h(e: MouseEvent) { if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setShowPicker(false); }
@@ -94,7 +103,7 @@ export default function EventModal({ defaultDate, event, onClose, onSave }: {
     const end   = f.allDay ? f.date : `${f.date}T${f.endTime}:00`;
 
     try {
-      const payload = { title: f.title.trim(), description: f.description || undefined, location: f.location || undefined, start, end, allDay: f.allDay, color: f.color, type: f.type, attendees };
+      const payload = { title: f.title.trim(), description: f.description || undefined, location: f.location || undefined, start, end, allDay: f.allDay, color: f.color, type: f.type, attendees, ...(binomeId ? { parrainage: true, binomeId } : {}) };
       const r = await fetch(isEdit ? `/api/calendar/${event!.id.replace("local-","")}` : "/api/calendar", {
         method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -218,6 +227,25 @@ export default function EventModal({ defaultDate, event, onClose, onSave }: {
             )}
           </F>
 
+          {/* Planning parrainage */}
+          {!isEdit && binomes.length > 0 && (
+            <F label="🤝 Planning parrainage">
+              <div style={{ background: "#F7F0E6", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 12px" }}>
+                <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 8, lineHeight: 1.5 }}>
+                  Partagez ce créneau avec votre binôme. Il apparaîtra sur les deux plannings et sera <strong>confirmé après validation des deux</strong>.
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  <button type="button" onClick={() => setBinomeId("")} style={chip(binomeId === "")}>Non partagé</button>
+                  {binomes.map(b => (
+                    <button key={b.id} type="button" onClick={() => setBinomeId(b.id)} style={chip(binomeId === b.id)}>
+                      {b.name} <span style={{ opacity: 0.7 }}>({b.role})</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </F>
+          )}
+
           {/* Couleur */}
           <F label="🎨 Couleur">
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -244,3 +272,7 @@ function F({ label, children }: { label: string; children: React.ReactNode }) {
 }
 
 const inp: React.CSSProperties = { width: "100%", height: 36, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 10px", fontSize: 13, outline: "none", background: "#f9fafb", fontFamily: "inherit", boxSizing: "border-box" };
+
+function chip(active: boolean): React.CSSProperties {
+  return { padding: "5px 11px", fontSize: 12, borderRadius: 20, cursor: "pointer", fontWeight: active ? 700 : 500, border: `1px solid ${active ? GOLD : BORDER}`, background: active ? GOLD : "#fff", color: active ? "#fff" : "#6b7280" };
+}
