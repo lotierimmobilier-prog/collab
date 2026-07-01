@@ -10,13 +10,14 @@ export const AGENCE = { email: "gestion@lotier-immobilier.com", tel: "04 67 11 2
 
 export interface WelcomeData {
   civilite: "M" | "Mme" | "MM" | "asso" | "societe";
+  proprietaire?: string;
   prenom1: string; nom1: string; email1: string;
   prenom2?: string; nom2?: string; email2?: string;
   agentPrenom?: string; agentNom?: string; agentTel?: string; agentEmail?: string;
   adresse?: string; etage?: string; numPorte?: string;
   typeLgt: "nu" | "meuble" | "commercial"; dateEntree?: string;
   loyer?: number; charges?: number; hono?: number; depot?: number;
-  pdlEdf?: string; ancienEdf?: string; numEau?: string; ancienEau?: string; numGaz?: string; ancienGaz?: string;
+  pdlEdf?: string; ancienEdf?: string; eauMode?: "individuel" | "charges" | "divisionnaire"; numEau?: string; ancienEau?: string; numGaz?: string; ancienGaz?: string;
 }
 
 const esc = (s?: string) => (s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -73,6 +74,19 @@ export function buildWelcomeEmailHtml(d: WelcomeData): string {
   const hasGaz = !!(d.numGaz && d.numGaz.trim());
   const eur = (n: number) => `${n.toFixed(2)} €`;
 
+  // Sous-titre de l'en-tête : PROPRIÉTAIRE / LOCATAIRE · ADRESSE.
+  const prop = esc(d.proprietaire);
+  const subLine = `${prop ? prop + " / " : ""}${loc}${adr ? " · " + adr : ""}`;
+  // Ligne « eau » selon le mode (compteur individuel / dans les charges /
+  // compteur divisionnaire).
+  const eauMode = d.eauMode || "individuel";
+  const waterLine = eauMode === "charges"
+    ? `💧 Eau — comprise dans vos charges : <strong>aucune action n'est à faire de votre part.</strong>`
+    : eauMode === "divisionnaire"
+    ? `💧 Eau — compteur divisionnaire (relevé par l'agence, régularisé dans vos charges) : <strong>aucune action n'est à faire de votre part.</strong>`
+    : `💧 Eau (SUEZ) — N° : <strong>${esc(d.numEau) || "[N°]"}</strong> · Ancien titulaire : ${esc(d.ancienEau) || "[Nom]"}`;
+  const accesLine = [d.etage, d.numPorte].filter(Boolean).map(esc).join(" · ");
+
   const row = (l: string, r: string) => `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee;color:#666;font-size:13px">${l}</td><td style="padding:8px 12px;border-bottom:1px solid #eee;color:#222;font-size:13px;font-weight:600">${r}</td></tr>`;
   const section = (title: string, inner: string) => `<div style="margin-bottom:22px"><div style="font-size:13px;font-weight:700;color:${NAVY};text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;border-left:3px solid ${GOLD};padding-left:10px">${title}</div>${inner}</div>`;
 
@@ -83,7 +97,7 @@ export function buildWelcomeEmailHtml(d: WelcomeData): string {
   </div>
   <div style="background:${GOLD};padding:20px 32px;text-align:center;color:#fff">
     <h1 style="font-size:21px;font-weight:700;margin:0">🏠 Bienvenue dans votre nouveau logement !</h1>
-    <p style="font-size:13px;margin:6px 0 0;opacity:.9">${loc}${adr ? " · " + adr : ""}</p>
+    <p style="font-size:13px;margin:6px 0 0;opacity:.9;text-transform:uppercase;letter-spacing:.02em">${subLine}</p>
   </div>
   <div style="padding:28px 32px">
     <p style="font-size:14px;color:#444;margin:0 0 22px;line-height:1.7">${civ} ${loc},<br><br>Toute l'équipe LOTIER Immobilier est heureuse de vous accueillir en tant que nouveau locataire${adr ? " au <strong>" + adr + "</strong>" : ""}. Nous espérons que vous vous y sentirez pleinement chez vous.</p>
@@ -91,6 +105,7 @@ export function buildWelcomeEmailHtml(d: WelcomeData): string {
     ${section("📋 Informations sur votre arrivée", `
       <table style="width:100%;border-collapse:collapse;background:#fafafa;border-radius:8px;overflow:hidden">
         ${row("Type de logement", tl)}
+        ${accesLine ? row("Étage / accès", accesLine) : ""}
         ${row("Date d'entrée", `${de || "[À confirmer]"} — à confirmer avec ${ag}${tel ? " · " + tel : ""}`)}
         ${row(`Loyer proratisé (${a.jo || "?"}j/${a.jm}j)`, a.pro > 0 ? eur(a.pro) : "[Montant]")}
         ${row("Honoraires d'agence", a.hono > 0 ? eur(a.hono) : "[Montant]")}
@@ -111,7 +126,7 @@ export function buildWelcomeEmailHtml(d: WelcomeData): string {
       <div style="background:#eef6ff;border:1px solid #b8d4f0;border-radius:8px;padding:12px 16px;font-size:13px;color:${NAVY};line-height:1.6">Notre partenaire <strong>Papernest</strong> vous appellera pour prendre en charge l'ouverture de vos contrats d'énergie. Ce service est <strong>100 % gratuit</strong> et inclus dans votre accompagnement LOTIER — accueillez bien leur appel !</div>
       <p style="font-size:12px;color:#666;margin:10px 0 4px">Références utiles :</p>
       <div style="font-size:12px;color:#444;line-height:1.7">🔌 Électricité — PDL : <strong>${esc(d.pdlEdf) || "[PDL]"}</strong> · Ancien titulaire : ${esc(d.ancienEdf) || "[Nom]"}<br>
-      💧 Eau (SUEZ) — N° : <strong>${esc(d.numEau) || "[N°]"}</strong> · Ancien titulaire : ${esc(d.ancienEau) || "[Nom]"}${hasGaz ? `<br>🔥 Gaz — N° : <strong>${esc(d.numGaz)}</strong> · Ancien titulaire : ${esc(d.ancienGaz) || "[Nom]"}` : ""}</div>`)}
+      ${waterLine}${hasGaz ? `<br>🔥 Gaz — N° : <strong>${esc(d.numGaz)}</strong> · Ancien titulaire : ${esc(d.ancienGaz) || "[Nom]"}` : ""}</div>`)}
 
     ${section("💳 RIB pour vos virements", `
       <table style="width:100%;border-collapse:collapse;background:#f8f5f0;border-radius:8px;overflow:hidden">
