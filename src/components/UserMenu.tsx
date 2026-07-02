@@ -11,8 +11,18 @@ export default function UserMenu() {
   const ref = useRef<HTMLDivElement>(null);
 
   const u = session?.user as { prenom?: string; nom?: string; email?: string; roleId?: string; name?: string } | undefined;
-  const name = u?.prenom && u?.nom ? `${u.prenom} ${u.nom}` : (u?.name ?? "Mon compte");
-  const initials = ((u?.prenom?.[0] ?? u?.name?.[0] ?? "?") + (u?.nom?.[0] ?? "")).toUpperCase();
+  // La session (JWT) peut être périmée après modification du profil : on lit le
+  // nom à jour depuis la base et on l'affiche en priorité.
+  const [freshName, setFreshName] = useState<{ prenom?: string; nom?: string } | null>(null);
+  useEffect(() => {
+    fetch("/api/profile").then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setFreshName({ prenom: d.prenom, nom: d.nom }); }).catch(() => {});
+  }, [session?.user ? (session.user as { id?: string }).id : null]);
+
+  const prenom = freshName?.prenom ?? u?.prenom;
+  const nom    = freshName?.nom ?? u?.nom;
+  const name = prenom && nom ? `${prenom} ${nom}` : (prenom ?? u?.name ?? "Mon compte");
+  const initials = ((prenom?.[0] ?? u?.name?.[0] ?? "?") + (nom?.[0] ?? "")).toUpperCase();
 
   // Téléphone
   const [phone, setPhone] = useState("");
@@ -84,7 +94,7 @@ export default function UserMenu() {
       <button onClick={() => { setOpen(o => !o); setView("menu"); }} title="Mon compte"
         style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "4px 8px 4px 4px", cursor: "pointer" }}>
         <div style={{ width: 28, height: 28, borderRadius: "50%", background: GOLD, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>{initials}</div>
-        <span className="hide-sm" style={{ fontSize: 13, fontWeight: 600, color: DARK }}>{u?.prenom ?? name}</span>
+        <span className="hide-sm" style={{ fontSize: 13, fontWeight: 600, color: DARK }}>{prenom ?? name}</span>
       </button>
 
       {open && (
