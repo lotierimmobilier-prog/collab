@@ -8,7 +8,7 @@ const GOLD_BG = "#F7F0E6";
 const DARK    = "#1C1A17";
 const BORDER  = "#E6E1D9";
 
-interface Msg { role: "user" | "assistant"; content: string; }
+interface Msg { role: "user" | "assistant" | "join"; content: string; agent?: { name: string; specialty?: string; icon?: string; color?: string }; }
 
 const SUGGESTIONS = [
   "Quelles tâches sont en attente ?",
@@ -249,11 +249,21 @@ export default function Auguste() {
       const r = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: newMsgs, today }),
+        body: JSON.stringify({ messages: newMsgs.filter(m => m.role !== "join"), today }),
       });
       const data = await r.json();
       const reply = data.reply ?? "Désolé, une erreur est survenue.";
-      setMsgs(prev => [...prev, { role: "assistant", content: reply }]);
+
+      // Spécialistes ayant « rejoint la discussion » : affichés en ligne système
+      // juste avant la réponse d'Auguste.
+      const joins: Msg[] = (data.sideEffects ?? [])
+        .filter((e: { type: string }) => e.type === "agent_joined")
+        .map((e: { title?: string; detail?: string }) => {
+          let meta: { specialty?: string; icon?: string; color?: string } = {};
+          try { meta = JSON.parse(e.detail || "{}"); } catch { /* ignore */ }
+          return { role: "join" as const, content: e.title || "Spécialiste", agent: { name: e.title || "Spécialiste", ...meta } };
+        });
+      setMsgs(prev => [...prev, ...joins, { role: "assistant", content: reply }]);
 
       // Dispatcher les side effects pour rafraîchir les modules concernés
       if (data.sideEffects?.length) {
@@ -416,7 +426,14 @@ export default function Auguste() {
                 </div>
               </div>
             ) : (
-              msgs.map((m, i) => (
+              msgs.map((m, i) => m.role === "join" ? (
+                <div key={i} style={{ display: "flex", justifyContent: "center", margin: "2px 0" }}>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: (m.agent?.color || GOLD) + "18", color: m.agent?.color || GOLD, border: `1px solid ${(m.agent?.color || GOLD)}44`, borderRadius: 999, padding: "4px 11px", fontSize: 11, fontWeight: 600 }}>
+                    <span style={{ fontSize: 13 }}>{m.agent?.icon || "🤝"}</span>
+                    <span><strong>{m.agent?.name}</strong>{m.agent?.specialty ? ` · ${m.agent.specialty}` : ""} a rejoint la discussion</span>
+                  </div>
+                </div>
+              ) : (
                 <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start" }}>
                   {m.role === "assistant" && (
                     <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3 }}>

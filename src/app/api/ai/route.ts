@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { canAccessIcsGed, gedDocAllowed } from "@/lib/ics";
 import { getValidGedToken, gedLevelForUser } from "@/lib/ics-ged-auth";
 import { gedFindDocuments } from "@/lib/ics-ged";
+import { augusteText } from "@/lib/auguste";
+import { resolveModel, agentAllowed, retrieveContext } from "@/lib/ai-agents";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -192,6 +194,18 @@ const TOOLS: Anthropic.Tool[] = [
     name: "formation_overview",
     description: "Donne l'avancement de la formation par parrainage : pour chaque filleul, son parrain, son pourcentage d'avancement, son statut (terminé / en cours / en retard / jamais commencé), son score aux QCM et sa dernière activité. À utiliser pour 'où en est X dans sa formation', 'qui est en retard', 'qui a terminé sa formation', 'charge des parrains', etc.",
     input_schema: { type: "object" as const, properties: {} },
+  },
+  {
+    name: "consulter_specialiste",
+    description: "Fait intervenir une IA spécialisée de l'agence sur une question pointue (droit/juridique, fiscalité/comptabilité, copropriété/syndic, gestion locative, transaction/vente, financement/crédit, diagnostics/DPE, prospection commerciale, rédaction d'annonces…). Le spécialiste « rejoint la discussion » et répond. Appelle cet outil dès qu'une question relève clairement d'un domaine spécialisé plutôt que d'y répondre toi-même. Fournis le domaine ou le nom du spécialiste et la question complète (avec le contexte utile).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        specialiste: { type: "string", description: "Nom ou domaine du spécialiste (ex. « juridique », « Maître Léa », « fiscalité », « copropriété », « vente », « financement »)." },
+        question:    { type: "string", description: "La question complète à poser au spécialiste, reformulée avec le contexte nécessaire." },
+      },
+      required: ["specialiste", "question"],
+    },
   },
 ];
 
@@ -642,6 +656,49 @@ async function executeTool(
       };
     }
 
+    case "consulter_specialiste": {
+      const question = (input.question as string | undefined)?.trim();
+      const who = (input.specialiste as string | undefined)?.trim() || "";
+      if (!question) return { error: "Précise la question à poser au spécialiste." };
+
+      const agents = await prisma.aiAgent.findMany({ where: { active: true }, orderBy: { order: "asc" } }).catch(() => []);
+      const allowed = agents.filter(a => agentAllowed(a.accessRoles, userRole));
+      if (!allowed.length) return { error: "Aucune IA spécialisée n'est disponible pour ce profil." };
+
+      const norm = (s: string | null | undefined) => (s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+      const w = norm(who);
+      // Correspondance : nom exact → nom partiel → spécialité/description par mots-clés.
+      let agent = allowed.find(a => norm(a.name) === w)
+        || (w ? allowed.find(a => norm(a.name).includes(w) || w.includes(norm(a.name))) : undefined)
+        || (w ? allowed.find(a => norm(`${a.specialty} ${a.description}`).split(/[^a-z0-9]+/).some(t => t.length > 3 && w.includes(t))) : undefined)
+        || (w ? allowed.find(a => norm(`${a.specialty} ${a.description}`).includes(w)) : undefined);
+      if (!agent) {
+        return { error: `Aucun spécialiste ne correspond à « ${who} ».`, specialistes_disponibles: allowed.map(a => `${a.name} — ${a.specialty ?? ""}`) };
+      }
+
+      let reponse = "";
+      try {
+        const ctx = await retrieveContext(agent.id, question).catch(() => "");
+        const sys = agent.systemPrompt + (ctx ? `\n\n══ BASE DE CONNAISSANCE ══\n${ctx}` : "");
+        reponse = await augusteText({ model: resolveModel(agent.model), max_tokens: 1024, system: sys, messages: [{ role: "user", content: question }] });
+      } catch {
+        return { error: `${agent.name} n'a pas pu répondre pour le moment.` };
+      }
+
+      sideEffects.push({
+        type: "agent_joined",
+        id: agent.id,
+        title: agent.name,
+        detail: JSON.stringify({ specialty: agent.specialty ?? "", icon: agent.icon ?? "🤝", color: agent.color ?? "#B8966A" }),
+      });
+      return {
+        specialiste: agent.name,
+        domaine: agent.specialty,
+        reponse,
+        instructions: `Restitue cette réponse à l'utilisateur en l'attribuant clairement à ${agent.name} (le spécialiste a rejoint la discussion). Tu peux synthétiser ou compléter, mais n'attribue pas sa réponse à toi-même.`,
+      };
+    }
+
     default:
       return { error: `Outil inconnu: ${name}` };
   }
@@ -673,6 +730,17 @@ export async function POST(req: NextRequest) {
     ? "\n- Documents ICS (GED) : retrouver les baux et états des lieux d'un locataire/propriétaire via recherche_documents_ics"
     : "";
   void canAccessIcsGed;
+
+  // Équipe d'IA spécialisées : Auguste peut les faire intervenir dans la
+  // discussion (outil consulter_specialiste) pour les questions pointues.
+  const specialists = await prisma.aiAgent.findMany({
+    where: { active: true }, orderBy: { order: "asc" },
+    select: { name: true, specialty: true, accessRoles: true },
+  }).catch(() => []);
+  const roster = specialists.filter(a => agentAllowed(a.accessRoles, userRole));
+  const rosterTxt = roster.length
+    ? `\n\n══ ÉQUIPE D'IA SPÉCIALISÉES ══\nTu diriges une équipe d'IA spécialisées. Pour une question qui relève clairement d'un domaine pointu, NE réponds PAS seul : appelle l'outil consulter_specialiste (le spécialiste « rejoint la discussion » et répond), puis restitue sa réponse en la lui attribuant (ex. « D'après Maître Léa… »). Spécialistes disponibles :\n${roster.map(a => `- ${a.name} — ${a.specialty ?? ""}`).join("\n")}\nExemples : une question de droit/bail → juridique ; fiscalité/charges → comptabilité ; AG/syndic → copropriété ; mandat/compromis → transaction. Pour une demande simple ou transverse, réponds toi-même.`
+    : "";
 
   const SYSTEM = `Tu es Auguste, l'assistant IA de l'agence immobilière Lotier Immobilier.
 Tu aides les collaborateurs à gérer leur travail quotidien depuis la plateforme Collab.
@@ -727,7 +795,7 @@ Confirme toujours clairement ce qui a été fait, par exemple :
 ══ TON ET STYLE ══
 - Réponds en français, concis et professionnel
 - Utilise du markdown (gras **texte**, listes)
-- Pour les questions légales : base-toi sur la loi française, indique si ta connaissance est limitée à août 2025${glossaire}`;
+- Pour les questions légales : privilégie le spécialiste juridique via consulter_specialiste ; à défaut, base-toi sur la loi française et indique si ta connaissance est limitée${rosterTxt}${glossaire}`;
 
   const sideEffects: SideEffect[] = [];
   const toolsUsed: string[] = [];
